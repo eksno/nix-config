@@ -59,6 +59,7 @@
 
     # programs
     firefox-devedition
+    bitwarden
   ];
 
   # starship - a customizable prompt for any shell
