@@ -24,6 +24,9 @@
     enable = true;
     userName = "Jonas Lindberg";
     userEmail = "eksno@protonmail.com";
+    extraConfig = {
+      credential.helper.store = true;
+    };
   };
 
   # Packages that should be installed to the user profile.

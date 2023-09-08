@@ -10,10 +10,11 @@
   outputs = inputs@{ nixpkgs, home-manager, ... }: {
     nixosConfigurations = {
       # Hostname
-      nixos = nixpkgs.lib.nixosSystem {
+      virteks = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
         modules = [
           ./configuration.nix
+	  ./hosts/virteks
 
           # make home-manager as a module of nixos
           # so that home-manager configuration will be deployed automatically when executing `nixos-rebuild switch`
