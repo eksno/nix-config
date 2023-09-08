@@ -77,19 +77,39 @@
   
   # Enable Flakes and the new command-line tool
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
+  
+  fonts.packages = with pkgs; [
+    noto-fonts
+    noto-fonts-cjk
+    noto-fonts-emoji
+    liberation_ttf
+    fira-code
+    fira-code-symbols
+    mplus-outline-fonts.githubRelease
+    dina-font
+    proggyfonts
+    nerdfonts
+  ];
 
   # List packages installed in system profile. To search, run:
   # $ nix search wget
   environment.systemPackages = with pkgs; [
     # Flakes use Git to pull dependencies from data sources, so Git must be installed first
+    gccgo
+    libgcc
     git
     neovim
     wget
     curl
+    docker
+    docker-compose
   ];
 
   # Set default editor to neovim
   environment.variables.EDITOR = "neovim";
+
+  # Docker
+  virtualisation.docker.enable = true;
 
   # Enable automatic login for the user.
   services.xserver.displayManager.autoLogin.enable = true;

@@ -29,6 +29,15 @@
     };
   };
 
+  programs.neovim = {
+    enable = true;
+    defaultEditor = true;
+    viAlias = true;
+    vimAlias = true;
+    vimdiffAlias = true;
+  };
+
+
   # Packages that should be installed to the user profile.
   home.packages = with pkgs; [
     # here is some command line tools I use frequently
@@ -36,6 +45,7 @@
 
     neofetch
     nnn # terminal file manager
+    lazygit
 
     # archives
     zip
@@ -49,6 +59,7 @@
     yq-go # yaml processer https://github.com/mikefarah/yq
     exa # A modern replacement for ‘ls’
     fzf # A command-line fuzzy finder
+    fd
 
     # networking tools
     mtr # A network diagnostic tool
@@ -63,6 +74,7 @@
     # programs
     firefox-devedition
     bitwarden
+    dbeaver
   ];
 
   # starship - a customizable prompt for any shell
