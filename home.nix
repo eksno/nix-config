@@ -19,13 +19,28 @@
   #     xxx
   # '';
 
+  programs.gpg.enable = true;
   # basic configuration of git, please change to your own
   programs.git = {
     enable = true;
     userName = "Jonas Lindberg";
     userEmail = "eksno@protonmail.com";
+    #signing = {
+    #  key = "";
+    #  signByDefault = true;
+    #};
+    aliases = {
+      prettylog = "log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(r) %C(bold blue)<%an>%Creset' --abbrev-commit --date=relative";
+      root = "rev-parse --show-toplevel";
+    };
     extraConfig = {
-      credential.helper.store = true;
+      branch.autosetuprebase = "always";
+      color.ui = true;
+      core.askPass = ""; # needs to be empty to use terminal for ask pass
+      credential.helper = "store"; # want to make this more secure
+      github.user = "eksno";
+      push.default = "tracking";
+      init.defaultBranch = "alpha";
     };
   };
 
@@ -60,6 +75,7 @@
     exa # A modern replacement for ‘ls’
     fzf # A command-line fuzzy finder
     fd
+    pinentry
 
     # networking tools
     mtr # A network diagnostic tool
@@ -75,6 +91,8 @@
     firefox-devedition
     bitwarden
     dbeaver
+    nextcloud-client
+    obsidian
   ];
 
   # starship - a customizable prompt for any shell
