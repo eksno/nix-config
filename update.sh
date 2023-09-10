@@ -7,11 +7,14 @@
 echo -n "Enter Configuration: "
 read configuration
 
-# It won't find paths not staged, we we git add .
+# It won't find paths not staged, we git add .
 git add .
 
 # Update flake.lock
 nix flake update
+
+# It won't find paths not staged, we git add .
+git add .
 
 # Apply the updates
 sudo nixos-rebuild switch --flake .#$configuration
