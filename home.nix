@@ -93,6 +93,7 @@
     dbeaver
     nextcloud-client
     obsidian
+    discord-canary
   ];
 
   # starship - a customizable prompt for any shell
