@@ -97,6 +97,7 @@
     # Flakes use Git to pull dependencies from data sources, so Git must be installed first
     gccgo
     libgcc
+    dotnet-sdk_7
     git
     neovim
     wget
