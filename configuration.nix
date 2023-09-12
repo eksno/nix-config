@@ -102,15 +102,36 @@
     neovim
     wget
     curl
-    docker
-    docker-compose
+    k3s
+    podman
+    podman-compose
   ];
 
   # Set default editor to neovim
   environment.variables.EDITOR = "neovim";
 
-  # Docker
-  virtualisation.docker.enable = true;
+  # Containers with podman
+  virtualisation = {
+    podman = {
+      enable = true;
+
+      # Create a `docker` alias for podman, to use it as a drop-in replacement
+      dockerCompat = true;
+
+      # Required for containers under podman-compose to be able to talk to each other.
+      defaultNetwork.settings.dns_enabled = true;
+      # For Nixos version > 22.11
+      #defaultNetwork.settings = {
+      #  dns_enabled = true;
+      #};
+    };
+  };
+
+  # K3S
+  services.k3s = {
+    enable = true;
+    role = "server";
+  };
 
   # Enable automatic login for the user.
   services.xserver.displayManager.autoLogin.enable = true;
@@ -147,7 +168,7 @@
   # services.openssh.enable = true;
 
   # Open ports in the firewall.
-  # networking.firewall.allowedTCPPorts = [ ... ];
+  networking.firewall.allowedTCPPorts = [ 6443 ];
   # networking.firewall.allowedUDPPorts = [ ... ];
   # Or disable the firewall altogether.
   # networking.firewall.enable = false;
