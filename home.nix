@@ -62,6 +62,9 @@
     nnn # terminal file manager
     lazygit
 
+    # runtimes
+    nodejs_20
+
     # archives
     zip
     xz
