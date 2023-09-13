@@ -1,4 +1,4 @@
-{ config, pkgs, ... }:
+{ config, lib, pkgs, ... }:
 
 {
   home.username = "eksno";
@@ -18,46 +18,143 @@
   # home.file.".xxx".text = ''
   #     xxx
   # '';
+  #
+  
 
-  programs.gpg.enable = true;
-  # basic configuration of git, please change to your own
-  programs.git = {
-    enable = true;
-    userName = "Jonas Lindberg";
-    userEmail = "eksno@protonmail.com";
-    #signing = {
-    #  key = "";
-    #  signByDefault = true;
-    #};
-    aliases = {
-      prettylog = "log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(r) %C(bold blue)<%an>%Creset' --abbrev-commit --date=relative";
-      root = "rev-parse --show-toplevel";
+  programs = {
+    bat = {
+      enable = true;
+      extraPackages = with pkgs.bat-extras; [
+        batwatch
+        prettybat
+      ];
     };
-    extraConfig = {
-      branch.autosetuprebase = "always";
-      color.ui = true;
-      core.askPass = ""; # needs to be empty to use terminal for ask pass
-      credential.helper = "store"; # want to make this more secure
-      github.user = "eksno";
-      push.default = "tracking";
-      init.defaultBranch = "alpha";
+    bottom = {
+      enable = true;
+      settings = {
+        colors = {
+          high_battery_color = "green";
+          medium_battery_color = "yellow";
+          low_battery_color = "red";
+        };
+        disk_filter = {
+          is_list_ignored = true;
+          list = [ "/dev/loop" ];
+          regex = true;
+          case_sensitive = false;
+          whole_word = false;
+        };
+        flags = {
+          dot_marker = false;
+          enable_gpu_memory = true;
+          group_processes = true;
+          hide_table_gap = true;
+          mem_as_value = true;
+          tree = true;
+        };
+      };
+    };
+    dircolors = {
+      enable = true;
+      enableBashIntegration = true;
+      enableFishIntegration = true;
+    };
+    direnv = {
+      enable = true;
+      enableBashIntegration = true;
+      nix-direnv = {
+        enable = true;
+      };
+    };
+    eza = {
+      enable = true;
+      enableAliases = true;
+      icons = true;
+    };
+    fish = {
+      enable = true;
+      shellAliases = {
+        cat = "bat --paging=never --style=plain";
+        htop = "btm --basic --tree --hide_table_gap --dot_marker --mem_as_value";
+        ip = "ip --color --brief";
+        less = "bat --paging=always";
+        more = "bat --paging=always";
+        top = "btm --basic --tree --hide_table_gap --dot_marker --mem_as_value";
+        tree = "exa --tree";
+      };
+    };
+    gh = {
+      enable = true;
+      extensions = with pkgs; [ gh-markdown-preview ];
+      settings = {
+        editor = "micro";
+        git_protocol = "ssh";
+        prompt = "enabled";
+      };
+    };
+    git = {
+      enable = true;
+      userName = "Jonas Lindberg";
+      userEmail = "eksno@protonmail.com";
+      delta = {
+        enable = true;
+        options = {
+          features = "decorations";
+          navigate = true;
+          side-by-side = true;
+        };
+      };
+      aliases = {
+        # Need to decide fav log
+        prettylog = "log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(r) %C(bold blue)<%an>%Creset' --abbrev-commit --date=relative";
+        lg = "log --color --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit";
+        root = "rev-parse --show-toplevel";
+      };
+      extraConfig = {
+        pull.rebase = true;
+        credential.helper = "store"; # want to make this more secure
+        branch.autosetuprebase = "always";
+        color.ui = true;
+        core.askPass = ""; # needs to be empty to use terminal for ask pass
+        github.user = "eksno";
+        push.default = "tracking";
+        init.defaultBranch = "alpha";
+      };
+      ignores = [
+        "*.log"
+        "*.out"
+        ".DS_Store"
+        "bin/"
+        "dist/"
+        "result"
+      ];
+    };
+    gpg.enable = true;
+    neovim = {
+      enable = true;
+      defaultEditor = true;
+      viAlias = true;
+      vimAlias = true;
+      vimdiffAlias = true;
+    };
+    zsh = {
+      enable = true;
+      shellAliases = {
+        update = "sudo nixos-rebuild switch";
+      };
     };
   };
 
-  programs.neovim = {
-    enable = true;
-    defaultEditor = true;
-    viAlias = true;
-    vimAlias = true;
-    vimdiffAlias = true;
+  services = {
+    gpg-agent = {
+      enable = true;
+      enableSshSupport = true;
+      pinentryFlavor = "curses";
+    };
   };
-
 
   # Packages that should be installed to the user profile.
   home.packages = with pkgs; [
-    # here is some command line tools I use frequently
-    # feel free to add your own or remove some of them
-
     neofetch
     nnn # terminal file manager
     lazygit
@@ -79,7 +176,6 @@
     ripgrep # recursively searches directories for a regex pattern
     jq # A lightweight and flexible command-line JSON processor
     yq-go # yaml processer https://github.com/mikefarah/yq
-    eza # A modern replacement for ‘ls’
     fzf # A command-line fuzzy finder
     fd
     pinentry
@@ -103,40 +199,16 @@
     discord-canary
   ];
 
-  # starship - a customizable prompt for any shell
-  programs.starship = {
+  xdg = {
     enable = true;
-    # custom settings
-    settings = {
-      add_newline = false;
-      aws.disabled = true;
-      gcloud.disabled = true;
-      line_break.disabled = true;
-    };
-  };
-
-  # alacritty - a cross-platform, GPU-accelerated terminal emulator
-  programs.alacritty = {
-    enable = true;
-    # custom settings
-    settings = {
-      env.TERM = "xterm-256color";
-      font = {
-        size = 12;
-        draw_bold_text_with_bright_colors = true;
+    userDirs = {
+      enable = true;
+      createDirectories = lib.mkDefault true;
+      extraConfig = {
+        XDG_SCREENSHOTS_DIR = "${config.home.homeDirectory}/Pictures/Screenshots";
       };
-      scrolling.multiplier = 5;
-      selection.save_to_clipboard = true;
     };
   };
-
-  programs.zsh = {
-    enable = true;
-    shellAliases = {
-      update = "sudo nixos-rebuild switch";
-    };
-  };
-
   # This value determines the home Manager release that your
   # configuration is compatible with. This helps avoid breakage
   # when a new home Manager release introduces backwards
