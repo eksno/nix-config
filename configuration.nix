@@ -105,6 +105,8 @@
     k3s
     podman
     podman-compose
+    docker
+    docker-compose
   ];
 
   # Set default editor to neovim
@@ -125,6 +127,9 @@
       #  dns_enabled = true;
       #};
     };
+    docker = {
+      enable = true;
+    }
   };
 
   # K3S

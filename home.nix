@@ -171,6 +171,7 @@
     # runtimes
     nodejs_20
     bun
+    gnumake
 
     # utils
     ripgrep # recursively searches directories for a regex pattern
