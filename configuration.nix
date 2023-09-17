@@ -95,6 +95,7 @@
   # $ nix search wget
   environment.systemPackages = with pkgs; [
     # Flakes use Git to pull dependencies from data sources, so Git must be installed first
+    speechd
     gccgo
     libgcc
     dotnet-sdk_7
