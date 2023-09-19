@@ -22,6 +22,14 @@
   
 
   programs = {
+    vscode = {
+      enable = true;
+      extensions = with pkgs.vscode-extensions; [
+        dracula-theme.theme-dracula
+        vscodevim.vim
+        yzhang.markdown-all-in-one
+      ];
+    };
     bat = {
       enable = true;
       extraPackages = with pkgs.bat-extras; [
@@ -159,9 +167,6 @@
     nnn # terminal file manager
     lazygit
 
-    # runtimes
-    nodejs_20
-
     # archives
     zip
     xz
@@ -170,6 +175,7 @@
 
     # runtimes
     nodejs_20
+    nodePackages.pnpm
     bun
     gnumake
 
