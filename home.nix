@@ -204,6 +204,7 @@
     nextcloud-client
     obsidian
     discord-canary
+    gimp
   ];
 
   xdg = {
