@@ -1,6 +1,10 @@
 { config, lib, pkgs, ... }:
 
 {
+  imports = [
+    ./alacritty.nix
+    ./tmux.nix
+  ];
   home.username = "eksno";
   home.homeDirectory = "/home/eksno";
 

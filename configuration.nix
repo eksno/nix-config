@@ -68,6 +68,9 @@
   # Enable touchpad support (enabled default in most desktopManager).
   # services.xserver.libinput.enable = true;
 
+  # Default Shell
+  users.defaultUserShell = pkgs.fish;
+
   # Define a user account. Don't forget to set a password with ‘passwd’.
   users.users.eksno = {
     isNormalUser = true;
@@ -113,6 +116,9 @@
 
   # Set default editor to neovim
   environment.variables.EDITOR = "neovim";
+
+  # Set fish shell environment
+  environment.shells = with pkgs; [ fish ];
 
   # Containers with podman
   virtualisation = {
@@ -160,11 +166,11 @@
 
   # Some programs need SUID wrappers, can be configured further or are
   # started in user sessions.
-  # programs.mtr.enable = true;
-  # programs.gnupg.agent = {
-  #   enable = true;
-  #   enableSSHSupport = true;
-  # };
+  programs = {
+    fish = {
+      enable = true;
+    };
+  };
 
   # List services that you want to enable:
 
