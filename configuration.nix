@@ -89,6 +89,7 @@
     dina-font
     proggyfonts
     nerdfonts
+    xclip
   ];
 
   # List packages installed in system profile. To search, run:

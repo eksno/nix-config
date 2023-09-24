@@ -14,7 +14,7 @@
         system = "x86_64-linux";
         modules = [
           ./configuration.nix
-	  ./hosts/verse
+          ./hosts/verse
 
           # make home-manager as a module of nixos
           # so that home-manager configuration will be deployed automatically when executing `nixos-rebuild switch`
@@ -34,7 +34,7 @@
         system = "x86_64-linux";
         modules = [
           ./configuration.nix
-	  ./hosts/virteks
+          ./hosts/virteks
 
           home-manager.nixosModules.home-manager
           {
