@@ -41,8 +41,9 @@
 
   # Configure keymap in X11
   services.xserver = {
-    layout = "us";
-    xkbVariant = "dvp";
+    layout = "us,no";
+    xkbVariant = "dvp,";
+    xkbOptions = "grp:win_space_toggle";
   };
 
   # Enable CUPS to print documents.
