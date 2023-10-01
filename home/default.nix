@@ -182,6 +182,7 @@
     nodePackages.pnpm
     bun
     gnumake
+    python312
 
     # utils
     ripgrep # recursively searches directories for a regex pattern
@@ -208,7 +209,9 @@
     nextcloud-client
     obsidian
     discord-canary
+    discord
     gimp
+    parsec-bin
   ];
 
   xdg = {
