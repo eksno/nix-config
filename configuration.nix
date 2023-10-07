@@ -85,8 +85,22 @@
   # $ nix search wget
   environment.systemPackages = with pkgs; [
     git # Flakes use Git to pull dependencies from data sources, so Git must be installed first
+
     kitty
+    alacritty
+    waybar
+    (waybar.overrideAttrs (oldAttrs: {
+        mesonFlags = oldAttrs.mesonFlags ++ [ "-Dexperimental=true" ];
+      })
+    )
+    dunst
+    libnotify
+    swww
+    wofi
     tofi
+
+    librewolf
+    firefox-wayland
     speechd
     gccgo
     libgcc
@@ -138,6 +152,9 @@
     opengl.enable = true;
     nvidia.modesetting.enable = true;
   };
+
+  xdg.portal.enable = true;
+  xdg.portal.extraPortals = [ pkgs.xdg-desktop-portal-gtk ];
 
   # List services that you want to enable:
 
