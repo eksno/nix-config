@@ -3,6 +3,7 @@
 {
   imports = [
     ./alacritty.nix
+    ./kitty.nix
     ./tmux.nix
   ];
   home.username = "calibor";
@@ -150,12 +151,6 @@
       vimAlias = true;
       vimdiffAlias = true;
     };
-    zsh = {
-      enable = true;
-      shellAliases = {
-        update = "sudo nixos-rebuild switch";
-      };
-    };
   };
 
   services = {
@@ -204,7 +199,7 @@
     ipcalc  # it is a calculator for the IPv4/v6 addresses
 
     # programs
-    firefox-devedition
+    librewolf
     bitwarden
     dbeaver
     nextcloud-client
@@ -215,16 +210,7 @@
     parsec-bin
   ];
 
-  xdg = {
-    enable = true;
-    userDirs = {
-      enable = true;
-      createDirectories = lib.mkDefault true;
-      extraConfig = {
-        XDG_SCREENSHOTS_DIR = "${config.home.homeDirectory}/Pictures/Screenshots";
-      };
-    };
-  };
+
   # This value determines the home Manager release that your
   # configuration is compatible with. This helps avoid breakage
   # when a new home Manager release introduces backwards

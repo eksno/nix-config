@@ -2,8 +2,8 @@
 # your system.  Help is available in the configuration.nix(5) man page
 # and in the NixOS manual (accessible by running ‘nixos-help’).
 
-{ config, pkgs, ... }:
 
+{ config, pkgs, ... }:
 {
   # networking.wireless.enable = true;  # Enables wireless support via wpa_supplicant.
 
@@ -32,18 +32,11 @@
     LC_TIME = "ja_JP.UTF-8";
   };
 
-  # Enable the X11 windowing system.
-  services.xserver.enable = true;
-
-  # Enable the GNOME Desktop Environment.
-  services.xserver.displayManager.gdm.enable = true;
-  services.xserver.desktopManager.gnome.enable = true;
-
-  # Configure keymap in X11
   services.xserver = {
+    enable = true;
     layout = "us,no";
     xkbVariant = "dvp,";
-    xkbOptions = "grp:win_space_toggle";
+    displayManager.sddm.enable = true;
   };
 
   # Enable CUPS to print documents.
@@ -58,16 +51,8 @@
     alsa.enable = true;
     alsa.support32Bit = true;
     pulse.enable = true;
-    # If you want to use JACK applications, uncomment this
-    #jack.enable = true;
-
-    # use the example session manager (no others are packaged yet so this is enabled by default,
-    # no need to redefine it in your config for now)
-    #media-session.enable = true;
+    jack.enable = true;
   };
-
-  # Enable touchpad support (enabled default in most desktopManager).
-  # services.xserver.libinput.enable = true;
 
   # Default Shell
   users.defaultUserShell = pkgs.fish;
@@ -75,14 +60,20 @@
   # Define a user account. Don't forget to set a password with ‘passwd’.
   users.users.calibor = {
     isNormalUser = true;
+<<<<<<< HEAD
     description = "Daniel Aanensen";
     extraGroups = [ "networkmanager" "wheel" ];
+=======
+    description = "Jonas Lindberg";
+    extraGroups = [ "networkmanager" "wheel" "video" ];
+>>>>>>> alpha
   };
   
   # Enable Flakes and the new command-line tool
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
   
   fonts.packages = with pkgs; [
+    nerdfonts
     noto-fonts
     noto-fonts-cjk
     noto-fonts-emoji
@@ -90,29 +81,38 @@
     fira-code
     fira-code-symbols
     mplus-outline-fonts.githubRelease
+    dejavu_fonts
     dina-font
     proggyfonts
-    nerdfonts
-    xclip
   ];
 
   # List packages installed in system profile. To search, run:
   # $ nix search wget
   environment.systemPackages = with pkgs; [
-    # Flakes use Git to pull dependencies from data sources, so Git must be installed first
+    git # Flakes use Git to pull dependencies from data sources, so Git must be installed first
+
+    kitty
+    alacritty
+    waybar
+    (waybar.overrideAttrs (oldAttrs: {
+        mesonFlags = oldAttrs.mesonFlags ++ [ "-Dexperimental=true" ];
+      })
+    )
+    dunst
+    libnotify
+    swww
+    wofi
+    tofi
+
+    librewolf
+    firefox-wayland
     speechd
     gccgo
     libgcc
     dotnet-sdk_7
-    git
     neovim
     wget
     curl
-    k3s
-    podman
-    podman-compose
-    docker
-    docker-compose
   ];
 
   # Set default editor to neovim
@@ -121,6 +121,7 @@
   # Set fish shell environment
   environment.shells = with pkgs; [ fish ];
 
+<<<<<<< HEAD
   # Containers with podman
   virtualisation = {
     podman = {
@@ -152,6 +153,8 @@
   systemd.services."getty@tty1".enable = false;
   systemd.services."autovt@tty1".enable = false;
 
+=======
+>>>>>>> alpha
   # Allow unfree packages
   nixpkgs.config.allowUnfree = true;
 
@@ -168,10 +171,29 @@
   # Some programs need SUID wrappers, can be configured further or are
   # started in user sessions.
   programs = {
+    hyprland = {
+      enable = true;
+      nvidiaPatches = true;
+      xwayland.enable = true;
+    };
+
     fish = {
       enable = true;
     };
   };
+
+  environment.sessionVariables = {
+    WLR_NO_HARDWARE_CURSORS = "1";
+    NIXOS_OZONE_WL = "1";
+  };
+
+  hardware = {
+    opengl.enable = true;
+    nvidia.modesetting.enable = true;
+  };
+
+  xdg.portal.enable = true;
+  xdg.portal.extraPortals = [ pkgs.xdg-desktop-portal-gtk ];
 
   # List services that you want to enable:
 
@@ -191,5 +213,4 @@
   # Before changing this value read the documentation for this option
   # (e.g. man configuration.nix or on https://nixos.org/nixos/options.html).
   system.stateVersion = "unstable"; # Did you read the comment?
-
 }
