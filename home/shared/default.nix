@@ -6,15 +6,13 @@
     ./kitty.nix
     ./tmux.nix
   ];
-  home.username = "calibor";
-  home.homeDirectory = "/home/calibor";
 
   # link the configuration file in current directory to the specified location in home directory
   # home.file.".config/i3/wallpaper.jpg".source = ./wallpaper.jpg;
 
   # link all files in `./scripts` to `~/.config/i3/scripts`
-  # home.file.".config/i3/scripts" = {
-  #   source = ./scripts;
+  # home.file.".config/hypr" = {
+  #   source = ./system/configs/hypr;
   #   recursive = true;   # link recursively
   #   executable = true;  # make all files executable
   # };
@@ -127,7 +125,6 @@
         branch.autosetuprebase = "always";
         color.ui = true;
         core.askPass = ""; # needs to be empty to use terminal for ask pass
-        github.user = "calibor";
         push.default = "tracking";
         init.defaultBranch = "alpha";
       };
