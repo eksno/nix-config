@@ -19,8 +19,9 @@
       chrono = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
         modules = [
-          ./configuration.nix
-          ./hosts/chrono
+          ./system/configuration.nix
+          ./system/users/calibor
+          ./system/hosts/chrono
 
           # make home-manager as a module of nixos
           # so that home-manager configuration will be deployed automatically when executing `nixos-rebuild switch`
@@ -29,7 +30,7 @@
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
 
-            home-manager.users.calibor = import ./home;
+            home-manager.users.calibor = import ./home/users/calibor;
 
             # Optionally, use home-manager.extraSpecialArgs to pass arguments to home.nix
           }
@@ -40,8 +41,9 @@
       verse = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
         modules = [
-          ./configuration.nix
-          ./hosts/verse
+          ./system/configuration.nix
+          ./system/users/eksno
+          ./system/hosts/verse
 
 
           home-manager.nixosModules.home-manager
@@ -50,16 +52,18 @@
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
 
-            home-manager.users.eksno = import ./home;
+            home-manager.users.eksno = import ./home/users/eksno;
           }
         ];
       };
-      # Virtualbox
+
+      # Jonas' Virtualbox
       virteks = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
         modules = [
-          ./configuration.nix
-          ./hosts/virteks
+          ./system/configuration.nix
+          ./system/users/eksno
+          ./system/hosts/virteks
 
           # make home-manager as a module of nixos
           # so that home-manager configuration will be deployed automatically when executing `nixos-rebuild switch`
@@ -68,7 +72,7 @@
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
 
-            home-manager.users.calibor = import ./home;
+            home-manager.users.calibor = import ./home/users/eksno;
 
             # Optionally, use home-manager.extraSpecialArgs to pass arguments to home.nix
           }

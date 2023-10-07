@@ -107,8 +107,6 @@
     };
     git = {
       enable = true;
-      userName = "Daniel Aanensen";
-      userEmail = "calibor@protonmail.com";
       delta = {
         enable = true;
         options = {

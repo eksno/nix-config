@@ -58,16 +58,6 @@
   users.defaultUserShell = pkgs.fish;
 
   # Define a user account. Don't forget to set a password with ‘passwd’.
-  users.users.calibor = {
-    isNormalUser = true;
-<<<<<<< HEAD
-    description = "Daniel Aanensen";
-    extraGroups = [ "networkmanager" "wheel" ];
-=======
-    description = "Jonas Lindberg";
-    extraGroups = [ "networkmanager" "wheel" "video" ];
->>>>>>> alpha
-  };
   
   # Enable Flakes and the new command-line tool
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
@@ -121,40 +111,6 @@
   # Set fish shell environment
   environment.shells = with pkgs; [ fish ];
 
-<<<<<<< HEAD
-  # Containers with podman
-  virtualisation = {
-    podman = {
-      enable = true;
-
-      # Required for containers under podman-compose to be able to talk to each other.
-      defaultNetwork.settings.dns_enabled = true;
-      # For Nixos version > 22.11
-      #defaultNetwork.settings = {
-      #  dns_enabled = true;
-      #};
-    };
-    docker = {
-      enable = true;
-    };
-  };
-
-  # K3S
-  services.k3s = {
-    enable = true;
-    role = "server";
-  };
-
-  # Enable automatic login for the user.
-  services.xserver.displayManager.autoLogin.enable = true;
-  services.xserver.displayManager.autoLogin.user = "calibor";
-
-  # Workaround for GNOME autologin: https://github.com/NixOS/nixpkgs/issues/103746#issuecomment-945091229
-  systemd.services."getty@tty1".enable = false;
-  systemd.services."autovt@tty1".enable = false;
-
-=======
->>>>>>> alpha
   # Allow unfree packages
   nixpkgs.config.allowUnfree = true;
 
