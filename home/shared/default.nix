@@ -135,7 +135,6 @@
         "bin/"
         "dist/"
         "result"
-        "~/nix-config/config.nix"
       ];
     };
     gpg.enable = true;
