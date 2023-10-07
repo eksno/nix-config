@@ -167,6 +167,10 @@
 
   # Packages that should be installed to the user profile.
   home.packages = with pkgs; [
+    mako # notification manager
+    wl-clipboard # wayland wl-clipboard
+    shotman # screenshot utility
+
     neofetch
     nnn # terminal file manager
     lazygit
@@ -203,7 +207,7 @@
     ipcalc  # it is a calculator for the IPv4/v6 addresses
 
     # programs
-    firefox-devedition
+    librewolf
     bitwarden
     dbeaver
     nextcloud-client
@@ -224,6 +228,15 @@
       };
     };
   };
+
+  wayland.windowManager.hyprland = {
+    enable = true;
+    enableNvidiaPatches = true;
+    settings = {
+      "$mod" = "SUPER";
+    };
+  };
+
   # This value determines the home Manager release that your
   # configuration is compatible with. This helps avoid breakage
   # when a new home Manager release introduces backwards

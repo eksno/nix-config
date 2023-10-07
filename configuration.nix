@@ -32,19 +32,15 @@
     LC_TIME = "ja_JP.UTF-8";
   };
 
-  # Enable the X11 windowing system.
-  services.xserver.enable = true;
-
-  # Enable the GNOME Desktop Environment.
-  services.xserver.displayManager.gdm.enable = true;
-  services.xserver.desktopManager.gnome.enable = true;
-
   # Configure keymap in X11
   services.xserver = {
     layout = "us,no";
     xkbVariant = "dvp,";
     xkbOptions = "grp:win_space_toggle";
   };
+  # wayland
+  security.polkit.enable = true;
+  hardware.opengl.enable = true;
 
   # Enable CUPS to print documents.
   services.printing.enable = true;
@@ -66,8 +62,6 @@
     #media-session.enable = true;
   };
 
-  # Enable touchpad support (enabled default in most desktopManager).
-  # services.xserver.libinput.enable = true;
 
   # Default Shell
   users.defaultUserShell = pkgs.fish;
@@ -83,6 +77,7 @@
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
   
   fonts.packages = with pkgs; [
+    nerdfonts
     noto-fonts
     noto-fonts-cjk
     noto-fonts-emoji
@@ -90,9 +85,9 @@
     fira-code
     fira-code-symbols
     mplus-outline-fonts.githubRelease
+    dejavu_fonts
     dina-font
     proggyfonts
-    nerdfonts
     xclip
   ];
 
@@ -144,13 +139,6 @@
     role = "server";
   };
 
-  # Enable automatic login for the user.
-  services.xserver.displayManager.autoLogin.enable = true;
-  services.xserver.displayManager.autoLogin.user = "eksno";
-
-  # Workaround for GNOME autologin: https://github.com/NixOS/nixpkgs/issues/103746#issuecomment-945091229
-  systemd.services."getty@tty1".enable = false;
-  systemd.services."autovt@tty1".enable = false;
 
   # Allow unfree packages
   nixpkgs.config.allowUnfree = true;
