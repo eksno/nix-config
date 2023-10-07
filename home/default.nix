@@ -3,6 +3,7 @@
 {
   imports = [
     ./alacritty.nix
+    ./kitty.nix
     ./tmux.nix
   ];
   home.username = "eksno";
@@ -149,12 +150,6 @@
       vimAlias = true;
       vimdiffAlias = true;
     };
-    zsh = {
-      enable = true;
-      shellAliases = {
-        update = "sudo nixos-rebuild switch";
-      };
-    };
   };
 
   services = {
@@ -167,10 +162,6 @@
 
   # Packages that should be installed to the user profile.
   home.packages = with pkgs; [
-    mako # notification manager
-    wl-clipboard # wayland wl-clipboard
-    shotman # screenshot utility
-
     neofetch
     nnn # terminal file manager
     lazygit
@@ -217,25 +208,6 @@
     gimp
     parsec-bin
   ];
-
-  xdg = {
-    enable = true;
-    userDirs = {
-      enable = true;
-      createDirectories = lib.mkDefault true;
-      extraConfig = {
-        XDG_SCREENSHOTS_DIR = "${config.home.homeDirectory}/Pictures/Screenshots";
-      };
-    };
-  };
-
-  wayland.windowManager.hyprland = {
-    enable = true;
-    enableNvidiaPatches = true;
-    settings = {
-      "$mod" = "SUPER";
-    };
-  };
 
   # This value determines the home Manager release that your
   # configuration is compatible with. This helps avoid breakage

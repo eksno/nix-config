@@ -2,8 +2,8 @@
 # your system.  Help is available in the configuration.nix(5) man page
 # and in the NixOS manual (accessible by running ‘nixos-help’).
 
-{ config, pkgs, ... }:
 
+{ config, pkgs, ... }:
 {
   # networking.wireless.enable = true;  # Enables wireless support via wpa_supplicant.
 
@@ -32,16 +32,6 @@
     LC_TIME = "ja_JP.UTF-8";
   };
 
-  # Configure keymap in X11
-  services.xserver = {
-    layout = "us,no";
-    xkbVariant = "dvp,";
-    xkbOptions = "grp:win_space_toggle";
-  };
-  # wayland
-  security.polkit.enable = true;
-  hardware.opengl.enable = true;
-
   # Enable CUPS to print documents.
   services.printing.enable = true;
 
@@ -54,14 +44,8 @@
     alsa.enable = true;
     alsa.support32Bit = true;
     pulse.enable = true;
-    # If you want to use JACK applications, uncomment this
-    #jack.enable = true;
-
-    # use the example session manager (no others are packaged yet so this is enabled by default,
-    # no need to redefine it in your config for now)
-    #media-session.enable = true;
+    jack.enable = true;
   };
-
 
   # Default Shell
   users.defaultUserShell = pkgs.fish;
@@ -88,26 +72,26 @@
     dejavu_fonts
     dina-font
     proggyfonts
-    xclip
   ];
 
   # List packages installed in system profile. To search, run:
   # $ nix search wget
   environment.systemPackages = with pkgs; [
-    # Flakes use Git to pull dependencies from data sources, so Git must be installed first
+    git # Flakes use Git to pull dependencies from data sources, so Git must be installed first
+    kitty
+    tofi
     speechd
     gccgo
     libgcc
     dotnet-sdk_7
-    git
     neovim
     wget
     curl
-    k3s
-    podman
-    podman-compose
-    docker
-    docker-compose
+    # k3s
+    # podman
+    # podman-compose
+    # docker
+    # docker-compose
   ];
 
   # Set default editor to neovim
@@ -115,30 +99,6 @@
 
   # Set fish shell environment
   environment.shells = with pkgs; [ fish ];
-
-  # Containers with podman
-  virtualisation = {
-    podman = {
-      enable = true;
-
-      # Required for containers under podman-compose to be able to talk to each other.
-      defaultNetwork.settings.dns_enabled = true;
-      # For Nixos version > 22.11
-      #defaultNetwork.settings = {
-      #  dns_enabled = true;
-      #};
-    };
-    docker = {
-      enable = true;
-    };
-  };
-
-  # K3S
-  services.k3s = {
-    enable = true;
-    role = "server";
-  };
-
 
   # Allow unfree packages
   nixpkgs.config.allowUnfree = true;
@@ -179,5 +139,4 @@
   # Before changing this value read the documentation for this option
   # (e.g. man configuration.nix or on https://nixos.org/nixos/options.html).
   system.stateVersion = "unstable"; # Did you read the comment?
-
 }
