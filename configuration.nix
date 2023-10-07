@@ -73,9 +73,9 @@
   users.defaultUserShell = pkgs.fish;
 
   # Define a user account. Don't forget to set a password with ‘passwd’.
-  users.users.eksno = {
+  users.users.calibor = {
     isNormalUser = true;
-    description = "Jonas Lindberg";
+    description = "Daniel Aanensen";
     extraGroups = [ "networkmanager" "wheel" ];
   };
   
@@ -146,7 +146,7 @@
 
   # Enable automatic login for the user.
   services.xserver.displayManager.autoLogin.enable = true;
-  services.xserver.displayManager.autoLogin.user = "eksno";
+  services.xserver.displayManager.autoLogin.user = "calibor";
 
   # Workaround for GNOME autologin: https://github.com/NixOS/nixpkgs/issues/103746#issuecomment-945091229
   systemd.services."getty@tty1".enable = false;

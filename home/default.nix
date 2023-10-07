@@ -5,8 +5,8 @@
     ./alacritty.nix
     ./tmux.nix
   ];
-  home.username = "eksno";
-  home.homeDirectory = "/home/eksno";
+  home.username = "calibor";
+  home.homeDirectory = "/home/calibor";
 
   # link the configuration file in current directory to the specified location in home directory
   # home.file.".config/i3/wallpaper.jpg".source = ./wallpaper.jpg;
@@ -106,8 +106,8 @@
     };
     git = {
       enable = true;
-      userName = "Jonas Lindberg";
-      userEmail = "eksno@protonmail.com";
+      userName = "Daniel Aanensen";
+      userEmail = "calibor@protonmail.com";
       delta = {
         enable = true;
         options = {
@@ -128,7 +128,7 @@
         branch.autosetuprebase = "always";
         color.ui = true;
         core.askPass = ""; # needs to be empty to use terminal for ask pass
-        github.user = "eksno";
+        github.user = "calibor";
         push.default = "tracking";
         init.defaultBranch = "alpha";
       };
@@ -139,6 +139,7 @@
         "bin/"
         "dist/"
         "result"
+        "~/nix-config/config.nix"
       ];
     };
     gpg.enable = true;
