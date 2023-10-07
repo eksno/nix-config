@@ -32,6 +32,13 @@
     LC_TIME = "ja_JP.UTF-8";
   };
 
+  services.xserver = {
+    enable = true;
+    layout = "us,no";
+    xkbVariant = "dvp,";
+    displayManager.sddm.enable = true;
+  };
+
   # Enable CUPS to print documents.
   services.printing.enable = true;
 
@@ -54,7 +61,7 @@
   users.users.eksno = {
     isNormalUser = true;
     description = "Jonas Lindberg";
-    extraGroups = [ "networkmanager" "wheel" ];
+    extraGroups = [ "networkmanager" "wheel" "video" ];
   };
   
   # Enable Flakes and the new command-line tool
@@ -87,11 +94,6 @@
     neovim
     wget
     curl
-    # k3s
-    # podman
-    # podman-compose
-    # docker
-    # docker-compose
   ];
 
   # Set default editor to neovim
@@ -116,9 +118,25 @@
   # Some programs need SUID wrappers, can be configured further or are
   # started in user sessions.
   programs = {
+    hyprland = {
+      enable = true;
+      nvidiaPatches = true;
+      xwayland.enable = true;
+    };
+
     fish = {
       enable = true;
     };
+  };
+
+  environment.sessionVariables = {
+    WLR_NO_HARDWARE_CURSORS = "1";
+    NIXOS_OZONE_WL = "1";
+  };
+
+  hardware = {
+    opengl.enable = true;
+    nvidia.modesetting.enable = true;
   };
 
   # List services that you want to enable:

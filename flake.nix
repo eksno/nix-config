@@ -5,14 +5,18 @@
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     home-manager.url = "github:nix-community/home-manager";
     home-manager.inputs.nixpkgs.follows = "nixpkgs";
+
+    hyprland.url = "github:hyprwm/Hyprland";
   };
 
-  outputs = inputs@{ nixpkgs, home-manager, ... }: {
+  outputs = inputs@{ nixpkgs, home-manager, hyprland, ... }: {
     nixosConfigurations = {
       # Desktop
       verse = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
         modules = [
+          hyprland.homeManagerModules.default
+          {wayland.windowManager.hyprland.enable = true;}
           ./configuration.nix
           ./hosts/verse
 
