@@ -3,8 +3,10 @@
 {
   imports = [
     ./alacritty.nix
+    ./firefox.nix
     ./kitty.nix
     ./tmux.nix
+    ./xdg.nix
   ];
 
 
@@ -161,9 +163,6 @@
     waypaper # gui wallpaper setter
     xdg-utils # commands for xdg, setting default apps and such
 
-    librewolf
-    firefox-wayland
-
     # archives
     zip
     xz
@@ -211,6 +210,9 @@
     parsec-bin
   ];
 
+  home.sessionVariables = {
+    MOZ_ENABLE_WAYLAND = "1";
+  };
 
   # This value determines the home Manager release that your
   # configuration is compatible with. This helps avoid breakage
