@@ -148,9 +148,21 @@
 
   # Packages that should be installed to the user profile.
   home.packages = with pkgs; [
-    neofetch
-    nnn # terminal file manager
-    lazygit
+    neofetch # :)
+    nnn # tui file manager
+    lazygit # tui for git
+
+    # hyprland
+    dunst # notifications
+    libnotify # Required by dunst
+    wofi # backup / temporary app launcher
+    tofi # minimalist app launcher TODO: get this to work instead of wofi
+    swww # wallpaper engine
+    waypaper # gui wallpaper setter
+    xdg-utils # commands for xdg, setting default apps and such
+
+    librewolf
+    firefox-wayland
 
     # archives
     zip
@@ -158,12 +170,12 @@
     unzip
     p7zip
 
-    # runtimes
-    nodejs_20
+    # language related
     nodePackages.pnpm
+    nodejs_20
     bun
-    gnumake
     python312
+    gnumake
 
     # rust
     cargo

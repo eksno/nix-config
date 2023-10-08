@@ -10,6 +10,9 @@ read configuration
 # It won't find paths not staged, we git add .
 git add .
 
+# Set Symlinks
+./symlink.sh
+
 # Update flake.lock (make sure it's synced up, can fail but should be fine)
 sudo nix flake update
 

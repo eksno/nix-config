@@ -80,7 +80,7 @@
   # $ nix search wget
   environment.systemPackages = with pkgs; [
     git # Flakes use Git to pull dependencies from data sources, so Git must be installed first
-
+    wl-clipboard
     kitty
     alacritty
     waybar
@@ -88,14 +88,6 @@
         mesonFlags = oldAttrs.mesonFlags ++ [ "-Dexperimental=true" ];
       })
     )
-    dunst
-    libnotify
-    swww
-    wofi
-    tofi
-
-    librewolf
-    firefox-wayland
     speechd
     gccgo
     libgcc
