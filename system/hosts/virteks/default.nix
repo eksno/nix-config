@@ -12,4 +12,9 @@
   boot.loader.grub.useOSProber = true;
 
   networking.hostName = "virteks"; # Define your hostname.
+
+  environment.sessionVariables = {
+    LIBGL_ALWAYS_SOFTWARE="true";
+    GALLIUM_DRIVER="llvmpipe";
+  };
 } 
