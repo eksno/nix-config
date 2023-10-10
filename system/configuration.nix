@@ -74,12 +74,14 @@
     dejavu_fonts
     dina-font
     proggyfonts
+    gnome.gnome-terminal
   ];
 
   # List packages installed in system profile. To search, run:
   # $ nix search wget
   environment.systemPackages = with pkgs; [
     git # Flakes use Git to pull dependencies from data sources, so Git must be installed first
+    st # Simple Terminal for backup purposes
     wl-clipboard
     kitty
     alacritty
