@@ -74,7 +74,6 @@
     dejavu_fonts
     dina-font
     proggyfonts
-    gnome.gnome-terminal
   ];
 
   # List packages installed in system profile. To search, run:
