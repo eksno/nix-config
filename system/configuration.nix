@@ -84,11 +84,7 @@
     wl-clipboard
     kitty
     alacritty
-    waybar
-    (waybar.overrideAttrs (oldAttrs: {
-        mesonFlags = oldAttrs.mesonFlags ++ [ "-Dexperimental=true" ];
-      })
-    )
+    eww
     speechd
     gccgo
     libgcc
