@@ -84,7 +84,8 @@
     wl-clipboard
     kitty
     alacritty
-    eww
+    eww-wayland
+    imagemagick
     speechd
     gccgo
     libgcc
