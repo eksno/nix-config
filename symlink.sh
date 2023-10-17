@@ -7,6 +7,7 @@ remove() {
 }
 
 symlink() {
+	mkdir ~/.config/
 	ln -s ~/nix-config/dotfiles/hypr ~/.config/hypr
 	ln -s ~/nix-config/dotfiles/nvim ~/.config/nvim
 	ln -s ~/nix-config/dotfiles/eww ~/.config/eww
