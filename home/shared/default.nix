@@ -212,6 +212,7 @@
     discord
     gimp
     parsec-bin
+    webcord
   ];
 
   home.sessionVariables = {
