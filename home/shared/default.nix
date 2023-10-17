@@ -158,9 +158,10 @@
     # hyprland
     dunst # notifications
     libnotify # Required by dunst
-    wofi # backup / temporary app launcher
-    tofi # minimalist app launcher TODO: get this to work instead of wofi
+    tofi # minimalist app launcher
+    grim # screenshot utility
     swww # wallpaper engine
+    mpvpaper # wallpaper video engine
     lz4 # helps swww
     waypaper # gui wallpaper setter
     xdg-utils # commands for xdg, setting default apps and such
