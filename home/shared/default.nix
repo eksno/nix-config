@@ -160,6 +160,7 @@
     libnotify # Required by dunst
     tofi # minimalist app launcher
     grim # screenshot utility
+    slurp # region selection
     swww # wallpaper engine
     mpvpaper # wallpaper video engine
     lz4 # helps swww
