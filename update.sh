@@ -3,9 +3,13 @@
 # Verify not sudo
 [[ -z $SUDO_USER ]] && echo "Running" || exit
 
-# Get configuration
-echo -n "Enter Configuration: "
-read configuration
+# Get Configuration
+if [[ "$HOSTNAME" = "nixos" ]] || [[ $1 == 'rename' ]]; then
+	echo -n "Enter Configuration: "
+	read configuration
+else
+	configuration=$HOSTNAME
+fi
 
 # It won't find paths not staged, we git add .
 git add .
