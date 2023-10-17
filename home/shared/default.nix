@@ -161,6 +161,7 @@
     wofi # backup / temporary app launcher
     tofi # minimalist app launcher TODO: get this to work instead of wofi
     swww # wallpaper engine
+    lz4 # helps swww
     waypaper # gui wallpaper setter
     xdg-utils # commands for xdg, setting default apps and such
 
@@ -188,6 +189,7 @@
     fzf # A command-line fuzzy finder
     fd
     pinentry
+    jellyfin-ffmpeg
 
     # networking tools
     mtr # A network diagnostic tool
