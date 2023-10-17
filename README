@@ -2,12 +2,11 @@
 
 > The ultimate computer setup :sunglasses_emoji:
 
-TODO:
-- [x] Create user management system
-- [ ] Polish
-- [ ] 
-- [ ] 
-- [ ] 
-- [ ] 
-- [ ] 
-- [ ] 
+## Installation
+
+1. `./install.sh`
+2. `mkdir ./system/[desired hostname]`
+3. `cp /etc/nixos/hardware-configuration.nix ./system/[desired hostname]/hardware-configuration.nix`
+4. Configure `./system/[desired hostname]/default.nix`
+5. Add your host to `flake.nix` configuring your desired system.
+6. Finally, when you're done with configuration, run `./update.sh`
