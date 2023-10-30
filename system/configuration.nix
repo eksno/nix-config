@@ -114,6 +114,9 @@
   # generation contains a different kernel, initrd or kernel modules.
   system.autoUpgrade.allowReboot = true;
 
+  # Support ntfs
+  boot.supportedFilesystems = [ "ntfs" ];
+
   # Some programs need SUID wrappers, can be configured further or are
   # started in user sessions.
   programs = {
