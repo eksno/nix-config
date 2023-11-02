@@ -1,0 +1,21 @@
+
+# system directory
+
+Contains system related configuration. Roughly equal to what `configuration.nix` does in a default installation.
+
+## system/device
+
+- Contains hardware / device specific system configuration files which can be shared across different hosts.
+
+## system/hosts
+
+- Individual installations of NixOS which use this configuration.
+
+## system/shared
+
+- Shared system configurations.
+
+## system/users
+
+- Individual user based **system** configurations.
+- If you want to modify their user configurations see /home.
