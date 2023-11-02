@@ -1,10 +1,10 @@
 { config, pkgs, ... }:
 
 {
-  imports =
-    [ # Include the results of the hardware scan.
-      ./hardware-configuration.nix
-    ];
+  imports = [
+    ./hardware-configuration.nix  # Include the results of the hardware scan.
+    ../../device/nvidia.nix  # Nvidia Support
+  ];
 
   # Bootloader.
   boot.loader.systemd-boot.enable = true;

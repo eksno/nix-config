@@ -1,6 +1,10 @@
 
 { config, pkgs, ... }:
 {
+  imports = [
+    ../../shared
+  ];
+
   users.users.eksno = {
     isNormalUser = true;
     description = "Jonas Lindberg";
