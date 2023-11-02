@@ -19,7 +19,7 @@
       chrono = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
         modules = [
-          ./system/shared/main.nix
+          ./system/shared
           ./system/users/calibor
           ./system/hosts/chrono
 
@@ -41,7 +41,7 @@
       verse = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
         modules = [
-          ./system/shared/main.nix
+          ./system/shared
           ./system/shared/nvidia.nix
           ./system/users/eksno
           ./system/hosts/verse
@@ -62,7 +62,7 @@
       virteks = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
         modules = [
-          ./system/shared/main.nix
+          ./system/shared
           ./system/shared/nvidia.nix
           ./system/users/eksno
           ./system/hosts/virteks
