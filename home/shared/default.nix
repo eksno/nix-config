@@ -197,6 +197,7 @@
     ipcalc  # it is a calculator for the IPv4/v6 addresses
 
     # programs
+    libreoffice
     helvum
     librewolf
     bitwarden
