@@ -18,6 +18,8 @@
   
 
   programs = {
+
+
     bat = {
       enable = true;
       extraPackages = with pkgs.bat-extras; [
@@ -139,6 +141,7 @@
       enableSshSupport = true;
       pinentryFlavor = "curses";
     };
+    
   };
 
   # Packages that should be installed to the user profile.
@@ -185,8 +188,13 @@
     fd
     pinentry
     jellyfin-ffmpeg
+    wlogout # yup this was needed
+    swaylock # we keep going
+    swayidle # now we need another one for lock on idle
+    wayout # might just be swayidle type program
+    swayosd # we keep swaying bby | OSD
 
-    # networking tools
+  # networking tools
     mtr # A network diagnostic tool
     iperf3
     dnsutils  # `dig` + `nslookup`
@@ -210,6 +218,7 @@
     parsec-bin
     webcord
     vscodium
+    wl-screenrec # we leaving obs
   ];
 
   home.sessionVariables = {

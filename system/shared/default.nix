@@ -25,7 +25,12 @@
     enable = true;
     layout = "us,no";
     xkbVariant = "dvp,";
-    displayManager.sddm.enable = true;
+    # sddm confip
+    displayManager.sddm = {
+    enable = true;
+    enableHidpi = true;
+    theme = "sugar-dark";
+    };
   };
 
   # Enable CUPS to print documents.
@@ -118,6 +123,9 @@
     fish = {
       enable = true;
     };
+    sway = {
+        enable = true;
+      };
   };
 
   environment.sessionVariables = {
