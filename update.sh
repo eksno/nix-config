@@ -15,7 +15,15 @@ fi
 git add .
 
 # Set Symlinks
-./symlink.sh
+echo -n "n for chrono hyprland configs: "
+read hConf
+if [[ "$hConf" == "n" ]]; then
+	./home/users/calibor/hypr/symlink.sh
+	echo "running chrono conf"
+else
+	./symlink.sh
+	echo "running shared conf"
+fi
 
 # Update flake.lock (make sure it's synced up, can fail but should be fine)
 sudo nix flake update
