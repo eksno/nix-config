@@ -17,7 +17,7 @@
       "${time}")
 
     (button :onclick "notify-send hey ho"
-      "${hell}")
+      "${song}")
 
     (button :onclick "notify-send hey ho"
       "oeaojqkxuo")
@@ -42,5 +42,6 @@
               :run-while time-visible   ; optional, defaults to 'true'
   `date +%H:%M:%S`)
 
-(deflisten hell :initial "whatever"
-  `playerctl --follow metadata --format {{title}})
+(deflisten song :initial "whatever"
+  'playerctl --follow metadata --format {{title}}'
+  )
