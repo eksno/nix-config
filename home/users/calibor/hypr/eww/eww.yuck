@@ -31,6 +31,7 @@
     (box :class "first" (children :nth 0))
     (box :class "secon" (children :nth 1))
     (box :class "third" (children :nth 2))
+    (literal :content variable_containing_yuck)
     ))
 
 (defvar time-visible false)   ; for :run-while property of below variable
@@ -45,3 +46,6 @@
 (deflisten song :initial "whatever"
   'playerctl --follow metadata --format {{title}}'
   )
+(defvar variable_containing_yuck
+  "(box (button 'foo') (button 'bar'))")
+
