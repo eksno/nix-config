@@ -28,8 +28,16 @@
     # sddm confip
     displayManager.sddm = {
     enable = true;
+
+    settings.Autologin = {  
+      Session = "hyprland";
+      User = "calibor";
+    };
     enableHidpi = true;
     theme = "sugar-dark";
+    wayland = {
+        enable = true;
+      };
     };
   };
 
@@ -124,7 +132,7 @@
       enable = true;
     };
     sway = {
-        enable = true;
+        enable = false;
       };
   };
 

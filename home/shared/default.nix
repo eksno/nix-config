@@ -218,7 +218,9 @@
     parsec-bin
     webcord
     vscodium
-    wl-screenrec # we leaving obs
+    obs-studio
+    spotify
+    spotify-cli-linux
   ];
 
   home.sessionVariables = {
