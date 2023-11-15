@@ -12,4 +12,8 @@
   };
 
   services.xserver.displayManager.sddm.settings.AutoLogin.User = "calibor";
+
+  environment.systemPackages = with pkgs; [
+
+  ]
 }
