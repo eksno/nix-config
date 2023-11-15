@@ -12,8 +12,8 @@
   programs.git.userEmail = "antopiahk@gmail.com";
   programs.git.extraConfig.github.user = "antopiahk";
 
-
   home.packages = with pkgs; [
     spotify
+    pcmanfm
   ];
 }
