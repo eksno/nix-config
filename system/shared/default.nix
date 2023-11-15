@@ -27,15 +27,12 @@
     xkbVariant = "dvp,";
     # sddm confip
     displayManager.sddm = {
-    enable = true;
+      enable = true;
 
-    settings.Autologin = {  
-      Session = "hyprland";
-      User = "calibor";
-    };
-    enableHidpi = true;
-    theme = "sugar-dark";
-    wayland = {
+      settings.Autologin.Session = "Hyprland";
+      enableHidpi = true;
+      theme = "sugar-dark";
+      wayland = {
         enable = true;
       };
     };

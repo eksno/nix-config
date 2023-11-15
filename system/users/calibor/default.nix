@@ -10,4 +10,6 @@
     description = "Daniel Aanensen";
     extraGroups = [ "networkmanager" "wheel" "video" ];
   };
+
+  services.xserver.displayManager.sddm.settings.AutoLogin.User = "calibor";
 }
