@@ -15,5 +15,5 @@
 
   environment.systemPackages = with pkgs; [
 
-  ]
+  ];
 }
