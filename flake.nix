@@ -14,6 +14,26 @@
 
   outputs = { nixpkgs, home-manager, hyprland, ... }: {
     nixosConfigurations = {
+      # Lucy's Laptop
+      lappy = nixpkgs.lib.nixosSystem {
+        system = "x86_64-linux";
+        modules = [
+          ./system/users/lucy
+          ./system/hosts/lappy
+
+          # make home-manager as a module of nixos
+          # so that home-manager configuration will be deployed automatically when executing `nixos-rebuild switch`
+          home-manager.nixosModules.home-manager
+          {
+            home-manager.useGlobalPkgs = true;
+            home-manager.useUserPackages = true;
+
+            home-manager.users.lucy = import ./home/users/lucy;
+
+            # Optionally, use home-manager.extraSpecialArgs to pass arguments to home.nix
+          }
+        ];
+      };
 
       # Daniel's Desktop
       chrono = nixpkgs.lib.nixosSystem {
