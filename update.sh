@@ -17,9 +17,12 @@ git add .
 # Set Symlinks
 # echo -n "n for chrono hyprland configs: "
 # read hConf
-if [[ "$HOSTNAME" == "lappy" ]]; then
+if [[ "$HOSTNAME" == "chrono" ]]; then
 	./home/users/calibor/hypr/symlink.sh
 	echo "running chrono conf"
+elif [[ "$HOSTNAME" == "lappy" ]]; then
+	./home/users/lucy/hypr/symlink.sh
+	echo "running lappy conf"
 else
 	./symlink.sh
 	echo "running shared conf"
