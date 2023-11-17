@@ -10,7 +10,7 @@ remove() {
 symlink() {
 	mkdir ~/.config/
 	ln -s ~/nix-config/home/users/calibor/hypr/hypr/ ~/.config/hypr
-	ln -s ~/nix-config/dotfiles/nvim ~/.config/nvim
+	ln -s ~/nix-config/home/users/calibor/hypr/nvim/ ~/.config/nvim
 	ln -s ~/nix-config/home/users/calibor/hypr/eww ~/.config/eww
 }
 

@@ -1,6 +1,7 @@
 ; ### Scripts ###
 (include "./scripts/time.yuck")
 
+(defpoll music_cover_art :interval "1s" "./scripts/audio-control.fish art")
 
 
 
@@ -18,8 +19,6 @@
            :wm-ignore false
            :exclusive true
   
-  (music-art :art "${art}"
-           :name "coolart"))
               
   (two-boxes :name "ooo"
     (button :onclick "notify-send hey ho"
@@ -28,7 +27,8 @@
     (button :onclick "playerctl next"
       "${song}")
 
-    (path: "${art}")
+    (box :class "music-cover-art"
+      :style "background-image: url(\"${music_cover_art}\");") 
   )
 
 )
@@ -38,14 +38,13 @@
   (box
     (box :class "first" (children :nth 0))
     (box :class "secon" (children :nth 1))
-    (image :class "third" (children :nth 2))
+    (box :class "third" (children :nth 2))
     (literal :content variable_containing_yuck)
     ))
 
 (defwidget music-art [?art name]
   (box :orientation "horizontal"
        :halign "center"
-    text
     (button :onclick "notify-send 'Hello' 'Hello, ${name}'"
       "Greet")))
 
