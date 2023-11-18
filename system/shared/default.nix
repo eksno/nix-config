@@ -28,8 +28,13 @@
     # sddm confip
     displayManager.sddm = {
       enable = true;
+      
+      settings = {
+        Autologin = {
+            Session = "hyprland";
+        };
+      };
 
-      settings.Autologin.Session = "Hyprland";
       enableHidpi = true;
       theme = "sugar-dark";
       wayland = {

@@ -7,11 +7,15 @@
 
   users.users.lucy = {
     isNormalUser = true;
-    description = "Daniel Aanensen";
+    description = "Lucy";
     extraGroups = [ "networkmanager" "wheel" "video" ];
   };
 
-  services.xserver.displayManager.sddm.settings.AutoLogin.User = "lucy";
+  services.xserver.displayManager.sddm.settings = {
+    Autologin = {
+        User = "lucy";
+    };
+  };
 
   environment.systemPackages = with pkgs; [
 
