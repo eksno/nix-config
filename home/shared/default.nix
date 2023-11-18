@@ -222,6 +222,7 @@
     spotify
     spotify-cli-linux
     playerctl # managing eww music
+    brave # browser 
   ];
 
   home.sessionVariables = {

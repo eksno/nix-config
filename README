@@ -2,6 +2,12 @@
 
 > The ultimate computer setup :sunglasses_emoji:
 
+
+## Before installing
+
+'nmctl --' (if need to connect to wifi)
+
+
 ## Installation
 
 1. `./install.sh`
