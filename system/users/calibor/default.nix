@@ -11,7 +11,11 @@
     extraGroups = [ "networkmanager" "wheel" "video" ];
   };
 
-  services.xserver.displayManager.sddm.settings.AutoLogin.User = "calibor";
+  services.xserver.displayManager.sddm.settings = {
+    Autologin = {
+        User = "calibor";
+    };
+  };
 
   environment.systemPackages = with pkgs; [
 
