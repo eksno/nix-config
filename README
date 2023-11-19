@@ -3,10 +3,12 @@
 > The ultimate computer setup :sunglasses_emoji:
 
 
-## Before installing
+## Before git clone / from fresh nixos install
 
-'nmctl --' (if need to connect to wifi)
-
+'nmctl device wifi connect 'tab to choose wifi' password ${password}' (if need to connect to wifi)
+nix-env -iA nixos.pkgs.gitAndTools.gitFull
+'etc/nixos/default.nix' change hostname to preferred hostname !IMPORTANT!
+'git clone https://www.github.com/eksno/nix-config'
 
 ## Installation
 
