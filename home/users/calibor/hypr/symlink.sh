@@ -4,7 +4,7 @@ remove() {
 	rm -rf ~/.config/hypr
 	rm -rf ~/.config/nvim
 	rm -rf ~/.config/eww
-	rm -rf ~/.config/sway
+	rm -rf ~/.config/wayvnc
 }
 
 symlink() {
@@ -12,6 +12,7 @@ symlink() {
 	ln -s ~/nix-config/home/users/calibor/hypr/hypr/ ~/.config/hypr
 	ln -s ~/nix-config/home/users/calibor/hypr/nvim/ ~/.config/nvim
 	ln -s ~/nix-config/home/users/calibor/hypr/eww ~/.config/eww
+	ln -s ~/nix-config/home/users/calibor/hypr/wayvnc ~/.config/wayvnc
 }
 
 remove
