@@ -35,11 +35,11 @@
         ];
       };
 
-      # Daniel's Desktop
+      # Lucy's Desktop
       chrono = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
         modules = [
-          ./system/users/calibor
+          ./system/users/lucy
           ./system/hosts/chrono
 
           # make home-manager as a module of nixos
@@ -49,7 +49,7 @@
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
 
-            home-manager.users.calibor = import ./home/users/calibor;
+            home-manager.users.lucy = import ./home/users/lucy;
 
             # Optionally, use home-manager.extraSpecialArgs to pass arguments to home.nix
           }
