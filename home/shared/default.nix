@@ -218,6 +218,7 @@
     spotify-cli-linux
     playerctl # managing eww music
     brave # browser 
+    caprine-bin # facebook messenger
   ];
 
   home.sessionVariables = {
