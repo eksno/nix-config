@@ -2,7 +2,7 @@
   description = "Chronoverse Flake Config";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable-small";
 
     home-manager = {
       url = "github:nix-community/home-manager";

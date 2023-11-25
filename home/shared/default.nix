@@ -188,11 +188,6 @@
     fd
     pinentry
     jellyfin-ffmpeg
-    wlogout # yup this was needed
-    swaylock # we keep going
-    swayidle # now we need another one for lock on idle
-    wayout # might just be swayidle type program
-    swayosd # we keep swaying bby | OSD
 
   # networking tools
     mtr # A network diagnostic tool
