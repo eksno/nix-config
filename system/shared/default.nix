@@ -101,7 +101,6 @@
     speechd
     gccgo
     libgcc
-    dotnet-sdk_7
     neovim
     wget
     curl

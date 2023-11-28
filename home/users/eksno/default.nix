@@ -3,6 +3,7 @@
 {
   imports = [
     ../../shared
+    ../../shared/dotnet.nix
   ];
 
   home.username = "eksno";
@@ -15,6 +16,5 @@
 
   home.packages = with pkgs; [
     sqlcmd
-    dotnetPackages.nuget
   ];
 }
