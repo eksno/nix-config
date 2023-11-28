@@ -22,7 +22,7 @@ if [[ "$HOSTNAME" == "chrono" ]]; then
 	echo "running chrono conf"
 
 elif [[ "$HOSTNAME" == "lappy" ]]; then
-	./home/users/lucy/hypr/symlink.sh
+	./home/users/lucy/dotfiles/symlink.sh
 	echo "running lappy conf"
 else
 	./symlink.sh
