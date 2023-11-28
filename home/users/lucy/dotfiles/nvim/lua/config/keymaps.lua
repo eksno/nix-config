@@ -15,6 +15,6 @@ vim.keymap.set({'n', 'v'}, '<C-d>', '<C-d>zz', { noremap = true })
 vim.keymap.set({'n', 'v'}, '<C-u>', '<C-u>zz', { noremap = true })
 
 
-vim.keymap.set('n', '<leader>e', ':E<CR>', {noremap = true})
+-- vim.keymap.set('n', '<leader>e', ':E<CR>', {noremap = true})
 
 
