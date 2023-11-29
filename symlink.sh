@@ -13,10 +13,11 @@ remove() {
 
 symlink() {
 	mkdir -p ~/.config/
+	mkdir -p ~/.config/hypr
 
 	# Configs
-	ln -s ~/nix-config/dotfiles/hypr/modules ~/.config/hypr
-	ln -s ~/nix-config/dotfiles/hypr/profiles ~/.config/hypr
+	ln -s ~/nix-config/dotfiles/hypr/modules ~/.config/hypr/modules
+	ln -s ~/nix-config/dotfiles/hypr/profiles ~/.config/hypr/profiles
 	ln -s ~/nix-config/dotfiles/nvim ~/.config/nvim
 	ln -s ~/nix-config/dotfiles/eww ~/.config/eww
 	ln -s ~/nix-config/dotfiles/tofi ~/.config/tofi

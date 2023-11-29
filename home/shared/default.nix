@@ -188,6 +188,7 @@
     fd
     pinentry
     jellyfin-ffmpeg
+    xorg.libxcvt # for screen sizing
 
   # networking tools
     mtr # A network diagnostic tool
