@@ -2,8 +2,7 @@
 
 remove() {
 	# Configs
-	rm -rf ~/.config/hypr/modules
-	rm -rf ~/.config/hypr/profiles
+	rm -rf ~/.config/hypr
 	rm -rf ~/.config/nvim
 	rm -rf ~/.config/eww
 	rm -rf ~/.config/tofi
