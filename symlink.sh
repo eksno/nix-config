@@ -2,7 +2,8 @@
 
 remove() {
 	# Configs
-	rm -rf ~/.config/hypr
+	rm -rf ~/.config/hypr/modules
+	rm -rf ~/.config/hypr/profiles
 	rm -rf ~/.config/nvim
 	rm -rf ~/.config/eww
 	rm -rf ~/.config/tofi
@@ -15,7 +16,8 @@ symlink() {
 	mkdir -p ~/.config/
 
 	# Configs
-	ln -s ~/nix-config/dotfiles/hypr ~/.config/hypr
+	ln -s ~/nix-config/dotfiles/hypr/modules ~/.config/hypr
+	ln -s ~/nix-config/dotfiles/hypr/profiles ~/.config/hypr
 	ln -s ~/nix-config/dotfiles/nvim ~/.config/nvim
 	ln -s ~/nix-config/dotfiles/eww ~/.config/eww
 	ln -s ~/nix-config/dotfiles/tofi ~/.config/tofi

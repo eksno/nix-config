@@ -3,12 +3,12 @@
 # Verify not sudo
 [[ -z $SUDO_USER ]] && echo "Running" || exit
 
-# Get Configuration
-if [[ "$HOSTNAME" = "nixos" ]] || [[ $1 == 'rename' ]]; then
-	echo -n "Enter Configuration: "
-	read configuration
+# Get Host
+if [[ "$HOSTNAME" = "nixos" ]] || [[ $1 == 'reconfigure' ]]; then
+	echo -n "Enter Host: "
+	read host
 else
-	configuration=$HOSTNAME
+	host=$HOSTNAME
 fi
 
 # It won't find paths not staged, we git add .
@@ -40,6 +40,15 @@ sudo nixos-rebuild switch --flake .#$configuration
 
 # It won't find paths not staged, we git add .
 git add .
+
+# Get Hyprland profile
+if [[ -z "$HYPRLAND_PROFILE" ]]; then
+	echo -n "Enter Hyprland Profile: "
+	read hyprlandprofile
+	export HYPRLAND_PROFILE=$hyprlandprofile
+	echo "If you want the profile to remain persistent set the environment variable HYPRLAND_PROFILE in your user nix-config."
+fi
+./hypr.sh $HYPRLAND_PROFILE
 
 # Update flake.lock (required again to update after package install)
 nix flake update

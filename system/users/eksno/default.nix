@@ -23,6 +23,10 @@
 
   virtualisation.docker.enable = true;
 
+  environment.sessionVariables = rec {
+    HYPRLAND_PROFILE = "vnc";
+  };
+
   environment.systemPackages = with pkgs; [
     docker-compose
     wayvnc
