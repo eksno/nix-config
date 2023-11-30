@@ -41,14 +41,8 @@ sudo nixos-rebuild switch --flake .#$configuration
 # It won't find paths not staged, we git add .
 git add .
 
-# Get Hyprland profile
-if [[ -z "$HYPRLAND_PROFILE" ]]; then
-	echo -n "Enter Hyprland Profile: "
-	read hyprlandprofile
-	export HYPRLAND_PROFILE=$hyprlandprofile
-	echo "If you want the profile to remain persistent set the environment variable HYPRLAND_PROFILE in your user nix-config."
-fi
-./hypr.sh $HYPRLAND_PROFILE
+# Source correct hyprland stuff
+./hypr.sh
 
 # Update flake.lock (required again to update after package install)
 nix flake update

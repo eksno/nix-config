@@ -13,7 +13,7 @@
 
   services.xserver.displayManager.sddm.settings = {
     Autologin = {
-        User = "eksno";
+      User = "eksno";
     };
   };
 
@@ -22,10 +22,6 @@
   };
 
   virtualisation.docker.enable = true;
-
-  environment.sessionVariables = rec {
-    HYPRLAND_PROFILE = "vnc";
-  };
 
   environment.systemPackages = with pkgs; [
     docker-compose
