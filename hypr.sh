@@ -1,3 +1,14 @@
 #!/usr/bin/env bash
 
-echo "source = ~/.config/hypr/profiles/$1.conf" | tee ~/.config/hypr/hyprland.conf
+remove() {
+	rm -rf ~/.config/hypr/hyprland.conf
+}
+
+create() {
+	echo "source = ~/.config/hypr/users/$USER/default.conf" | tee ~/.config/hypr/hyprland.conf
+}
+
+remove
+if ! [[ $1 == 'remove' ]]; then
+	create
+fi

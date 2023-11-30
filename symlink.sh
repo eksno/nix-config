@@ -11,13 +11,14 @@ remove() {
 	rm -rf ~/.local/share/fonts
 }
 
-symlink() {
+create() {
 	mkdir -p ~/.config/
 	mkdir -p ~/.config/hypr
 
 	# Configs
-	ln -s ~/nix-config/dotfiles/hypr/modules ~/.config/hypr/modules
-	ln -s ~/nix-config/dotfiles/hypr/profiles ~/.config/hypr/profiles
+	ln -s ~/nix-config/dotfiles/hypr/users ~/.config/hypr/users
+	ln -s ~/nix-config/dotfiles/hypr/hosts ~/.config/hypr/hosts
+	ln -s ~/nix-config/dotfiles/hypr/shared ~/.config/hypr/shared
 	ln -s ~/nix-config/dotfiles/nvim ~/.config/nvim
 	ln -s ~/nix-config/dotfiles/eww ~/.config/eww
 	ln -s ~/nix-config/dotfiles/tofi ~/.config/tofi
@@ -28,5 +29,5 @@ symlink() {
 
 remove
 if ! [[ $1 == 'remove' ]]; then
-	symlink
+	create
 fi
