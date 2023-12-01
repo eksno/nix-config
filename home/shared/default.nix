@@ -157,9 +157,9 @@
     grim # screenshot utility
     slurp # region selection
     swww # wallpaper engine
-    mpvpaper # wallpaper video engine
+    mpvpaper # wallpaper video engine / possibly can remove this
     lz4 # helps swww
-    waypaper # gui wallpaper setter
+    waypaper # gui wallpaper setter / possibly can remove this
     xdg-utils # commands for xdg, setting default apps and such
 
     # archives
@@ -208,18 +208,12 @@
     dbeaver
     nextcloud-client
     obsidian
-    discord-canary
-    discord
     gimp
-    parsec-bin
     webcord
     vscodium
     obs-studio
-    spotify
-    spotify-cli-linux
     playerctl # managing eww music
     brave # browser 
-    caprine-bin # facebook messenger
   ];
 
   # This value determines the home Manager release that your

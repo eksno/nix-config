@@ -14,6 +14,8 @@
 
 
   home.packages = with pkgs; [
- 
+    caprine-bin # facebook messenger
+    spotify
+    spotify-cli-linux
  ];
 }
