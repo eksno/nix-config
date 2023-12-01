@@ -17,17 +17,8 @@ git add .
 # Set Symlinks
 # echo -n "n for chrono hyprland configs: "
 # read hConf
-if [[ "$HOSTNAME" == "chrono" ]]; then
-	./home/users/lucy/dotfiles/symlink.sh
-	echo "running chrono conf"
-
-elif [[ "$HOSTNAME" == "lappy" ]]; then
-	./home/users/lucy/dotfiles/symlink.sh
-	echo "running lappy conf"
-else
-	./symlink.sh
-	echo "running shared conf"
-fi
+./symlink.sh
+echo "running shared conf"
 
 # Update flake.lock (make sure it's synced up, can fail but should be fine)
 sudo nix flake update
