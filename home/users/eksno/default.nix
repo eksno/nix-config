@@ -16,5 +16,7 @@
   home.packages = with pkgs; [
     sqlcmd
     wayvnc
+    gource
+    discord
   ];
 }
