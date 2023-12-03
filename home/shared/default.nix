@@ -189,8 +189,9 @@
     pinentry
     jellyfin-ffmpeg
     xorg.libxcvt # for screen sizing
+    cmake
 
-  # networking tools
+    # networking tools
     mtr # A network diagnostic tool
     iperf3
     dnsutils  # `dig` + `nslookup`
