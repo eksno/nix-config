@@ -2,7 +2,7 @@
 { config, pkgs, ... }:
 {
   imports = [
-    ../../shared
+    ../../shared/desktop
   ];
 
   users.users.eksno = {

@@ -2,6 +2,7 @@
 { config, pkgs, ... }:
 {
   imports = [
+    ../../shared/headless
   ];
 
   users.users.nixos = {

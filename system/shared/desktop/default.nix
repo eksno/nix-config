@@ -1,25 +1,14 @@
 { config, pkgs, ... }:
 {
-  # Enable networking
-  networking.networkmanager.enable = true;
+  imports = [
+    ../fish.nix
+    ../fonts.nix
+    ../hyprland.nix
+    ../locale.nix
+  ];
 
   # Set your time zone.
   time.timeZone = "Europe/Oslo";
-
-  # Select internationalisation properties.
-  i18n.defaultLocale = "en_US.UTF-8";
-
-  i18n.extraLocaleSettings = {
-    LC_ADDRESS = "en_US.UTF-8";
-    LC_IDENTIFICATION = "en_US.UTF-8";
-    LC_MEASUREMENT = "ja_JP.UTF-8";
-    LC_MONETARY = "en_US.UTF-8";
-    LC_NAME = "en_US.UTF-8";
-    LC_NUMERIC = "ja_JP.UTF-8";
-    LC_PAPER = "en_US.UTF-8";
-    LC_TELEPHONE = "en_US.UTF-8";
-    LC_TIME = "ja_JP.UTF-8";
-  };
 
   services.xserver = {
     enable = true;
@@ -64,27 +53,12 @@
   services.blueman.enable = true; 
 
 
-  # Default Shell
-  users.defaultUserShell = pkgs.fish;
 
   # Define a user account. Don't forget to set a password with ‘passwd’.
   
   # Enable Flakes and the new command-line tool
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
   
-  fonts.packages = with pkgs; [
-    nerdfonts
-    noto-fonts
-    noto-fonts-cjk
-    noto-fonts-emoji
-    liberation_ttf
-    fira-code
-    fira-code-symbols
-    mplus-outline-fonts.githubRelease
-    dejavu_fonts
-    dina-font
-    proggyfonts
-  ];
 
   fonts.fontDir.enable = true;
 
@@ -109,9 +83,6 @@
   # Set default editor to neovim
   environment.variables.EDITOR = "neovim";
 
-  # Set fish shell environment
-  environment.shells = with pkgs; [ fish ];
-
   # Allow unfree packages
   nixpkgs.config.allowUnfree = true;
 
@@ -127,23 +98,6 @@
 
   # Support ntfs
   boot.supportedFilesystems = [ "ntfs" ];
-
-  # Some programs need SUID wrappers, can be configured further or are
-  # started in user sessions.
-  programs = {
-    hyprland = {
-      enable = true;
-      enableNvidiaPatches = true;
-      xwayland.enable = true;
-    };
-
-    fish = {
-      enable = true;
-    };
-    sway = {
-        enable = false;
-      };
-  };
 
   environment.sessionVariables = rec {
     MOZ_ENABLE_WAYLAND = "1";
