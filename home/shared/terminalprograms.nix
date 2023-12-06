@@ -1,25 +1,7 @@
 { config, lib, pkgs, ... }:
 
 {
-  imports = [
-    ./alacritty.nix
-    ./firefox.nix
-    ./kitty.nix
-    ./tmux.nix
-    ./xdg.nix
-  ];
-
-
-  # encode the file content in nix configuration file directly
-  # home.file.".xxx".text = ''
-  #     xxx
-  # '';
-  #
-  
-
   programs = {
-
-
     bat = {
       enable = true;
       extraPackages = with pkgs.bat-extras; [
@@ -135,32 +117,11 @@
     };
   };
 
-  services = {
-    gpg-agent = {
-      enable = true;
-      enableSshSupport = true;
-      pinentryFlavor = "curses";
-    };
-    
-  };
-
   # Packages that should be installed to the user profile.
   home.packages = with pkgs; [
     neofetch # :)
     nnn # tui file manager
     lazygit # tui for git
-
-    # hyprland
-    dunst # notifications
-    libnotify # Required by dunst
-    tofi # minimalist app launcher
-    grim # screenshot utility
-    slurp # region selection
-    swww # wallpaper engine
-    mpvpaper # wallpaper video engine / possibly can remove this
-    lz4 # helps swww
-    waypaper # gui wallpaper setter / possibly can remove this
-    xdg-utils # commands for xdg, setting default apps and such
 
     # archives
     zip
@@ -190,6 +151,7 @@
     jellyfin-ffmpeg
     xorg.libxcvt # for screen sizing
     cmake
+    imagemagick
 
     # networking tools
     mtr # A network diagnostic tool
@@ -200,33 +162,5 @@
     socat # replacement of openbsd-netcat
     nmap # A utility for network discovery and security auditing
     ipcalc  # it is a calculator for the IPv4/v6 addresses
-
-    # programs
-    libreoffice
-    helvum
-    librewolf
-    bitwarden
-    dbeaver
-    nextcloud-client
-    obsidian
-    gimp
-    webcord
-    vscodium
-    obs-studio
-    playerctl # managing eww music
-    brave # browser 
   ];
-
-  # This value determines the home Manager release that your
-  # configuration is compatible with. This helps avoid breakage
-  # when a new home Manager release introduces backwards
-  # incompatible changes.
-  #
-  # You can update home Manager without changing this value. See
-  # the home Manager release notes for a list of state version
-  # changes in each release.
-  home.stateVersion = "23.05";
-
-  # Let home Manager install and manage itself.
-  programs.home-manager.enable = true;
 }

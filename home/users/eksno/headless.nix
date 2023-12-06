@@ -3,6 +3,7 @@
 {
   imports = [
     ../../shared/headless
+    ../../shared/dotnet.nix
   ];
 
   home.username = "nixos";

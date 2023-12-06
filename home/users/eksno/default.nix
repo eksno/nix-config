@@ -2,7 +2,7 @@
 
 {
   imports = [
-    ../../shared
+    ../../shared/desktop
     ../../shared/dotnet.nix
   ];
 
