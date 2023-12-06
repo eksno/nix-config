@@ -75,6 +75,25 @@
           }
         ];
       };
+
+      # WSL
+      wsl = nixpkgs.lib.nixosSystem {
+        system = "x86_64-linux";
+        modules = [
+          ./system/users/eksno/headless.nix
+          ./system/hosts/wsl
+
+
+          home-manager.nixosModules.home-manager
+          {
+
+            home-manager.useGlobalPkgs = true;
+            home-manager.useUserPackages = true;
+
+            home-manager.users.nixos = import ./home/users/eksno/headless.nix;
+          }
+        ];
+      };
     };
   };
 }
