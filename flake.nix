@@ -28,10 +28,7 @@
           {
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
-
             home-manager.users.lucy = import ./home/users/lucy;
-
-            # Optionally, use home-manager.extraSpecialArgs to pass arguments to home.nix
           }
         ];
       };
@@ -43,16 +40,11 @@
           ./system/users/lucy
           ./system/hosts/chrono
 
-          # make home-manager as a module of nixos
-          # so that home-manager configuration will be deployed automatically when executing `nixos-rebuild switch`
           home-manager.nixosModules.home-manager
           {
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
-
             home-manager.users.lucy = import ./home/users/lucy;
-
-            # Optionally, use home-manager.extraSpecialArgs to pass arguments to home.nix
           }
         ];
       };
@@ -64,14 +56,27 @@
           ./system/users/eksno
           ./system/hosts/verse
 
+          home-manager.nixosModules.home-manager
+          {
+            home-manager.useGlobalPkgs = true;
+            home-manager.useUserPackages = true;
+            home-manager.users.eksno = import ./home/users/eksno;
+          }
+        ];
+      };
+
+      # Jorge's Desktop
+      antopiahk = nixpkgs.lib.nixosSystem {
+        system = "x86_64-linux";
+        modules = [
+          ./system/users/jorge
+          ./system/hosts/antopiahk
 
           home-manager.nixosModules.home-manager
           {
-
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
-
-            home-manager.users.eksno = import ./home/users/eksno;
+            home-manager.users.jorge = import ./home/users/jorge;
           }
         ];
       };
@@ -83,13 +88,10 @@
           ./system/users/eksno/headless.nix
           ./system/hosts/wsl
 
-
           home-manager.nixosModules.home-manager
           {
-
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
-
             home-manager.users.nixos = import ./home/users/eksno/headless.nix;
           }
         ];

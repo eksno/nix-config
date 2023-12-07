@@ -133,8 +133,8 @@
     nodePackages.pnpm
     nodejs_20
     bun
-    python312
     gnumake
+
 
     # rust
     cargo
