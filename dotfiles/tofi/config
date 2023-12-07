@@ -1,0 +1,10 @@
+anchor = center
+width = 100%
+height = 100%
+border-width = 0
+outline-width = 0
+padding-left = 40%
+padding-top = 30%
+result-spacing = 25
+num-results = 5
+background-color = #000A

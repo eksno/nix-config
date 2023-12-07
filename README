@@ -2,11 +2,19 @@
 
 > The ultimate computer setup :sunglasses_emoji:
 
+
+## Before git clone / from fresh nixos install
+
+'nmctl device wifi connect 'tab to choose wifi' password ${password}' (if need to connect to wifi)
+nix-env -iA nixos.pkgs.gitAndTools.gitFull
+'etc/nixos/default.nix' change hostname to preferred hostname !IMPORTANT!
+'git clone https://www.github.com/eksno/nix-config'
+
 ## Installation
 
 1. `./install.sh`
-2. `mkdir ./system/[desired hostname]`
-3. `cp /etc/nixos/hardware-configuration.nix ./system/[desired hostname]/hardware-configuration.nix`
-4. Configure `./system/[desired hostname]/default.nix`
+2. `mkdir ./system/hosts/[desired hostname]`
+3. `cp /etc/nixos.bak/hardware-configuration.nix ./system/hosts/[desired hostname]/hardware-configuration.nix`
+4. Configure `./system/hosts/[desired hostname]/default.nix`
 5. Add your host to `flake.nix` configuring your desired system.
 6. Finally, when you're done with configuration, run `./update.sh`

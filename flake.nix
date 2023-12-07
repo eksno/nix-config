@@ -3,6 +3,7 @@
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    # nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable-small";
 
     home-manager = {
       url = "github:nix-community/home-manager";
@@ -14,13 +15,12 @@
 
   outputs = { nixpkgs, home-manager, hyprland, ... }: {
     nixosConfigurations = {
-
-      # Daniel's Desktop
-      chrono = nixpkgs.lib.nixosSystem {
+      # Lucy's Laptop
+      lappy = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
         modules = [
-          ./system/users/calibor
-          ./system/hosts/chrono
+          ./system/users/lucy
+          ./system/hosts/lappy
 
           # make home-manager as a module of nixos
           # so that home-manager configuration will be deployed automatically when executing `nixos-rebuild switch`
@@ -28,10 +28,23 @@
           {
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
+            home-manager.users.lucy = import ./home/users/lucy;
+          }
+        ];
+      };
 
-            home-manager.users.calibor = import ./home/users/calibor;
+      # Lucy's Desktop
+      chrono = nixpkgs.lib.nixosSystem {
+        system = "x86_64-linux";
+        modules = [
+          ./system/users/lucy
+          ./system/hosts/chrono
 
-            # Optionally, use home-manager.extraSpecialArgs to pass arguments to home.nix
+          home-manager.nixosModules.home-manager
+          {
+            home-manager.useGlobalPkgs = true;
+            home-manager.useUserPackages = true;
+            home-manager.users.lucy = import ./home/users/lucy;
           }
         ];
       };
@@ -43,13 +56,10 @@
           ./system/users/eksno
           ./system/hosts/verse
 
-
           home-manager.nixosModules.home-manager
           {
-
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
-
             home-manager.users.eksno = import ./home/users/eksno;
           }
         ];
@@ -61,17 +71,31 @@
         modules = [
           ./system/users/jorge
           ./system/hosts/antopiahk
+
           home-manager.nixosModules.home-manager
           {
-
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
-
             home-manager.users.jorge = import ./home/users/jorge;
           }
         ];
       };
 
+      # WSL
+      wsl = nixpkgs.lib.nixosSystem {
+        system = "x86_64-linux";
+        modules = [
+          ./system/users/eksno/headless.nix
+          ./system/hosts/wsl
+
+          home-manager.nixosModules.home-manager
+          {
+            home-manager.useGlobalPkgs = true;
+            home-manager.useUserPackages = true;
+            home-manager.users.nixos = import ./home/users/eksno/headless.nix;
+          }
+        ];
+      };
     };
   };
 }

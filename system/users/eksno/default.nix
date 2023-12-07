@@ -2,7 +2,7 @@
 { config, pkgs, ... }:
 {
   imports = [
-    ../../shared
+    ../../shared/desktop
   ];
 
   users.users.eksno = {
@@ -11,13 +11,19 @@
     extraGroups = [ "networkmanager" "wheel" "video" "docker" ];
   };
 
-  virtualisation.docker.enable = true;
-  environment.systemPackages = with pkgs; [
-    docker-compose
-    wayvnc
-  ];
+  services.xserver.displayManager.sddm.settings = {
+    Autologin = {
+      User = "eksno";
+    };
+  };
 
   services.openssh = {
     enable = true;
   };
+
+  virtualisation.docker.enable = true;
+
+  environment.systemPackages = with pkgs; [
+    docker-compose
+  ];
 }

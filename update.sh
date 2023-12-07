@@ -3,12 +3,12 @@
 # Verify not sudo
 [[ -z $SUDO_USER ]] && echo "Running" || exit
 
-# Get Configuration
-if [[ "$HOSTNAME" = "nixos" ]] || [[ $1 == 'rename' ]]; then
-	echo -n "Enter Configuration: "
-	read configuration
+# Get Host
+if [[ "$HOSTNAME" = "nixos" ]] || [[ $1 == 'reconfigure' ]]; then
+	echo -n "Enter Host: "
+	read host
 else
-	configuration=$HOSTNAME
+	host=$HOSTNAME
 fi
 
 # It won't find paths not staged, we git add .
@@ -17,13 +17,8 @@ git add .
 # Set Symlinks
 # echo -n "n for chrono hyprland configs: "
 # read hConf
-if [[ "$HOSTNAME" == "chrono" ]]; then
-	./home/users/calibor/hypr/symlink.sh
-	echo "running chrono conf"
-else
-	./symlink.sh
-	echo "running shared conf"
-fi
+./symlink.sh
+echo "running shared conf"
 
 # Update flake.lock (make sure it's synced up, can fail but should be fine)
 sudo nix flake update
@@ -32,10 +27,13 @@ sudo nix flake update
 git add .
 
 # Apply the updates
-sudo nixos-rebuild switch --flake .#$configuration
+sudo nixos-rebuild switch --flake .#$configuration --impure
 
 # It won't find paths not staged, we git add .
 git add .
+
+# Source correct hyprland stuff
+./hypr.sh
 
 # Update flake.lock (required again to update after package install)
 nix flake update
