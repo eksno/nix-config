@@ -23,6 +23,9 @@ create() {
 	ln -s ~/nix-config/dotfiles/eww ~/.config/eww
 	ln -s ~/nix-config/dotfiles/tofi ~/.config/tofi
 
+	# Root Configs
+	sudo ln -s ~/nix-config/dotfiles/nvim /root/.config/nvim
+
 	# Fonts
 	ln -s /run/current-system/sw/share/X11/fonts ~/.local/share/fonts
 }

@@ -9,6 +9,7 @@
     ../terminalprograms.nix
     ../tmux.nix
     ../xdg.nix
+    ./programs.nix
   ];
 
   # This value determines the home Manager release that your
