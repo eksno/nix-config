@@ -60,7 +60,7 @@
         system = "x86_64-linux";
         modules = [
           ./system/users/jorge
-	  ./system/hosts/antopiahk
+          ./system/hosts/antopiahk
           home-manager.nixosModules.home-manager
           {
 

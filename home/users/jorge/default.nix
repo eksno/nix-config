@@ -16,6 +16,5 @@
     pcmanfm
     openvpn
     feh
-    chrome
   ];
 }
