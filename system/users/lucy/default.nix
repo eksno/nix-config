@@ -18,7 +18,7 @@
   };
 
   services.openssh = {
-    enable = true;
+    enable = false;
   };
 
   environment.systemPackages = with pkgs; [
