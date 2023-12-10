@@ -16,9 +16,8 @@
     caprine-bin # facebook messenger
     spotify
     spotify-cli-linux
-    wally-cli
-    zsa-udev-rules
     whatsapp-for-linux
+    zsa-udev-rules
     wayvnc
  ];
 }

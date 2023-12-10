@@ -21,7 +21,15 @@
     enable = false;
   };
 
-  environment.systemPackages = with pkgs; [
+  services.udev.extraRules = '' SUBSYSTEMS=="usb", ATTRS{idVendor}=="3297", MODE:="0666", SYMLINK+="ignition_dfu" '';
+   
 
+
+  environment.systemPackages = with pkgs; [
+    wally-cli
   ];
+
+  hardware.keyboard.zsa = {
+    enable = true;
+  };
 }
