@@ -19,5 +19,6 @@
     whatsapp-for-linux
     zsa-udev-rules
     wayvnc
+    webcord
  ];
 }

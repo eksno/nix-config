@@ -21,7 +21,6 @@
     nextcloud-client
     obsidian
     gimp
-    webcord
     vscodium
     obs-studio
     playerctl # managing eww music
