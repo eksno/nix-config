@@ -10,6 +10,10 @@
     ../system.nix
   ];
 
+  nixpkgs.config.permittedInsecurePackages = [
+    "electron-25.9.0"
+  ];
+
   services.xserver = {
     enable = true;
     layout = "us,no";
