@@ -78,6 +78,9 @@
     opengl.enable = true;
   };
 
+  nixpkgs.config.permittedInsecurePackages = [
+    "electron-25.9.0" ];
+  
   xdg = {
     portal = {
       enable = true;
