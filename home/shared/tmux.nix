@@ -64,21 +64,6 @@ in
         }
         {
           plugin = mkTmuxPlugin {
-            pluginName = "tmux-browser";
-            version = "unstable-2022-10-24";
-            src = pkgs.fetchFromGitHub {
-              owner = "ofirgall";
-              repo = "tmux-browser";
-              rev = "c3e115f9ebc5ec6646d563abccc6cf89a0feadb8";
-              sha256 = "08hwzsry7z22lrfdg9j367zqxqfsha7s9fi3sdg876z36l7ij1ly";
-            };
-          };
-          extraConfig = ''
-            set -g @browser_close_on_deattach '1'
-          '';
-        }
-        {
-          plugin = mkTmuxPlugin {
             pluginName = "tmux.nvim";
             version = "unstable-2023-09-06";
             src = pkgs.fetchFromGitHub {
