@@ -16,5 +16,5 @@
     pcmanfm
     openvpn
     feh
-  ];
+    ];
 }

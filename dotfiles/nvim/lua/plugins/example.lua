@@ -41,10 +41,13 @@ return {
   -- override nvim-cmp and add cmp-emoji
   {
     "hrsh7th/nvim-cmp",
-    dependencies = { "hrsh7th/cmp-emoji" },
+    dependencies = {
+      "hrsh7th/cmp-emoji",   
+      "zbirenbaum/copilot.lua",
+    },
     ---@param opts cmp.ConfigSchema
     opts = function(_, opts)
-      table.insert(opts.sources, { name = "emoji" })
+      table.insert(opts.sources, { name = "emoji" }, {name = "copilot", group_index = 2})
     end,
   },
 
@@ -172,6 +175,7 @@ return {
     end,
   },
 
+
   -- the opts function can also be used to change the default opts:
   {
     "nvim-lualine/lualine.nvim",
@@ -213,17 +217,12 @@ return {
 
   -- Use <tab> for completion and snippets (supertab)
   -- first: disable default <tab> and <s-tab> behavior in LuaSnip
-  {
-    "L3MON4D3/LuaSnip",
-    keys = function()
-      return {}
-    end,
-  },
-  -- then: setup supertab in cmp
+   -- then: setup supertab in cmp
   {
     "hrsh7th/nvim-cmp",
     dependencies = {
       "hrsh7th/cmp-emoji",
+      "zbirenbaum/copilot.lua",
     },
     ---@param opts cmp.ConfigSchema
     opts = function(_, opts)
