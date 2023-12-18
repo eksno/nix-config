@@ -16,9 +16,7 @@
 
   services.xserver = {
     enable = true;
-    layout = "us,no";
-    xkbVariant = "dvp,";
-    # sddm confip
+    # sddm config
     displayManager.sddm = {
       enable = true;
       

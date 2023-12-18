@@ -16,6 +16,8 @@
       User = "eksno";
     };
   };
+  services.xserver.layout = "us";
+  services.xserver.xkbVariant = "dvp";
 
   services.openssh = {
     enable = true;
