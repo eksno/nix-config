@@ -18,6 +18,6 @@
     wayvnc
     gource
     discord
-    xkbcomp
+    xorg.xkbcomp
   ];
 }

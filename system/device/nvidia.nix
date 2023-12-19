@@ -25,5 +25,12 @@
     nvidiaSettings = true;
 
     package = config.boot.kernelPackages.nvidiaPackages.production;
+
+    environment.systemPackages = with pkgs; [
+      libva-nvidia-driver-git
+      libva
+      qt5ct
+      qt5-wayland
+    ];
   };
 }
