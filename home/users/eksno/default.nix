@@ -18,5 +18,6 @@
     wayvnc
     gource
     discord
+    xkbcomp
   ];
 }
