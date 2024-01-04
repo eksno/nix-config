@@ -1,5 +1,8 @@
 { config, pkgs, ... }:
 {
+  # This automatically performs a garbage collection of old Nix store generations
+  nix.gc.automatic = true;
+
   # This enables a periodically executed systemd service named nixos-upgrade.service.
   # If the allowReboot option is false, it runs nixos-rebuild switch --upgrade to
   # upgrade NixOS to the latest version in the current channel.

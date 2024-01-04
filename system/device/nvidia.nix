@@ -1,5 +1,15 @@
 { config, pkgs, ... }:
 {
+  # Enable OpenGL
+  hardware.opengl = {
+    enable = true;
+    driSupport = true;
+    driSupport32Bit = true;
+  };
+
+  # Load nvidia driver for Xorg and Wayland
+  services.xserver.videoDrivers = ["nvidia"];
+
   hardware.nvidia = {
 
     # Modesetting is required.
@@ -17,20 +27,13 @@
     # supported GPUs is at: 
     # https://github.com/NVIDIA/open-gpu-kernel-modules#compatible-gpus 
     # Only available from driver 515.43.04+
-    # Do not disable this unless your GPU is unsupported or if you have a good reason to.
+    # Currently alpha-quality/buggy, so false is currently the recommended setting.
     open = true;
 
     # Enable the Nvidia settings menu,
     # accessible via `nvidia-settings`.
     nvidiaSettings = true;
 
-    package = config.boot.kernelPackages.nvidiaPackages.production;
-
-    environment.systemPackages = with pkgs; [
-      libva-nvidia-driver-git
-      libva
-      qt5ct
-      qt5-wayland
-    ];
+    package = config.boot.kernelPackages.nvidiaPackages.beta;
   };
 }

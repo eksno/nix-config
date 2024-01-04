@@ -1,5 +1,4 @@
 { config, lib, pkgs, ... }:
-
 {
   imports = [
     ../../shared/desktop
@@ -19,5 +18,6 @@
     gource
     discord
     xorg.xkbcomp
+    xorg.xmodmap
   ];
 }

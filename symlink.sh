@@ -7,11 +7,11 @@ remove() {
 	rm -rf ~/.config/eww
 	rm -rf ~/.config/tofi
 
-	# Root Configs
-	sudo rm -rf /root/.config/nvim
-
 	# Fonts
 	rm -rf ~/.local/share/fonts
+
+	# Root Configs
+	sudo rm -rf /root/.config/nvim
 }
 
 create() {
@@ -34,7 +34,7 @@ create() {
 
 	sudo ln -s ~/nix-config/dotfiles/nvim /root/.config/nvim
 
-	sudo ln -s /run/current-system/sw/share/X11/fonts /root/.local/share/fonts
+	# sudo ln -s /run/current-system/sw/share/X11/fonts /root/.local/share/fonts
 }
 
 remove

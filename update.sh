@@ -15,10 +15,7 @@ fi
 git add .
 
 # Set Symlinks
-# echo -n "n for chrono hyprland configs: "
-# read hConf
 ./symlink.sh
-echo "running shared conf"
 
 # Update flake.lock (make sure it's synced up, can fail but should be fine)
 sudo nix flake update

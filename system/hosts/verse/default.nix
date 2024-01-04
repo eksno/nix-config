@@ -1,14 +1,17 @@
 { config, pkgs, ... }:
-
 {
   imports = [  # Do not import from ../../shared here. This is just hardware/device related.
     ./hardware-configuration.nix  # Include the results of the hardware scan.
     ../../device/nvidia.nix  # Nvidia Support
+    ./input.nix
   ];
+
+  services.xserver.exportConfiguration = true;
 
   # Bootloader.
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
+  boot.loader.systemd-boot.configurationLimit = 42;
 
   # Setup keyfile
   boot.initrd.secrets = {
