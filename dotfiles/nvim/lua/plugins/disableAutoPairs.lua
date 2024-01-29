@@ -1,4 +1,4 @@
 return {
-  -- disable trouble
+  -- disable auto pairs
   { "mini.pairs", enabled = false },
 }
