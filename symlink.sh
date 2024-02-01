@@ -6,6 +6,7 @@ remove() {
 	rm -rf ~/.config/nvim
 	rm -rf ~/.config/eww
 	rm -rf ~/.config/tofi
+	rm -rf ~/.config/kitty
 
 	# Fonts
 	rm -rf ~/.local/share/fonts
@@ -25,6 +26,7 @@ create() {
 	ln -s ~/nix-config/dotfiles/nvim ~/.config/nvim
 	ln -s ~/nix-config/dotfiles/eww ~/.config/eww
 	ln -s ~/nix-config/dotfiles/tofi ~/.config/tofi
+	ln -s ~/nix-config/dotfiles/kitty ~/.config/kitty
 
 	# Fonts
 	ln -s /run/current-system/sw/share/X11/fonts ~/.local/share/fonts
