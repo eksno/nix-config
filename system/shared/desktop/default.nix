@@ -1,10 +1,10 @@
 { config, pkgs, ... }:
 {
   imports = [
+    ../wayland/hyprland
     ../bluetooth.nix
     ../fish.nix
     ../fonts.nix
-    ../hyprland.nix
     ../locale.nix
     ../networking.nix
     ../system.nix

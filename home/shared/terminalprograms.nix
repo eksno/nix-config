@@ -148,7 +148,6 @@
     fzf # A command-line fuzzy finder
     fd
     pinentry
-    jellyfin-ffmpeg
     xorg.libxcvt # for screen sizing
     cmake
     imagemagick

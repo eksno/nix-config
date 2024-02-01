@@ -9,6 +9,11 @@
     isNormalUser = true;
     description = "Jonas Lindberg";
     extraGroups = [ "networkmanager" "wheel" "video" "docker" ];
+    openssh.authorizedKeys.keys = [
+      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAII4AP87WBXD5W+VrUSNVNSc3UugdxtaMqenVlwApZAcf eksno" # content of authorized_keys file
+      # note: ssh-copy-id will add user@your-machine after the public key
+      # but we can remove the "@your-machine" part
+    ];
   };
 
   services.xserver.layout = "us";
