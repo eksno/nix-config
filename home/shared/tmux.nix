@@ -23,7 +23,7 @@ in
     home.packages = with pkgs; [
       lsof
       # for tmux super fingers
-      python312
+      python311
     ];
 
     programs.tmux = {
