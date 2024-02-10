@@ -16,6 +16,10 @@ let
 in
 {
   config = {
+    programs.fish.shellInit = ''
+      fish_add_path ${t-smart-manager}/share/tmux-plugins/t-smart-tmux-session-manager/bin/
+    '';
+
     home.packages = with pkgs; [
       lsof
       # for tmux super fingers

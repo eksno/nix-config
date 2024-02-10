@@ -3,6 +3,7 @@
   imports = [
     ../wayland/hyprland
     ../bluetooth.nix
+    ../fish.nix
     ../fonts.nix
     ../locale.nix
     ../networking.nix
