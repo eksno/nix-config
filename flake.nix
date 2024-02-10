@@ -65,6 +65,22 @@
         ];
       };
 
+      # Jonas' Laptop
+      werse = nixpkgs.lib.nixosSystem {
+        system = "x86_64-linux";
+        modules = [
+          ./system/users/eksno
+          ./system/hosts/werse
+
+          home-manager.nixosModules.home-manager
+          {
+            home-manager.useGlobalPkgs = true;
+            home-manager.useUserPackages = true;
+            home-manager.users.eksno = import ./home/users/eksno;
+          }
+        ];
+      };
+
       # Jorge's Desktop
       antopiahk = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";

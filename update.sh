@@ -24,7 +24,7 @@ sudo nix flake update
 git add .
 
 # Apply the updates
-sudo nixos-rebuild switch --flake .#$configuration --impure
+sudo nixos-rebuild switch --flake .#$host --impure
 
 # It won't find paths not staged, we git add .
 git add .
