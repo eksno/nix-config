@@ -5,7 +5,6 @@
     ../alacritty.nix
     ../gpgagent.nix
     ../hyprland.nix
-    ../kitty.nix
     ../terminalprograms.nix
     ../tmux.nix
     ../xdg.nix

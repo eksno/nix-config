@@ -2,7 +2,6 @@
 { config, pkgs, ... }:
 {
   imports = [
-    ../fish.nix
     ../fonts.nix
     ../locale.nix
     ../networking.nix
@@ -19,6 +18,8 @@
     neovim
     wget
     curl
+    kitty
+    fish
   ];
 
   # Set default editor to neovim
