@@ -7,6 +7,7 @@ remove() {
 	rm -rf ~/.config/eww
 	rm -rf ~/.config/tofi
 	rm -rf ~/.config/kitty
+	rm -rf ~/.config/i3
 
 	# Fonts
 	rm -rf ~/.local/share/fonts
@@ -19,6 +20,7 @@ create() {
 	# User Configs
 	mkdir -p ~/.config/
 	mkdir -p ~/.config/hypr
+	mkdir -p ~/.config/i3
 
 	ln -s ~/nix-config/dotfiles/hypr/users ~/.config/hypr/users
 	ln -s ~/nix-config/dotfiles/hypr/hosts ~/.config/hypr/hosts
@@ -27,6 +29,8 @@ create() {
 	ln -s ~/nix-config/dotfiles/eww ~/.config/eww
 	ln -s ~/nix-config/dotfiles/tofi ~/.config/tofi
 	ln -s ~/nix-config/dotfiles/kitty ~/.config/kitty
+	#i3
+	ln -s ~/nix-config/dotfiles/i3/config ~/.config/i3/config
 
 	# Fonts
 	ln -s /run/current-system/sw/share/X11/fonts ~/.local/share/fonts
