@@ -16,7 +16,6 @@
   services.xserver = {
     enable = true;
     # sddm config
-      enable = true;
       windowManager.i3.enable = true;
   };
 

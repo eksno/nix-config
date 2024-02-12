@@ -20,5 +20,8 @@
     zsa-udev-rules
     wayvnc
     webcord
+    immersed-vr
+    libva 
+    v4l2-relayd
  ];
 }

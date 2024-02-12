@@ -2,7 +2,7 @@
 { config, pkgs, ... }:
 {
   imports = [
-    ../../shared/i3
+    ../../shared/desktop
   ];
 
   users.users.lucy = {
