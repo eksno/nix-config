@@ -2,7 +2,7 @@
 { config, pkgs, ... }:
 {
   imports = [
-    ../../shared/desktop/x11/i3
+    ../../shared/desktop/wayland/hyprland
   ];
 
   users.users.eksno = {
