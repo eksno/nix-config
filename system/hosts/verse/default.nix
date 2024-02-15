@@ -6,7 +6,7 @@
     ./input.nix
   ];
 
-  services.xserver.exportConfiguration = true;
+  # services.xserver.exportConfiguration = true;
 
   # Bootloader.
   boot.loader.systemd-boot.enable = true;
