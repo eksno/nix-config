@@ -2,7 +2,7 @@
 { config, pkgs, ... }:
 {
   imports = [
-    ../../shared/desktop
+    ../../shared/desktop/wayland/hyprland
   ];
 
   users.users.lucy = {
