@@ -24,5 +24,7 @@
     libva 
     v4l2-relayd
     parsec-bin
+    v4l-utils
+    libdrm
  ];
 }

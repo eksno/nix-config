@@ -20,7 +20,7 @@ create() {
 	# User Configs
 	mkdir -p ~/.config/
 	mkdir -p ~/.config/hypr
-	#mkdir -p ~/.config/i3
+	mkdir -p ~/.config/i3
 
 	ln -s ~/nix-config/dotfiles/hypr/users ~/.config/hypr/users
 	ln -s ~/nix-config/dotfiles/hypr/hosts ~/.config/hypr/hosts
