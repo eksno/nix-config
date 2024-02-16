@@ -23,9 +23,6 @@
     immersed-vr
     libva 
     v4l2-relayd
-    poetry
-    python311Packages.youtube-transcript-api
-    yt-dlp
     parsec-bin
  ];
 }
