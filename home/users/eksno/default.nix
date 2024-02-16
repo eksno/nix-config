@@ -3,9 +3,7 @@
 {
   imports = [
     ./git.nix
-    ./terminalprograms.nix
     ../../shared/desktop
-    ../../shared/dotnet.nix
   ];
 
   home.username = "eksno";

@@ -134,9 +134,6 @@
     nodejs_20
     bun
     gnumake
-
-
-    # rust
     cargo
     rustc
 
