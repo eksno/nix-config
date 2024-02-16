@@ -9,8 +9,8 @@
   home.homeDirectory = "/home/lucy";
 
   programs.git.userName = "Daniel Aanensen";
-  programs.git.userEmail = "calibor@protonmail.com";
-  programs.git.extraConfig.github.user = "calibor";
+  programs.git.userEmail = "tetochrono@protonmail.com";
+  programs.git.extraConfig.github.user = "LVGrinder";
 
   home.packages = with pkgs; [
     caprine-bin # facebook messenger
@@ -21,8 +21,6 @@
     wayvnc
     webcord
     immersed-vr
-    libva 
-    v4l2-relayd
     parsec-bin
     v4l-utils
     libdrm
