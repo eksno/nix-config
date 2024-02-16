@@ -3,5 +3,5 @@
 {
   programs.git.userName = "Daniel Aanensen";
   programs.git.userEmail = "tetochrono@protonmail.com";
-  programs.git.extraConfig.github.user = "calibor";
+  programs.git.extraConfig.github.user = "LVGrinder";
 }
