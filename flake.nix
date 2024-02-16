@@ -15,11 +15,11 @@
 
   outputs = { nixpkgs, home-manager, hyprland, ... }: {
     nixosConfigurations = {
-      # Teto's Mac
+      # Teto's Work PC
       tetomini = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
         modules = [
-          ./system/users/tetochrono
+          ./system/users/teto
           ./system/hosts/tetomini
 
           # make home-manager as a module of nixos
@@ -28,7 +28,7 @@
           {
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
-            home-manager.users.tetochrono = import ./home/users/tetochrono;
+            home-manager.users.teto = import ./home/users/teto;
           }
         ];
       };
