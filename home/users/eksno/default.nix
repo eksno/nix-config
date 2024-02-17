@@ -10,7 +10,7 @@
   home.homeDirectory = "/home/eksno";
 
   home.packages = with pkgs; [
-    wayvnc
+    bitwarden-cli
     gource
     discord
     anki

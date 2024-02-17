@@ -20,7 +20,6 @@ create() {
 	# User Configs
 	mkdir -p ~/.config/
 	mkdir -p ~/.config/hypr
-	mkdir -p ~/.config/i3
 
 	ln -s ~/nix-config/dotfiles/hypr/users ~/.config/hypr/users
 	ln -s ~/nix-config/dotfiles/hypr/hosts ~/.config/hypr/hosts
@@ -29,8 +28,7 @@ create() {
 	ln -s ~/nix-config/dotfiles/eww ~/.config/eww
 	ln -s ~/nix-config/dotfiles/tofi ~/.config/tofi
 	ln -s ~/nix-config/dotfiles/kitty ~/.config/kitty
-	#i3
-	ln -s ~/nix-config/dotfiles/i3/config ~/.config/i3/config
+	ln -s ~/nix-config/dotfiles/i3 ~/.config/i3
 
 	# Fonts
 	ln -s /run/current-system/sw/share/X11/fonts ~/.local/share/fonts
@@ -39,8 +37,6 @@ create() {
 	sudo mkdir -p /root/.config/
 
 	sudo ln -s ~/nix-config/dotfiles/nvim /root/.config/nvim
-
-	# sudo ln -s /run/current-system/sw/share/X11/fonts /root/.local/share/fonts
 }
 
 remove
