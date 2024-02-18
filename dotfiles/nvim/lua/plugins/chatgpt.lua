@@ -1,8 +1,10 @@
-{
-  "jackMort/ChatGPT.nvim",
+return {
+    "jackMort/ChatGPT.nvim",
     event = "VeryLazy",
     config = function()
-      require("chatgpt").setup()
+        require("chatgpt").setup({
+            api_key_cmd = "bw get notes openai"
+        })
     end,
     dependencies = {
       "MunifTanjim/nui.nvim",

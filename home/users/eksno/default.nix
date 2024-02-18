@@ -11,6 +11,7 @@
 
   home.packages = with pkgs; [
     bitwarden-cli
+    obs-studio
     gource
     discord
     anki
