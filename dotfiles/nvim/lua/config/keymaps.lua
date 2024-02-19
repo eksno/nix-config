@@ -26,8 +26,6 @@ vim.keymap.set("n", "<C-f>", function()
     vim.lsp.buf.format()
 end)
 
-vim.keymap.set("n", "<C-l>", "<leader>e")
-
 vim.keymap.set("n", "<C-k>", "<cmd>cnext<CR>zz")
 vim.keymap.set("n", "<C-j>", "<cmd>cprev<CR>zz")
 vim.keymap.set("n", "<leader>k", "<cmd>lnext<CR>zz")
