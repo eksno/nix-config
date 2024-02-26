@@ -13,7 +13,7 @@ vim.keymap.set({"n", "v"}, "<C-u>", "<C-u>zz")
 vim.keymap.set({"n", "v"}, "<C-d>", "<C-d>zz")
 
 vim.keymap.set({"n", "v"}, "n", "nzzzv")
-vim.keymap.set({"n", "v"}, "N", "nzzzv")
+vim.keymap.set({"n", "v"}, "N", "Nzzzv")
 
 vim.keymap.set("x", "<leader>p", [["_dP]])
 vim.keymap.set({"n", "v"}, "<leader>y", [["+y]])
