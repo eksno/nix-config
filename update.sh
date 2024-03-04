@@ -17,6 +17,9 @@ git add .
 # Set Symlinks
 ./symlink.sh
 
+# Source correct hyprland stuff
+./hypr.sh
+
 # Update flake.lock (make sure it's synced up, can fail but should be fine)
 sudo nix flake update
 
@@ -28,9 +31,6 @@ sudo nixos-rebuild switch --flake .#$host --impure
 
 # It won't find paths not staged, we git add .
 git add .
-
-# Source correct hyprland stuff
-./hypr.sh
 
 # Update flake.lock (required again to update after package install)
 nix flake update
