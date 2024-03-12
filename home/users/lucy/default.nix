@@ -24,5 +24,6 @@
     parsec-bin
     v4l-utils
     libdrm
+    easyeffects
  ];
 }
