@@ -21,7 +21,7 @@
     nextcloud-client
     obsidian
     gimp
-    vscodium
+    code
     obs-studio
     playerctl # managing eww music
     brave # browser 
