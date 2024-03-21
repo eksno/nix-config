@@ -12,7 +12,7 @@
     # programs
     speechd
     wl-clipboard
-    eww-wayland
+    eww
     libreoffice
     helvum
     librewolf
@@ -21,7 +21,7 @@
     nextcloud-client
     obsidian
     gimp
-    code
+    vscode
     obs-studio
     playerctl # managing eww music
     brave # browser 

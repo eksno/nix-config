@@ -48,7 +48,7 @@
     };
     eza = {
       enable = true;
-      enableAliases = true;
+      enableFishIntegration = true;
       icons = true;
     };
     fish = {

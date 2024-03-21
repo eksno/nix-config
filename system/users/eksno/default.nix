@@ -17,9 +17,7 @@
     };
 
     services.xserver.xkb.layout = "us";
-    services.xserver.layout = "us";
     services.xserver.xkb.variant = "dvp";
-    services.xserver.xkbVariant = "dvp";
     console.useXkbConfig = true;
     
     services.xserver.displayManager.sddm.settings.Autologin.User = "eksno";
