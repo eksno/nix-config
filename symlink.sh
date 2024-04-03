@@ -24,6 +24,8 @@ create() {
 	ln -s ~/nix-config/dotfiles/hypr/users ~/.config/hypr/users
 	ln -s ~/nix-config/dotfiles/hypr/hosts ~/.config/hypr/hosts
 	ln -s ~/nix-config/dotfiles/hypr/shared ~/.config/hypr/shared
+	./hypr.sh # source correct hypr files
+
 	ln -s ~/nix-config/dotfiles/nvim ~/.config/nvim
 	ln -s ~/nix-config/dotfiles/eww ~/.config/eww
 	ln -s ~/nix-config/dotfiles/tofi ~/.config/tofi
