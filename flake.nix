@@ -99,18 +99,18 @@
         ];
       };
 
-      # Jorge's Desktop
-      antopiahk = nixpkgs.lib.nixosSystem {
+      # Jorge's Laptop
+      lewis = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
         modules = [
-          ./system/users/jorge
-          ./system/hosts/antopiahk
+          ./system/users/antopiahk
+          ./system/hosts/lewis
 
           home-manager.nixosModules.home-manager
           {
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
-            home-manager.users.jorge = import ./home/users/jorge;
+            home-manager.users.antopiahk = import ./home/users/antopiahk;
           }
         ];
       };

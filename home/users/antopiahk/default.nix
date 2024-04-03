@@ -5,13 +5,14 @@
     ../../shared/desktop
   ];
 
-  home.username = "jorge";
-  home.homeDirectory = "/home/jorge";
+  home.username = "antopiahk";
+  home.homeDirectory = "/home/antopiahk";
 
   programs.git.userName = "antopiahk";
   programs.git.userEmail = "antopiahk@gmail.com";
   programs.git.extraConfig.github.user = "antopiahk";
-   home.packages = with pkgs; [
+
+  home.packages = with pkgs; [
     spotify
     pcmanfm
     openvpn
