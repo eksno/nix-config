@@ -16,7 +16,6 @@
     discord
     anki
     mattermost-desktop
-    immersed-vr
     linuxKernel.packages.linux_zen.v4l2loopback
     easyeffects
   ];
