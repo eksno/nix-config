@@ -13,6 +13,7 @@
     speechd
     wl-clipboard
     eww
+    waybar
     libreoffice
     helvum
     librewolf
