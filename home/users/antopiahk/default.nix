@@ -17,5 +17,10 @@
     pcmanfm
     openvpn
     feh
+    discord
+    bitwarden-cli
+    obs-studio
+    gource
+    discord
   ];
 }
