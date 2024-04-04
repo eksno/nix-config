@@ -3,11 +3,12 @@
 remove() {
 	# User Configs
 	rm -rf ~/.config/hypr
-	rm -rf ~/.config/nvim
 	rm -rf ~/.config/eww
-	rm -rf ~/.config/tofi
-	rm -rf ~/.config/kitty
 	rm -rf ~/.config/i3
+	rm -rf ~/.config/kitty
+	rm -rf ~/.config/nvim
+	rm -rf ~/.config/tofi
+	rm -rf ~/.config/waybar
 
 	# Fonts
 	rm -rf ~/.local/share/fonts
@@ -26,11 +27,12 @@ create() {
 	ln -s ~/nix-config/dotfiles/hypr/shared ~/.config/hypr/shared
 	./hypr.sh # source correct hypr files
 
-	ln -s ~/nix-config/dotfiles/nvim ~/.config/nvim
 	ln -s ~/nix-config/dotfiles/eww ~/.config/eww
-	ln -s ~/nix-config/dotfiles/tofi ~/.config/tofi
-	ln -s ~/nix-config/dotfiles/kitty ~/.config/kitty
 	ln -s ~/nix-config/dotfiles/i3 ~/.config/i3
+	ln -s ~/nix-config/dotfiles/kitty ~/.config/kitty
+	ln -s ~/nix-config/dotfiles/nvim ~/.config/nvim
+	ln -s ~/nix-config/dotfiles/tofi ~/.config/tofi
+	ln -s ~/nix-config/dotfiles/waybar ~/.config/waybar
 
 	# Fonts
 	ln -s /run/current-system/sw/share/X11/fonts ~/.local/share/fonts
