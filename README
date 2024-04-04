@@ -20,8 +20,12 @@
 Configure `./system/hosts/[desired hostname]/default.nix`
 Configure `./dotfiles/hypr/hosts/[desired hostname]/default.nix`
 
-Configure all user specific files including some dotfiles (hypr) for everything to work properly. TODO: Elaborate on this
+Configure all user specific files including some dotfiles (hypr) for everything
+to work properly. TODO: Elaborate on this
 
 Add your host to `flake.nix` configuring your desired system.
 
-Finally, when you're done with configuration, run `./update.sh`
+When you're done with configuration, run `./update.sh`
+
+After all that run `nix-env --uninstall git vim` to make it all declarative
+again, don't worry they're still installed through your config
