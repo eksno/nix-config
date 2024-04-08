@@ -26,5 +26,6 @@
     obs-studio
     playerctl # managing eww music
     brave # browser 
+    easyeffects
   ];
 }
