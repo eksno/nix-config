@@ -1,4 +1,4 @@
 return {
-  -- disable auto pairs
-  { "mini.pairs", enabled = false },
+        -- disable auto pairs
+        { "mini.pairs", enabled = false },
 }
