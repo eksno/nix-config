@@ -11,11 +11,11 @@
 
   home.packages = with pkgs; [
     bitwarden-cli
+    openvpn
     obs-studio
     gource
     discord
     anki
-    mattermost-desktop
     linuxKernel.packages.linux_zen.v4l2loopback
     easyeffects
   ];
