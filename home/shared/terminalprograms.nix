@@ -136,6 +136,7 @@
     gnumake
     cargo
     rustc
+    python312
 
     # utils
     gdb
@@ -148,6 +149,8 @@
     xorg.libxcvt # for screen sizing
     cmake
     imagemagick
+    acpi # Power
+    lsof # List open files
 
     # networking tools
     mtr # A network diagnostic tool
