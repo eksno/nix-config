@@ -17,10 +17,10 @@
     libreoffice
     helvum
     librewolf
-    bitwarden
     dbeaver
     nextcloud-client
-    obsidian
+    # obsidian I'm sorry little one, you were too trash for me to try to figure out. https://github.com/NixOS/nixpkgs/issues/302457
+    # bitwarden I believed in you, but you had to be a pain.
     gimp
     vscode
     obs-studio

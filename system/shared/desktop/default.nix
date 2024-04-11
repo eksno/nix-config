@@ -4,10 +4,6 @@
     ../headless
   ];
 
-  nixpkgs.config.permittedInsecurePackages = [
-    "electron-25.9.0"
-  ];
-
   # Enable CUPS to print documents.
   services.printing.enable = true;
 
@@ -29,5 +25,6 @@
   hardware = {
     opengl.enable = true;
   };
-xdg.portal.config.common.default = "*";
+
+  xdg.portal.config.common.default = "*";
 }
