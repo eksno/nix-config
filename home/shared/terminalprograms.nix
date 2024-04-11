@@ -151,6 +151,7 @@
     imagemagick
     acpi # Power
     lsof # List open files
+    bluetuith
 
     # networking tools
     mtr # A network diagnostic tool
