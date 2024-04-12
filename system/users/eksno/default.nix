@@ -20,7 +20,7 @@
     services.xserver.xkb.variant = "dvp";
     console.useXkbConfig = true;
     
-    services.xserver.displayManager.sddm.settings.Autologin.User = "eksno";
+    services.displayManager.sddm.settings.Autologin.User = "eksno";
 
     services.openssh.enable = true;
 

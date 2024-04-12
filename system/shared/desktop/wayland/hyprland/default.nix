@@ -1,31 +1,34 @@
 { config, pkgs, ... }:
 {
-  imports = [
-    ./..
-  ];
+    imports = [
+        ./..
+    ];
 
-  programs = {
-    hyprland = {
-      enable = true;
-      xwayland.enable = true;
-    };
-  };
-  services.xserver = {
-    enable = true;
-    displayManager.sddm = {
-      enable = true;
-      
-      settings = {
-        Autologin = {
-            Session = "hyprland";
+    programs = {
+        hyprland = {
+            enable = true;
+            xwayland.enable = true;
         };
-      };
-
-      enableHidpi = true;
-      theme = "sugar-dark";
-      wayland = {
-        enable = true;
-      };
     };
-  };
+
+    services.xserver = {
+        enable = true;
+    };
+
+    services.displayManager.sddm = {
+        enable = true;
+        
+        settings = {
+            Autologin = {
+                Session = "hyprland";
+            };
+        };
+
+        enableHidpi = true;
+        theme = "sugar-dark";
+
+        wayland = {
+            enable = true;
+        };
+    };
 }

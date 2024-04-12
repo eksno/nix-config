@@ -15,7 +15,7 @@
     services.xserver.xkb.variant = "dvp";
     console.useXkbConfig = true;
     
-    services.xserver.displayManager.sddm.settings.Autologin.User = "antopiahk";
+    services.displayManager.sddm.settings.Autologin.User = "antopiahk";
 
     services.openssh.enable = true;
 
