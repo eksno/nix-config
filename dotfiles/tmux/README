@@ -1,0 +1,3 @@
+# tmux config
+
+The tmux.conf is managed by nix so only include plugin configs here
