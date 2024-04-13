@@ -195,13 +195,6 @@ in
                         set -g @plugin 'joshmedeski/tmux-nerd-font-window-name'
                     '';
                 }
-                {
-                    plugin = tmux-fzf-url;
-                    extraConfig = ''
-                        set -g @plugin 'joshmedeski/tmux-fzf-url';
-                        set -g @fzf-url-history-limit '2000'
-                    '';
-                }
             ];
             extraConfig = ''
                 # This command is executed to address an edge case where after a fresh install of the OS no resurrect
@@ -310,8 +303,8 @@ in
                 bind-key -T prefix C-d switch -t dotfiles
                 bind-key e send-keys "tmux capture-pane -p -S - | nvim -c 'set buftype=nofile' +" Enter
 
-        # evaluate/reload config
-        bind-key e source-file ${generatedConfigFilePath} \; display-message "${generatedConfigFilePath} evaluated."
+                # evaluate/reload config
+                bind-key e source-file ${generatedConfigFilePath} \; display-message "${generatedConfigFilePath} evaluated."
             '';
         };
     };
