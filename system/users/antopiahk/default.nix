@@ -2,7 +2,7 @@
 { config, pkgs, ... }:
 {
     imports = [
-        ../../shared/desktop/wayland/hyprland
+        ../../shared/desktop/x11/gnome
     ];
 
     users.users.antopiahk = {
