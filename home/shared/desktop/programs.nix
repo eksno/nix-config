@@ -11,7 +11,6 @@
   home.packages = with pkgs; [
     # programs
     speechd
-    wl-clipboard
     eww
     waybar
     libreoffice
