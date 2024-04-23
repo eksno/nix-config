@@ -11,7 +11,6 @@
 
   home.packages = with pkgs; [
     bitwarden-cli
-    openvpn
     obs-studio
     gource
     discord

@@ -15,7 +15,6 @@
   home.packages = with pkgs; [
     spotify
     pcmanfm
-    openvpn
     feh
     discord
     bitwarden-cli
