@@ -34,5 +34,5 @@
   # (e.g. man configuration.nix or on https://nixos.org/nixos/options.html).
   system.stateVersion = "unstable"; # Did you read the comment?
 
-  networking.hostName = "wsl"; # Define your hostname.
+  networking.hostName = "leon-wsl"; # Define your hostname.
 }
