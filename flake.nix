@@ -119,7 +119,7 @@
         system = "x86_64-linux";
         modules = [
           ./system/users/eksno/headless.nix
-          ./system/hosts/wsl
+          ./system/hosts/eksno-wsl
 
           home-manager.nixosModules.home-manager
           {
@@ -135,7 +135,7 @@
         system = "x86_64-linux";
         modules = [
           ./system/users/leon/headless.nix
-          ./system/hosts/wsl
+          ./system/hosts/leon-wsl
 
           home-manager.nixosModules.home-manager
           {
