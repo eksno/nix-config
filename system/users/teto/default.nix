@@ -1,24 +1,25 @@
 
 { config, pkgs, ... }:
 {
-  imports = [
-    ../../shared/headless
-  ];
+    imports = [
+        ../../shared/headless
+        ./locale.nix
+    ];
 
-  users.users.teto = {
-    isNormalUser = true;
-    description = "teto";
-    extraGroups = [ "networkmanager" "wheel" "video" ];
-  };
+    users.users.teto = {
+        isNormalUser = true;
+        description = "teto";
+        extraGroups = [ "networkmanager" "wheel" "video" ];
+    };
 
 
-  services.openssh = {
-    enable = true;
-  };
-   
+    services.openssh = {
+        enable = true;
+    };
+    
 
-  environment.systemPackages = with pkgs; [
+    environment.systemPackages = with pkgs; [
 
-  ];
+    ];
 
 }

@@ -1,22 +1,23 @@
 
 { config, pkgs, ... }:
 {
-  imports = [
-    ../../shared/headless
-  ];
+    imports = [
+        ../../shared/headless
+        ./locale.nix
+    ];
 
-  users.users.nixos = {
-    isNormalUser = true;
-    description = "Daniel Aanensen";
-    extraGroups = [ "networkmanager" "wheel" "video" "docker" ];
-  };
+    users.users.nixos = {
+        isNormalUser = true;
+        description = "Daniel Aanensen";
+        extraGroups = [ "networkmanager" "wheel" "video" "docker" ];
+    };
 
-  services.openssh = {
-    enable = false;
-  };
+    services.openssh = {
+        enable = false;
+    };
 
 
-  environment.systemPackages = with pkgs; [
+    environment.systemPackages = with pkgs; [
 
-  ];
+    ];
 }

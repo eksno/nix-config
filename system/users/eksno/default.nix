@@ -3,6 +3,7 @@
 {
     imports = [
         ../../shared/desktop/wayland/hyprland
+        ./locale.nix
     ];
 
     users.users.eksno = {

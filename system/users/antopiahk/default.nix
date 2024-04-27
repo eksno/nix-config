@@ -3,6 +3,7 @@
 {
     imports = [
         ../../shared/desktop/x11/gnome
+        ./locale.nix
     ];
 
     users.users.antopiahk = {

@@ -1,35 +1,36 @@
 
 { config, pkgs, ... }:
 {
-  imports = [
-    ../../shared/desktop/wayland/hyprland
-  ];
+    imports = [
+        ../../shared/desktop/wayland/hyprland
+        ./locale.nix
+    ];
 
-  users.users.lucy = {
-    isNormalUser = true;
-    description = "Lucy";
-    extraGroups = [ "networkmanager" "wheel" "video" ];
-  };
-
-  services.displayManager.sddm.settings = {
-    Autologin = {
-        User = "lucy";
+    users.users.lucy = {
+        isNormalUser = true;
+        description = "Lucy";
+        extraGroups = [ "networkmanager" "wheel" "video" ];
     };
-  };
 
-  services.openssh = {
-    enable = false;
-  };
+    services.displayManager.sddm.settings = {
+        Autologin = {
+            User = "lucy";
+        };
+    };
 
-  services.udev.extraRules = '' SUBSYSTEMS=="usb", ATTRS{idVendor}=="3297", MODE:="0666", SYMLINK+="ignition_dfu" '';
-   
+    services.openssh = {
+        enable = false;
+    };
+
+    services.udev.extraRules = '' SUBSYSTEMS=="usb", ATTRS{idVendor}=="3297", MODE:="0666", SYMLINK+="ignition_dfu" '';
+    
 
 
-  environment.systemPackages = with pkgs; [
-    wally-cli
-  ];
+    environment.systemPackages = with pkgs; [
+        wally-cli
+    ];
 
-  hardware.keyboard.zsa = {
-    enable = true;
-  };
+    hardware.keyboard.zsa = {
+        enable = true;
+    };
 }
