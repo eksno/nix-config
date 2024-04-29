@@ -21,5 +21,6 @@
     obs-studio
     gource
     discord
+    google-chrome
   ];
 }

@@ -13,7 +13,6 @@
     };
 
     services.xserver.xkb.layout = "us";
-    services.xserver.xkb.variant = "dvp";
     console.useXkbConfig = true;
     
     services.displayManager.sddm.settings.Autologin.User = "antopiahk";
@@ -29,5 +28,6 @@
 
     environment.systemPackages = with pkgs; [
         docker-compose
+        gnome3.gnome-tweaks
     ];
 }
