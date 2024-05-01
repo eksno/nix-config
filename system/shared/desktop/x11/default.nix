@@ -3,4 +3,7 @@
     imports = [
         ./..
     ];
+    environment.systemPackages = with pkgs; [
+    xclip
+    ];
 }
