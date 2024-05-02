@@ -139,6 +139,7 @@
     python312
 
     # utils
+    openvpn
     gdb
     ripgrep # recursively searches directories for a regex pattern
     jq # A lightweight and flexible command-line JSON processor
