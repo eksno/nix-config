@@ -6,10 +6,15 @@
         ./locale.nix
     ];
 
-    users.users.lucy = {
-        isNormalUser = true;
-        description = "Lucy";
-        extraGroups = [ "networkmanager" "wheel" "video" ];
+  users.users.lucy = {
+    isNormalUser = true;
+    description = "Lucy";
+    extraGroups = [ "networkmanager" "wheel" "video" "docker" ];
+  };
+
+  services.displayManager.sddm.settings = {
+    Autologin = {
+        User = "lucy";
     };
 
     services.displayManager.sddm.settings = {
@@ -18,17 +23,14 @@
         };
     };
 
-    services.openssh = {
-        enable = false;
-    };
+  services.udev.extraRules = '' SUBSYSTEMS=="usb", ATTRS{idVendor}=="3297", MODE:="0666", SYMLINK+="ignition_dfu" '';
+   
+  virtualisation.docker.enable = true;
 
-    services.udev.extraRules = '' SUBSYSTEMS=="usb", ATTRS{idVendor}=="3297", MODE:="0666", SYMLINK+="ignition_dfu" '';
-    
-
-
-    environment.systemPackages = with pkgs; [
-        wally-cli
-    ];
+  environment.systemPackages = with pkgs; [
+    docker-compose
+    wally-cli
+  ];
 
     hardware.keyboard.zsa = {
         enable = true;

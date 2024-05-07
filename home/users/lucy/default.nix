@@ -25,5 +25,6 @@
     v4l-utils
     libdrm
     easyeffects
+    openvpn
  ];
 }
