@@ -54,14 +54,14 @@
       chrono = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
         modules = [
-          ./system/users/lucy
+          ./system/users/teto
           ./system/hosts/chrono
 
           home-manager.nixosModules.home-manager
           {
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
-            home-manager.users.lucy = import ./home/users/lucy;
+            home-manager.users.teto = import ./home/users/teto;
           }
         ];
       };

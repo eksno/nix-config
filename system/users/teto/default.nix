@@ -2,24 +2,19 @@
 { config, pkgs, ... }:
 {
     imports = [
-        ../../shared/headless
+        ../../shared/desktop/wayland/hyprland
         ./locale.nix
     ];
 
-    users.users.teto = {
-        isNormalUser = true;
-        description = "teto";
-        extraGroups = [ "networkmanager" "wheel" "video" ];
-    };
+  users.users.teto = {
+    isNormalUser = true;
+    description = "Teto";
+    extraGroups = [ "networkmanager" "wheel" "video"];
+  };
 
-
-    services.openssh = {
-        enable = true;
-    };
-    
-
-    environment.systemPackages = with pkgs; [
-
-    ];
+  environment.systemPackages = with pkgs; [
+    docker-compose
+    wally-cli
+  ];
 
 }

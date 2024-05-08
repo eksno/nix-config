@@ -3,9 +3,12 @@
 {
   imports = [
     ./git.nix
-    ../../shared/headless
+    ../../shared/desktop
   ];
 
   home.username = "teto";
   home.homeDirectory = "/home/teto";
+
+  home.packages = with pkgs; [
+  ];
 }
