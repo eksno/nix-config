@@ -22,5 +22,6 @@
     gource
     discord
     google-chrome
+    openvpn
   ];
 }
