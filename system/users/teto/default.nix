@@ -9,7 +9,7 @@
   users.users.teto = {
     isNormalUser = true;
     description = "Teto";
-    extraGroups = [ "networkmanager" "wheel" "video"];
+    extraGroups = [ "networkmanager" "wheel" "video" "docker" ];
   };
 
   environment.systemPackages = with pkgs; [
