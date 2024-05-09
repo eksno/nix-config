@@ -22,5 +22,7 @@
     libdrm
     easyeffects
     openvpn
+    p7zip
+    wineWowPackages.waylandFull
  ];
 }
