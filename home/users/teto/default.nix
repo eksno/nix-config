@@ -24,5 +24,7 @@
     openvpn
     p7zip
     wineWowPackages.waylandFull
+    steam
+    legendary-gl
  ];
 }
