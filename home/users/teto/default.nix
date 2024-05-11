@@ -8,7 +8,8 @@
 
   home.username = "teto";
   home.homeDirectory = "/home/teto";
-
+  
+  
   home.packages = with pkgs; [
     caprine-bin # facebook messenger
     spotify
@@ -24,7 +25,10 @@
     openvpn
     p7zip
     wineWowPackages.waylandFull
-    steam
     legendary-gl
+    signal-desktop
+    prismlauncher
+    rustdesk
+    teamviewer
  ];
 }
