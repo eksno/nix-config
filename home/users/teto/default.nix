@@ -28,6 +28,7 @@
     legendary-gl
     signal-desktop
     prismlauncher
+    desmume
 #    rustdesk
 #    teamviewer
  ];
