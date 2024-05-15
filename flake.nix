@@ -15,11 +15,11 @@
   outputs = { nixpkgs, home-manager, hyprland, ... }: {
     nixosConfigurations = {
       # Teto's Work PC
-      tetomini = nixpkgs.lib.nixosSystem {
+      chuu = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
         modules = [
-          ./system/users/teto
-          ./system/hosts/tetomini
+          ./system/users/nabi
+          ./system/hosts/chuu
 
           # make home-manager as a module of nixos
           # so that home-manager configuration will be deployed automatically when executing `nixos-rebuild switch`
@@ -27,7 +27,7 @@
           {
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
-            home-manager.users.teto = import ./home/users/teto;
+            home-manager.users.nabi = import ./home/users/nabi;
           }
         ];
       };
