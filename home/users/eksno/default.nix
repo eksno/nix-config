@@ -4,6 +4,7 @@
   imports = [
     ./git.nix
     ../../shared/desktop
+    ./autojump.nix
   ];
 
   home.username = "eksno";

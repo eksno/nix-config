@@ -138,6 +138,10 @@
     rustc
     python312
 
+    # dev
+    cz-cli
+    pre-commit
+
     # utils
     openvpn
     gdb
