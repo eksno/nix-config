@@ -24,7 +24,7 @@ vim.keymap.set("n", "Q", "<nop>")
 vim.keymap.set("n", "<C-z>", "<nop>")
 
 vim.keymap.set("n", "<C-f>", function()
-        vim.lsp.buf.format()
+  vim.lsp.buf.format()
 end)
 
 vim.keymap.set("n", "<C-k>", "<cmd>cnext<CR>zz")
