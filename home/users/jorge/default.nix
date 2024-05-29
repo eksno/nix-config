@@ -5,8 +5,8 @@
     ../../shared/desktop
   ];
 
-  home.username = "antopiahk";
-  home.homeDirectory = "/home/antopiahk";
+  home.username = "jorge";
+  home.homeDirectory = "/home/jorge";
 
   programs.git.userName = "antopiahk";
   programs.git.userEmail = "antopiahk@gmail.com";
@@ -16,7 +16,6 @@
     spotify
     pcmanfm
     feh
-    discord
     bitwarden-cli
     obs-studio
     gource

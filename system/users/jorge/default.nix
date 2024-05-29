@@ -6,7 +6,7 @@
         ./locale.nix
     ];
 
-    users.users.antopiahk = {
+    users.users.jorge = {
         isNormalUser = true;
         description = "Jorge Lewis";
         extraGroups = [ "networkmanager" "wheel" "video" "docker" ];
@@ -15,7 +15,7 @@
     services.xserver.xkb.layout = "us";
     console.useXkbConfig = true;
     
-    services.displayManager.sddm.settings.Autologin.User = "antopiahk";
+    services.displayManager.sddm.settings.Autologin.User = "jorge";
 
     services.openssh.enable = true;
 

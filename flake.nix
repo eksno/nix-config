@@ -102,14 +102,14 @@
       lewis = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
         modules = [
-          ./system/users/antopiahk
+          ./system/users/jorge
           ./system/hosts/lewis
 
           home-manager.nixosModules.home-manager
           {
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
-            home-manager.users.antopiahk = import ./home/users/antopiahk;
+            home-manager.users.jorge = import ./home/users/jorge;
           }
         ];
       };
