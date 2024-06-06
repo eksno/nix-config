@@ -66,7 +66,7 @@
         ];
       };
 
-      # Jonas' Desktop
+      # Jonas' Main
       verse = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
         modules = [
@@ -82,7 +82,7 @@
         ];
       };
 
-      # Jonas' Laptop
+      # Jonas' Other
       werse = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
         modules = [
