@@ -25,7 +25,7 @@
     obs-studio
     playerctl # managing eww music
     brave # browser 
-    chrome # backup browser 2
+    chromium # backup browser 2
     easyeffects
   ];
 }

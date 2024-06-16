@@ -18,5 +18,6 @@
         gource
         anki
         easyeffects
+        webcord
     ];
 }
