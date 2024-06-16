@@ -29,6 +29,7 @@
     signal-desktop
     prismlauncher
     desmume
+    simplex-chat-desktop
 #    rustdesk
 #    teamviewer
  ];
