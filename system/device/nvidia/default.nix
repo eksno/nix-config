@@ -1,5 +1,8 @@
 { config, pkgs, ... }:
 {
+    imports = [
+        ./..
+    ];
   # Enable OpenGL
   hardware.opengl = {
     enable = true;
