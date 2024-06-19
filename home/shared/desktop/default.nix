@@ -2,6 +2,7 @@
 
 {
   imports = [
+    ../librewolf.nix
     ../alacritty.nix
     ../gpgagent.nix
     ../hyprland.nix

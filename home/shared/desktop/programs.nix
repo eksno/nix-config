@@ -15,7 +15,6 @@
     waybar
     libreoffice
     helvum
-    librewolf
     dbeaver-bin
     nextcloud-client
     obsidian # Update WE'RE SO BACK <-- I'm sorry little one, you were too trash for me to try to figure out. https://github.com/NixOS/nixpkgs/issues/302457
