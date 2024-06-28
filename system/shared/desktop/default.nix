@@ -25,9 +25,5 @@
     # links /libexec from derivations to /run/current-system/sw 
     environment.pathsToLink = [ "/libexec" ];
 
-    hardware = {
-        opengl.enable = true;
-    };
-
     xdg.portal.config.common.default = "*";
 }

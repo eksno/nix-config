@@ -2,6 +2,7 @@
 
 remove() {
 	# User Configs
+	rm -rf ~/.config/fish
 	rm -rf ~/.config/hypr
 	rm -rf ~/.config/eww
 	rm -rf ~/.config/i3
@@ -28,6 +29,7 @@ create() {
 	ln -s ~/nix-config/dotfiles/hypr/shared ~/.config/hypr/shared
 	./hypr.sh # source correct hypr files
 
+	ln -s ~/nix-config/dotfiles/fish ~/.config/fish
 	ln -s ~/nix-config/dotfiles/eww ~/.config/eww
 	ln -s ~/nix-config/dotfiles/i3 ~/.config/i3
 	ln -s ~/nix-config/dotfiles/kitty ~/.config/kitty
