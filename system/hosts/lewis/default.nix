@@ -6,13 +6,13 @@
 
     services.xserver.exportConfiguration = true;
 
-    services.fwupd.enable = true;
+    systemd.extraConfig = ''
+        DefaultTimeoutStopSec=10s
+    '';
 
     # Bootloader.
     boot.loader.systemd-boot.enable = true;
     boot.loader.efi.canTouchEfiVariables = true;
-    boot.kernelParams = [ "i916.force_probe=7d55" ];
-
 
     networking.hostName = "lewis"; # Define your hostname.
  }
