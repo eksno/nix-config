@@ -2,6 +2,7 @@
 {
     imports = [  # Do not import from ../../shared here. This is just hardware/device related.
         ./hardware-configuration.nix  # Include the results of the hardware scan.
+        ../../device/intel
     ];
 
     services.xserver.exportConfiguration = true;
