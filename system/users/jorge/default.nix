@@ -28,6 +28,5 @@
 
     environment.systemPackages = with pkgs; [
         docker-compose
-        gnome3.gnome-tweaks
     ];
 }
