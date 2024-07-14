@@ -29,8 +29,6 @@
 
     environment.systemPackages = with pkgs; [
         docker-compose
-        xorg.xmodmap
-        xorg.xkbcomp
     ];
 
     programs.steam = {
