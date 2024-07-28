@@ -66,28 +66,28 @@
         ];
       };
 
+      # Biwas' Main
+      ace = nixpkgs.lib.nixosSystem {
+        system = "x86_64-linux";
+        modules = [
+          ./system/users/biwas
+          ./system/hosts/ace
+
+          home-manager.nixosModules.home-manager
+          {
+            home-manager.useGlobalPkgs = true;
+            home-manager.useUserPackages = true;
+            home-manager.users.biwas = import ./home/users/biwas;
+          }
+        ];
+      };
+
       # Jonas' Main
       verse = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
         modules = [
           ./system/users/eksno
           ./system/hosts/verse
-
-          home-manager.nixosModules.home-manager
-          {
-            home-manager.useGlobalPkgs = true;
-            home-manager.useUserPackages = true;
-            home-manager.users.eksno = import ./home/users/eksno;
-          }
-        ];
-      };
-
-      # Jonas' Other
-      werse = nixpkgs.lib.nixosSystem {
-        system = "x86_64-linux";
-        modules = [
-          ./system/users/eksno
-          ./system/hosts/werse
 
           home-manager.nixosModules.home-manager
           {
