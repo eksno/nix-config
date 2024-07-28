@@ -56,10 +56,6 @@
             foreground = "#1e1e2e";
             background = "#a6e3a1";
             };
-            footer_bar = {
-            foreground = "#1e1e2e";
-            background = "#a6adc8";
-            };
         };
         hints = {
             start = {
