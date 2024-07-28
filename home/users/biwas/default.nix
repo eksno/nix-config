@@ -18,5 +18,6 @@
         gource
         easyeffects
         webcord
+        discord
     ];
 }
