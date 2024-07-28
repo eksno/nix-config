@@ -4,12 +4,13 @@
     imports = [
         ../../shared/desktop/wayland/hyprland
         ./locale.nix
+        ./steamcontroller.nix
     ];
 
     users.users.eksno = {
         isNormalUser = true;
         description = "Jonas Lindberg";
-        extraGroups = [ "networkmanager" "wheel" "video" "docker" ];
+        extraGroups = [ "networkmanager" "wheel" "video" "docker" "input" ];
     };
 
     services.xserver.xkb.layout = "us";
@@ -29,7 +30,12 @@
 
     environment.systemPackages = with pkgs; [
         docker-compose
+        xboxdrv
+        steam
     ];
+
+    boot.initrd.kernelModules = [ "usbhid" "joydev" "xpad" ];
+    boot.extraModprobeConfig = '' options bluetooth disable_ertm=1 '';
 
     programs.steam = {
         enable = true;
@@ -37,4 +43,8 @@
         dedicatedServer.openFirewall = true; # Open ports in the firewall for Source Dedicated Server
         localNetworkGameTransfers.openFirewall = true; # Open ports in the firewall for Steam Local Network Game Transfers
     };
+
+    hardware.pulseaudio.support32Bit = true;
+    hardware.graphics.enable32Bit = true;
+    hardware.steam-hardware.enable = true;
 }
