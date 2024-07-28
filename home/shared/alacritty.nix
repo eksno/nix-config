@@ -21,7 +21,7 @@
         save_to_clipboard = true;
       };
 
-      mouse_bindings = [
+      mouse.bindings = [
         {
           mouse = "Right";
           action = "Paste";
