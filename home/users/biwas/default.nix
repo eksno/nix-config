@@ -8,7 +8,7 @@
     ];
 
     home.username = "biwas";
-    home.homeDirectory = "/home/biwas";
+    home.homeDirectory = lib.mkForce "/home/biwas";
 
     home.packages = with pkgs; [
         glib
