@@ -7,7 +7,7 @@
         ./steamcontroller.nix
     ];
 
-    users.users.eksno = {
+    users.users.biwas = {
         isNormalUser = true;
         description = "Biwas Bhandari";
         extraGroups = [ "networkmanager" "wheel" "video" "docker" "input" ];
