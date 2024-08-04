@@ -1,4 +1,3 @@
-
 { config, pkgs, ... }:
 {
     imports = [
@@ -31,9 +30,12 @@
         docker-compose
         xboxdrv
         steam
+        droidcam        # Add DroidCam
+        android-tools    # Add ADB
+        v4l2loopback    # Add v4l2loopback for virtual webcam support
     ];
 
-    boot.initrd.kernelModules = [ "usbhid" "joydev" "xpad" ];
+    boot.initrd.kernelModules = [ "usbhid" "joydev" "xpad" "v4l2loopback" ];  # Load v4l2loopback
     boot.extraModprobeConfig = '' options bluetooth disable_ertm=1 '';
 
     programs.steam = {

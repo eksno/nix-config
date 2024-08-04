@@ -18,6 +18,9 @@
         gource
         easyeffects
         webcord
-        discord
+        cheese
+        droidcam
+        guvcview
+        android-tools
     ];
 }
