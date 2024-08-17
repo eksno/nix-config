@@ -57,36 +57,32 @@ in
                     plugin = catppuccin;
                     extraConfig = ''
                         set -g @catppuccin_flavour 'mocha'
-                        set -g @catppuccin_window_left_separator "█"
-                        set -g @catppuccin_window_right_separator "█ "
-                        set -g @catppuccin_window_middle_separator " █"
-                        set -g @catppuccin_window_number_position "right"
+                        set -g @catppuccin_window_left_separator '█'
+                        set -g @catppuccin_window_right_separator '█ '
+                        set -g @catppuccin_window_middle_separator ' █'
+                        set -g @catppuccin_window_number_position 'right'
 
-                        set -g @catppuccin_window_default_fill "number"
-                        set -g @catppuccin_window_default_text "#W"
+                        set -g @catppuccin_window_default_fill 'number'
+                        set -g @catppuccin_window_default_text '#W'
 
-                        set -g @catppuccin_window_current_fill "number"
-                        set -g @catppuccin_window_current_text "#W"
+                        set -g @catppuccin_window_current_fill 'number'
+                        set -g @catppuccin_window_current_text '#W'
 
-                        set -g @catppuccin_status_modules "application session user host battery date_time"
-                        set -g @catppuccin_status_left_separator  ""
-                        set -g @catppuccin_status_right_separator ""
-                        set -g @catppuccin_status_right_separator_inverse "no"
-                        set -g @catppuccin_status_fill "icon"
-                        #set -g @catppuccin_status_connect_separator "no"
+                        set -g @catppuccin_status_modules 'application session user host battery date_time'
+                        set -g @catppuccin_status_left_separator ''
+                        set -g @catppuccin_status_right_separator ''
+                        set -g @catppuccin_status_right_separator_inverse 'no'
+                        set -g @catppuccin_status_fill 'icon'
 
-                        set -g @catppuccin_directory_text "#{pane_current_path}"
+                        set -g @catppuccin_directory_text '#{pane_current_path}'
                     '';
-                }
-
-                {
-                    plugin = better-mouse-mode;
                 }
 
                 # Required for catppuccin battery indicator
                 {
                     plugin = battery;
                 }
+
                 {
                     plugin = resurrect;
                     extraConfig = ''
@@ -134,6 +130,7 @@ in
                 {
                     plugin = yank;
                 }
+
                 # For some reason this plugin by default only copy into the Tmux copy buffer
                 # and so I had to explicitly state the command to make it copy into the system
                 # clipboard as swell.
@@ -144,6 +141,7 @@ in
                     set -g @thumbs-key C-y
                     '';
                 }
+
                 {
                     plugin = extrakto;
                     extraConfig = ''
@@ -151,6 +149,7 @@ in
                         set -g @extrakto_split_direction v
                     '';
                 }
+
                 # a few words about @continuum-boot and @continuum-systemd-start-cmd that
                 # are not used as part of the extraConfig for the continuum plugin.
                 #
@@ -183,7 +182,7 @@ in
                 # If autosave option interval is not set there is a default of 15 minutes
                 # and it worked for me when tested.
                 {
-                plugin = continuum;
+                    plugin = continuum;
                     extraConfig = ''
                         set -g @continuum-restore 'on'
                         set -g @continuum-save-interval '10'
@@ -278,8 +277,6 @@ in
                 # Escape turns on copy mode
                 bind Escape copy-mode
 
-                # Easier reload of config
-                bind r source-file ~/.config/tmux/tmux.conf
 
                 set-option -g status-position top
 
@@ -304,7 +301,7 @@ in
                 bind-key e send-keys "tmux capture-pane -p -S - | nvim -c 'set buftype=nofile' +" Enter
 
                 # evaluate/reload config
-                bind-key e source-file ${generatedConfigFilePath} \; display-message "${generatedConfigFilePath} evaluated."
+                bind-key r source-file ${generatedConfigFilePath} \; display-message "${generatedConfigFilePath} evaluated."
             '';
         };
     };

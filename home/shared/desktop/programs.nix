@@ -1,4 +1,3 @@
-
 { config, lib, pkgs, ... }:
 
 {
@@ -20,7 +19,6 @@
     bitwarden  # Update WE'RE SO BACK <-- I believed in you, but you had to be a pain.
     vscode
     obs-studio
-    playerctl # managing eww music
     brave # browser 
     chromium # backup browser 2
     easyeffects
