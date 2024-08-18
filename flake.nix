@@ -36,7 +36,7 @@
       lappy = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
         modules = [
-          ./system/users/lucy
+          ./system/users/teto
           ./system/hosts/lappy
 
           # make home-manager as a module of nixos
@@ -45,7 +45,7 @@
           {
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
-            home-manager.users.lucy = import ./home/users/lucy;
+            home-manager.users.teto = import ./home/users/teto;
           }
         ];
       };

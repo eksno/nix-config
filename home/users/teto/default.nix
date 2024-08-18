@@ -14,15 +14,10 @@
     caprine-bin # facebook messenger
     spotify
     spotify-cli-linux
-    whatsapp-for-linux
     zsa-udev-rules
-    wayvnc
     webcord
     parsec-bin
-    v4l-utils
-    libdrm
     easyeffects
-    openvpn
     p7zip
     wineWowPackages.waylandFull
     legendary-gl
@@ -30,6 +25,7 @@
     prismlauncher
     desmume
     simplex-chat-desktop
+    brightnessctl
 #    rustdesk
 #    teamviewer
  ];
