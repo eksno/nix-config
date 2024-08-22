@@ -19,6 +19,5 @@
         anki
         easyeffects
         webcord
-        logmein-hamachi
     ];
 }
