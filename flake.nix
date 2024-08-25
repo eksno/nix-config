@@ -9,7 +9,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    hyprland.url = "github:hyprwm/Hyprland";
+        hyprland.url = "github:hyprwm/Hyprland/xwayland-rewrite?submodules=1";
   };
 
   outputs = { nixpkgs, home-manager, hyprland, ... }: {
