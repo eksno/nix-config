@@ -1,4 +1,4 @@
-{ config, lib, pkgs, ... }:
+{ config, lib, pkgs, ...}:
 
 {
   imports = [
@@ -29,4 +29,8 @@
 #    rustdesk
 #    teamviewer
  ];
+
+  programs.librewolf = {
+    enable = lib.mkOverride 10 false;
+  };
 }
