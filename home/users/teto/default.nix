@@ -30,7 +30,4 @@
 #    teamviewer
  ];
 
-  programs.librewolf = {
-    enable = lib.mkOverride 10 false;
-  };
 }
