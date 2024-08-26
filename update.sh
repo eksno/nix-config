@@ -5,10 +5,10 @@
 
 # Get Host
 if [[ "$HOSTNAME" = "nixos" ]] || [[ $1 == 'reconfigure' ]]; then
-	echo -n "Enter Host: "
-	read host
+    echo -n "Enter Host: "
+    read -r host
 else
-	host=$HOSTNAME
+    host=$HOSTNAME
 fi
 
 # It won't find paths not staged, we git add .
@@ -24,10 +24,12 @@ sudo nix flake update
 git add .
 
 # Apply the updates
-sudo nixos-rebuild switch --flake .#$host --impure
+sudo nixos-rebuild switch --flake "./#$host" --impure
 
 # It won't find paths not staged, we git add .
 git add .
 
 # Update flake.lock (required again to update after package install)
 nix flake update
+
+df -h /boot
