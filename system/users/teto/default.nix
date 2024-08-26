@@ -26,6 +26,12 @@
         };
     };
 
+
+    #services.xserver = {
+        #layout = "no";   
+        #xkbVariant = "nodeadkeys";  
+    # };
+
   services.udev.extraRules = '' SUBSYSTEMS=="usb", ATTRS{idVendor}=="3297", MODE:="0666", SYMLINK+="ignition_dfu" '';
   environment.systemPackages = with pkgs; [
     docker-compose
