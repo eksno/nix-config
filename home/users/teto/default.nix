@@ -28,6 +28,8 @@
     brightnessctl
 #    rustdesk
 #    teamviewer
+    kdePackages.qtsvg
+    dolphin
  ];
 
 }
