@@ -9,14 +9,40 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-        hyprland.url = "github:hyprwm/Hyprland/xwayland-rewrite?submodules=1";
+    nixos-unstable-small = {
+      url = "github:NixOS/nixpkgs/nixos-unstable-small";
+    };
   };
 
-  outputs = { nixpkgs, home-manager, hyprland, ... }: {
+  outputs = inputs: let
+        nixpkgs = inputs.nixpkgs;
+        home-manager = inputs.home-manager;
+        system = "x86_64-linux";
+        unstable-small-pkgs = import inputs.nixos-unstable-small {inherit system;};
+        xdphOverlay = final: prev: {
+            inherit (unstable-small-pkgs) xdg-desktop-portal-hyprland;
+        };
+        pkgs = import inputs.nixpkgs {
+            inherit system;
+            overlays = [xdphOverlay];
+            config = {
+                permittedInsecurePackages = [];
+                allowUnfree = true;
+                packageOverrides = pkgs: {
+                    intel-vaapi-driver = pkgs.intel-vaapi-driver.override { enableHybridCodec = true; };
+                    catppuccin-gtk = pkgs.catppuccin-gtk.override {
+                        size = "standard";
+                        variant = "mocha";
+                    };
+                };
+            };
+        };
+  in {
     nixosConfigurations = {
       # Teto's Work PC
       chuu = nixpkgs.lib.nixosSystem {
-        system = "x86_64-linux";
+        inherit system;
+        specialArgs = {inherit inputs pkgs;};
         modules = [
           ./system/users/nabi
           ./system/hosts/chuu
@@ -34,7 +60,8 @@
 
       # Lucy's Laptop
       lappy = nixpkgs.lib.nixosSystem {
-        system = "x86_64-linux";
+        inherit system;
+        specialArgs = {inherit inputs pkgs;};
         modules = [
           ./system/users/teto
           ./system/hosts/lappy
@@ -52,7 +79,8 @@
 
       # Lucy's Desktop
       chrono = nixpkgs.lib.nixosSystem {
-        system = "x86_64-linux";
+        inherit system;
+        specialArgs = {inherit inputs pkgs;};
         modules = [
           ./system/users/teto
           ./system/hosts/chrono
@@ -68,7 +96,8 @@
 
       # Biwas' Main
       ace = nixpkgs.lib.nixosSystem {
-        system = "x86_64-linux";
+        inherit system;
+        specialArgs = {inherit inputs pkgs;};
         modules = [
           ./system/users/biwas
           ./system/hosts/ace
@@ -84,7 +113,8 @@
 
       # Jonas' Main
       verse = nixpkgs.lib.nixosSystem {
-        system = "x86_64-linux";
+        inherit system;
+        specialArgs = {inherit inputs pkgs;};
         modules = [
           ./system/users/eksno
           ./system/hosts/verse
@@ -100,7 +130,8 @@
 
       # Jorge's Laptop
       lewis = nixpkgs.lib.nixosSystem {
-        system = "x86_64-linux";
+        inherit system;
+        specialArgs = {inherit inputs pkgs;};
         modules = [
           ./system/users/jorge
           ./system/hosts/lewis
@@ -116,7 +147,8 @@
 
       # WSL
       eksno-wsl = nixpkgs.lib.nixosSystem {
-        system = "x86_64-linux";
+        inherit system;
+        specialArgs = {inherit inputs pkgs;};
         modules = [
           ./system/users/eksno/headless.nix
           ./system/hosts/eksno-wsl
@@ -132,7 +164,8 @@
 
       # WSL
       leon-wsl = nixpkgs.lib.nixosSystem {
-        system = "x86_64-linux";
+        inherit system;
+        specialArgs = {inherit inputs pkgs;};
         modules = [
           ./system/users/leon/headless.nix
           ./system/hosts/leon-wsl

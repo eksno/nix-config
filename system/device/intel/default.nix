@@ -9,10 +9,6 @@
     boot.kernelParams = [ "i915.force_probe=7d55" ];  
     boot.kernelModules = [ "kvm-intel" ];
 
-    # Accelerated Video Playback (https://nixos.wiki/wiki/Accelerated_Video_Playback)
-    nixpkgs.config.packageOverrides = pkgs: {
-        intel-vaapi-driver = pkgs.intel-vaapi-driver.override { enableHybridCodec = true; };
-    };
     hardware.graphics = {
         enable = true;
         extraPackages = with pkgs; [

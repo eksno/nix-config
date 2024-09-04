@@ -10,7 +10,9 @@
     home.username = "eksno";
     home.homeDirectory = "/home/eksno";
 
+
     home.packages = with pkgs; [
+
         glib
         beeper
         bitwarden-cli

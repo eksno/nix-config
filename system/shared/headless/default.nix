@@ -8,7 +8,6 @@
     ../networking.nix
     ../system.nix
   ];
-
   # Enable Flakes and the new command-line tool
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
   
@@ -23,9 +22,6 @@
 
   # Set default editor to neovim
   environment.variables.EDITOR = "neovim";
-
-  # Allow unfree packages
-  nixpkgs.config.allowUnfree = true;
 
   # Support ntfs
   boot.supportedFilesystems = [ "ntfs" ];
