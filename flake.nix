@@ -9,31 +9,25 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    nixos-unstable-small = {
-      url = "github:NixOS/nixpkgs/nixos-unstable-small";
-    };
+        hyprland.url = "github:hyprwm/Hyprland/xwayland-rewrite?submodules=1";
   };
+
 
   outputs = inputs: let
         nixpkgs = inputs.nixpkgs;
         home-manager = inputs.home-manager;
         system = "x86_64-linux";
-        unstable-small-pkgs = import inputs.nixos-unstable-small {inherit system;};
-        xdphOverlay = final: prev: {
-            inherit (unstable-small-pkgs) xdg-desktop-portal-hyprland;
-        };
         pkgs = import inputs.nixpkgs {
             inherit system;
-            overlays = [xdphOverlay];
             config = {
                 permittedInsecurePackages = [];
                 allowUnfree = true;
                 packageOverrides = pkgs: {
                     intel-vaapi-driver = pkgs.intel-vaapi-driver.override { enableHybridCodec = true; };
-                    catppuccin-gtk = pkgs.catppuccin-gtk.override {
-                        size = "standard";
-                        variant = "mocha";
-                    };
+                    # catppuccin-gtk = pkgs.catppuccin-gtk.override {
+                    #     size = "standard";
+                    #     variant = "mocha";
+                    # };
                 };
             };
         };
