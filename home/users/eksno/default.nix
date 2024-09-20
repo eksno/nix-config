@@ -12,7 +12,8 @@
 
 
     home.packages = with pkgs; [
-
+        hoppscotch
+        brightnessctl
         glib
         beeper
         bitwarden-cli
