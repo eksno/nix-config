@@ -9,7 +9,9 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-        hyprland.url = "github:hyprwm/Hyprland/xwayland-rewrite?submodules=1";
+    hyprland.url = "github:hyprwm/Hyprland/xwayland-rewrite?submodules=1";
+
+    nixcord.url = "github:kaylorben/nixcord";
   };
 
 
@@ -31,6 +33,7 @@
                 };
             };
         };
+        nixcord = inputs.nixcord;
   in {
     nixosConfigurations = {
       # Teto's Work PC
@@ -118,6 +121,9 @@
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
             home-manager.users.eksno = import ./home/users/eksno;
+            home-manager.sharedModules = [
+              nixcord.homeManagerModules.nixcord
+            ];
           }
         ];
       };
