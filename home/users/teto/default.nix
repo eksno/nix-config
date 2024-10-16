@@ -31,6 +31,7 @@
     kdePackages.qtsvg
     dolphin
     whatsapp-for-linux
+    smile
  ];
 
 }
