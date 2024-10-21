@@ -10,7 +10,7 @@
     users.users.eksno = {
         isNormalUser = true;
         description = "Jonas Lindberg";
-        extraGroups = [ "networkmanager" "wheel" "video" "docker" "input" ];
+        extraGroups = [ "networkmanager" "wheel" "video" "docker" "input" "uinput" ];
     };
 
     services.xserver.xkb.layout = "us";
