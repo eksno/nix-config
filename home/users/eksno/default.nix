@@ -5,6 +5,7 @@
         ./git.nix
         ../../shared/desktop
         ./autojump.nix
+        ./dev
     ];
 
     home.username = "eksno";
@@ -16,7 +17,6 @@
         axel
         glib
         btop
-        kanata-with-cmd
 
         qbittorrent
         hoppscotch

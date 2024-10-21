@@ -49,7 +49,7 @@
     eza = {
       enable = true;
       enableFishIntegration = true;
-      icons = true;
+      icons = "auto";
     };
     fish = {
       enable = true;

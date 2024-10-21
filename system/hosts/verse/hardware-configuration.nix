@@ -24,14 +24,26 @@
       options = [ "fmask=0022" "dmask=0022" ];
     };
 
-  swapDevices = [ ];
+  swapDevices =
+    [ { device = "/dev/disk/by-uuid/ac186a2c-612d-45f9-8c18-034c90d12915"; }
+    ];
 
   # Enables DHCP on each ethernet and wireless interface. In case of scripted networking
   # (the default) this is the recommended approach. When using systemd-networkd it's
   # still possible to use this option, but it's recommended to use it in conjunction
   # with explicit per-interface declarations with `networking.interfaces.<interface>.useDHCP`.
   networking.useDHCP = lib.mkDefault true;
+  # networking.interfaces.br-13c343f6c288.useDHCP = lib.mkDefault true;
+  # networking.interfaces.br-33ba543ef146.useDHCP = lib.mkDefault true;
+  # networking.interfaces.br-a2572b02b21d.useDHCP = lib.mkDefault true;
+  # networking.interfaces.br-f01d0f56a61b.useDHCP = lib.mkDefault true;
   # networking.interfaces.docker0.useDHCP = lib.mkDefault true;
+  # networking.interfaces.veth1a435df.useDHCP = lib.mkDefault true;
+  # networking.interfaces.veth64aa3d0.useDHCP = lib.mkDefault true;
+  # networking.interfaces.vethb737e54.useDHCP = lib.mkDefault true;
+  # networking.interfaces.vethdd0987d.useDHCP = lib.mkDefault true;
+  # networking.interfaces.vethdf6791a.useDHCP = lib.mkDefault true;
+  # networking.interfaces.vethe9ad286.useDHCP = lib.mkDefault true;
   # networking.interfaces.wlo1.useDHCP = lib.mkDefault true;
 
   nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";

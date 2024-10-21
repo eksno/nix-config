@@ -16,6 +16,26 @@
     services.xserver.xkb.layout = "us";
     services.xserver.xkb.variant = "dvp";
     console.useXkbConfig = true;
+
+    services.kanata.enable = true;
+    services.kanata.keyboards.main = {
+        config = ''
+            (defsrc
+                esc
+                caps
+            )
+
+            (defalias
+                noesc ()
+                cec (tap-hold 100 100 esc lctrl)
+            )
+
+            (deflayer base
+                @noesc
+                @cec
+            )
+        '';
+    };
     
     services.displayManager.sddm.settings.Autologin.User = "eksno";
 
