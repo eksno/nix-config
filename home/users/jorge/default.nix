@@ -22,5 +22,6 @@
     discord
     google-chrome
     openvpn
+    code-cursor
   ];
 }
