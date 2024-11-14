@@ -1,28 +1,36 @@
 { config, pkgs, ... }:
 {
-  imports = [
-    ../fish.nix
-    ../bluetooth.nix
-    ../fish.nix
-    ../fonts.nix
-    ../networking.nix
-    ../system.nix
-  ];
-  # Enable Flakes and the new command-line tool
-  nix.settings.experimental-features = [ "nix-command" "flakes" ];
-  
-  environment.systemPackages = with pkgs; [
-    git # Flakes use Git to pull dependencies from data sources, so Git must be installed first
-    gccgo
-    libgcc
-    neovim
-    wget
-    curl
-  ];
+    imports = [
+        ../fish.nix
+        ../bluetooth.nix
+        ../fish.nix
+        ../fonts.nix
+        ../networking.nix
+        ../system.nix
+    ];
+    # Enable Flakes and the new command-line tool
+    nix.settings.experimental-features = [ "nix-command" "flakes" ];
+    
+    environment.systemPackages = with pkgs; [
+        git # Flakes use Git to pull dependencies from data sources, so Git must be installed first
+        gccgo
+        libgcc
+        neovim
+        wget
+        curl
+        gnome-keyring
+        libsecret
+    ];
 
-  # Set default editor to neovim
-  environment.variables.EDITOR = "neovim";
+    services.dbus.packages = with pkgs; [
+        pass-secret-service
+    ];
 
-  # Support ntfs
-  boot.supportedFilesystems = [ "ntfs" ];
+    services.passSecretService.enable = true;
+
+    # Set default editor to neovim
+    environment.variables.EDITOR = "neovim";
+
+    # Support ntfs
+    boot.supportedFilesystems = [ "ntfs" ];
 }
