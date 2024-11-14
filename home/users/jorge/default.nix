@@ -3,6 +3,7 @@
 {
   imports = [
     ../../shared/desktop
+    ../eksno/dev
   ];
 
   home.username = "jorge";
