@@ -9,7 +9,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    hyprland.url = "github:hyprwm/Hyprland/xwayland-rewrite?submodules=1";
+    hyprland.url = "github:hyprwm/Hyprland";
 
     nixcord.url = "github:kaylorben/nixcord";
   };
