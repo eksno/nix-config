@@ -11,6 +11,8 @@ else
     host=$HOSTNAME
 fi
 
+sudo echo "Authenticated." || exit
+
 # It won't find paths not staged, we git add .
 git add .
 
