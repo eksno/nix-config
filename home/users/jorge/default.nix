@@ -27,5 +27,6 @@
     protonvpn-gui
     supabase-cli
     github-desktop
+    logiops
   ];
 }
