@@ -28,5 +28,6 @@
     supabase-cli
     github-desktop
     logiops
+    imagemagick
   ];
 }
