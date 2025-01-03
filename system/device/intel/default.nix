@@ -4,7 +4,7 @@
         ./..
     ];
     hardware.enableRedistributableFirmware = true; 
-    services.xserver.videoDrivers = [ "intel" "modesetting" ];
+    services.xserver.videoDrivers = [ "modesetting" ];
     boot.blacklistedKernelModules = [ "nouveau" "nvidia" "bbswitch" ];
     boot.kernelParams = [ "i915.force_probe=7d55" ];  
     boot.kernelModules = [ "kvm-intel" ];
