@@ -16,23 +16,23 @@
     services.xserver.xkb.layout = "us";
     console.useXkbConfig = true;
 
-    services.kanata.enable = true;
-    services.kanata.keyboards.main = {
-        config = ''
-            (defsrc
-                caps
-            )
-
-            (defalias
-                cec ()
-            )
-
-            (deflayer base
-                @cec
-            )
-        '';
-    };
-   
+    # services.kanata.enable = true;
+    # services.kanata.keyboards.main = {
+    #     config = ''
+    #         (defsrc
+    #             caps
+    #         )
+    #
+    #         (defalias
+    #             cec ()
+    #         )
+    #
+    #         (deflayer base
+    #             @cec
+    #         )
+    #     '';
+    # };
+    #
     services.displayManager.sddm.settings.Autologin.User = "eksno";
 
     services.openssh.enable = true;

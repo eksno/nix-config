@@ -136,7 +136,6 @@
     gnumake
     cargo
     rustc
-    python312
 
     # dev
     cz-cli

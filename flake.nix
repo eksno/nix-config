@@ -2,16 +2,14 @@
   description = "Chronoverse Flake Config";
 
   inputs = {
+    hyprland.url = "github:hyprwm/Hyprland";
+
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 
     home-manager = {
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-
-    hyprland.url = "github:hyprwm/Hyprland";
-
-    nixcord.url = "github:kaylorben/nixcord";
   };
 
 
@@ -33,7 +31,6 @@
                 };
             };
         };
-        nixcord = inputs.nixcord;
   in {
     nixosConfigurations = {
       # Teto's Work PC
@@ -121,9 +118,6 @@
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
             home-manager.users.eksno = import ./home/users/eksno;
-            home-manager.sharedModules = [
-              nixcord.homeManagerModules.nixcord
-            ];
           }
         ];
       };

@@ -22,12 +22,6 @@
         libsecret
     ];
 
-    services.dbus.packages = with pkgs; [
-        pass-secret-service
-    ];
-
-    services.passSecretService.enable = true;
-
     # Set default editor to neovim
     environment.variables.EDITOR = "neovim";
 
