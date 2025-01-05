@@ -28,7 +28,6 @@
 
     environment.systemPackages = with pkgs; [
         docker-compose
-        xboxdrv
         steam
         droidcam        # Add DroidCam
         android-tools    # Add ADB
@@ -45,7 +44,5 @@
         localNetworkGameTransfers.openFirewall = true; # Open ports in the firewall for Steam Local Network Game Transfers
     };
 
-    hardware.pulseaudio.support32Bit = true;
-    hardware.graphics.enable32Bit = true;
     hardware.steam-hardware.enable = true;
 }

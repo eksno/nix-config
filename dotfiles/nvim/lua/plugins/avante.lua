@@ -3,10 +3,19 @@ return {
     "yetone/avante.nvim",
     event = "VeryLazy",
     lazy = false,
-    version = false, -- set this if you want to always pull the latest change
+    version = true, -- set this if you want to always pull the latest change
     opts = {
       -- add any opts here
-      provider = "copilot",
+      provider = "azure", -- Recommend using Claude
+      auto_suggestions_provider = "copilot", -- Since auto-suggestions are a high-frequency operation and therefore expensive, it is recommended to specify an inexpensive provider or even a free provider: copilot
+      azure = {
+        endpoint = "https://startino.openai.azure.com",
+        deployment = "gpt-4o",
+        model = "gpt-4o",
+        timeout = 30000, -- Timeout in milliseconds
+        temperature = 0,
+        max_tokens = 4096,
+      },
     },
     -- if you want to build from source then do `make BUILD_FROM_SOURCE=true`
     build = "make",
