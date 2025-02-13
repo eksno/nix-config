@@ -3,21 +3,24 @@
 # Verify not sudo
 [[ -z $SUDO_USER ]] && echo "Running" || exit
 
-# Get Host
-if [[ "$HOSTNAME" = "nixos" ]] || [[ $1 == 'reconfigure' ]]; then
-    echo -n "Enter Host: "
-    read -r host
-else
-    host=$HOSTNAME
-fi
-
 sudo echo "Authenticated." || exit
 
 # It won't find paths not staged, we git add .
 git add .
 
-# Set Symlinks
-./symlink.sh
+# Get Host and Symlink
+if [[ "$HOSTNAME" = "nixos" ]] || [[ $1 == 'reconfigure' ]] || [[ $2 == 'reconfigure' ]]; then
+    echo -n "Enter Host: "
+    read -r host
+    ./symlink.sh
+else
+    host=$HOSTNAME
+
+    if [[ $1 == 'symlink' ]] || [[ $2 == 'symlink' ]]; then
+        # Set Symlinks
+        ./symlink.sh
+    fi
+fi
 
 # Update flake.lock (make sure it's synced up, can fail but should be fine)
 sudo nix flake update

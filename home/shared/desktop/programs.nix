@@ -19,8 +19,7 @@
     bitwarden  # Update WE'RE SO BACK <-- I believed in you, but you had to be a pain.
     vscode
     obs-studio
-    brave # browser 
-    chromium # backup browser 2
+    google-chrome
     easyeffects
   ];
 }

@@ -2,10 +2,9 @@
   description = "Chronoverse Flake Config";
 
   inputs = {
-    hyprland.url = "github:hyprwm/Hyprland";
-
+    zen-browser.url = "github:0xc000022070/zen-browser-flake";
+    catppuccin.url = "github:catppuccin/nix";
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-
     home-manager = {
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -14,6 +13,7 @@
 
 
   outputs = inputs: let
+        catppuccin = inputs.catppuccin;
         nixpkgs = inputs.nixpkgs;
         home-manager = inputs.home-manager;
         system = "x86_64-linux";
@@ -24,10 +24,6 @@
                 allowUnfree = true;
                 packageOverrides = pkgs: {
                     intel-vaapi-driver = pkgs.intel-vaapi-driver.override { enableHybridCodec = true; };
-                    # catppuccin-gtk = pkgs.catppuccin-gtk.override {
-                    #     size = "standard";
-                    #     variant = "mocha";
-                    # };
                 };
             };
         };
@@ -107,14 +103,17 @@
 
       # Jonas' Main
       verse = nixpkgs.lib.nixosSystem {
-        inherit system;
-        specialArgs = {inherit inputs pkgs;};
+        system = "x86_64-linux";
+        specialArgs = {inherit system inputs pkgs;};
         modules = [
+          catppuccin.nixosModules.catppuccin
           ./system/users/eksno
           ./system/hosts/verse
 
           home-manager.nixosModules.home-manager
           {
+            catppuccin.flavor = "mocha";
+            catppuccin.enable = true;
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
             home-manager.users.eksno = import ./home/users/eksno;
