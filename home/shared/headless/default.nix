@@ -5,7 +5,6 @@
     ../homemanager.nix
 
     ./gpgagent.nix
-    ./tmux.nix
     ./xdg.nix
 
     ./programs.nix

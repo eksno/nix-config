@@ -17,6 +17,7 @@
         glib
         btop
 
+        tmux
         google-chrome
         postgresql
         qbittorrent
