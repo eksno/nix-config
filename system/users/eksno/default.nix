@@ -34,6 +34,8 @@
         docker-compose
         steam
         v4l-utils
+        beeper
+        tmux
     ];
 
     boot.extraModulePackages = with config.boot.kernelPackages; [ v4l2loopback ];

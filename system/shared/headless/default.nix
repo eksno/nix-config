@@ -22,6 +22,7 @@
         libsecret
     ];
 
+    programs.tmux.enable = true;
     # Set default editor to neovim
     environment.variables.EDITOR = "neovim";
 

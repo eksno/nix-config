@@ -16,13 +16,10 @@
         axel
         glib
         btop
-
-        tmux
         google-chrome
         postgresql
         qbittorrent
         hoppscotch
-        beeper
         obs-studio
         gource
         anki
