@@ -18,7 +18,6 @@
         neovim
         wget
         curl
-        gnome-keyring
         libsecret
     ];
 

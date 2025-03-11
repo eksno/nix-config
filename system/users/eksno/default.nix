@@ -41,7 +41,25 @@
         beeper
         whisper-ctranslate2
         tmux
+        code-cursor
+        vivaldi
     ];
+
+    # better way of handling wifi connections
+    networking.wireless.iwd = {
+        enable = true;
+        settings = {
+            IPv6 = {
+                Enabled = true;
+            };
+            Settings = {
+                AutoConnect = true;
+            };
+        };
+    };
+    networking.networkmanager.wifi.backend = "iwd";
+    services.connman.wifi.backend = "iwd";
+    services.gnome3.gnome-keyring.enable = true;
 
     boot.extraModulePackages = with config.boot.kernelPackages; [ v4l2loopback ];
     boot.kernelModules = [ "v4l2loopback" ];
