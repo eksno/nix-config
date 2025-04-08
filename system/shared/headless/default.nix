@@ -27,4 +27,7 @@
 
     # Support ntfs
     boot.supportedFilesystems = [ "ntfs" ];
+    
+    # keyring
+    services.gnome.gnome-keyring.enable = true;
 }
