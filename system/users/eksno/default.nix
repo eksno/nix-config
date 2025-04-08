@@ -28,9 +28,9 @@
     ];
 
     networking.networkmanager.enable = true;
-    networking.enableIPv6 = false;
-    boot.kernel.sysctl."net.ipv6.conf.all.disable_ipv6" = true;
-    boot.kernel.sysctl."net.ipv6.conf.default.disable_ipv6" = true;
+    # networking.enableIPv6 = false;
+    # boot.kernel.sysctl."net.ipv6.conf.all.disable_ipv6" = true;
+    # boot.kernel.sysctl."net.ipv6.conf.default.disable_ipv6" = true;
 
     environment.systemPackages = with pkgs; [
         inputs.zen-browser.packages."${system}".default
@@ -43,23 +43,23 @@
         tmux
         code-cursor
         vivaldi
+        seahorse
     ];
 
     # better way of handling wifi connections
-    networking.wireless.iwd = {
-        enable = true;
-        settings = {
-            IPv6 = {
-                Enabled = true;
-            };
-            Settings = {
-                AutoConnect = true;
-            };
-        };
-    };
-    networking.networkmanager.wifi.backend = "iwd";
-    services.connman.wifi.backend = "iwd";
-    services.gnome3.gnome-keyring.enable = true;
+    # networking.wireless.iwd = {
+    #     enable = true;
+    #     settings = {
+    #         IPv6 = {
+    #             Enabled = true;
+    #         };
+    #         Settings = {
+    #             AutoConnect = true;
+    #         };
+    #     };
+    # };
+    # networking.networkmanager.wifi.backend = "iwd";
+    # services.connman.wifi.backend = "iwd";
 
     boot.extraModulePackages = with config.boot.kernelPackages; [ v4l2loopback ];
     boot.kernelModules = [ "v4l2loopback" ];
