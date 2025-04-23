@@ -23,7 +23,6 @@
     discord
     google-chrome
     openvpn
-    code-cursor
     protonvpn-gui
     supabase-cli
     github-desktop
