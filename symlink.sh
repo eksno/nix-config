@@ -4,7 +4,6 @@ remove() {
     # User Configs
     rm -rf ~/.config/fish
     rm -rf ~/.config/eww
-    rm -rf ~/.config/i3
     rm -rf ~/.config/tmux
     rm -rf ~/.config/kitty
     rm -rf ~/.config/nvim
@@ -29,7 +28,6 @@ create() {
     ln -s ~/nix-config/dotfiles/fish ~/.config/fish
     ln -s ~/nix-config/dotfiles/tmux ~/.config/tmux
     ln -s ~/nix-config/dotfiles/eww ~/.config/eww
-    ln -s ~/nix-config/dotfiles/i3 ~/.config/i3
     ln -s ~/nix-config/dotfiles/kitty ~/.config/kitty
     ln -s ~/nix-config/dotfiles/nvim ~/.config/nvim
     ln -s ~/nix-config/dotfiles/tofi ~/.config/tofi

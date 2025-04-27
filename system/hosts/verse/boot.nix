@@ -1,16 +1,10 @@
 { pkgs,  ... }:
 
 {
-  # Bootloader.
-  boot.loader.systemd-boot.enable = true;
-  boot.loader.efi.canTouchEfiVariables = true;
-  # boot.loader.timeout = 2;
-  # boot.initrd.enable = true;
-  # boot.initrd.systemd.enable = true;
-  # boot.consoleLogLevel = 3;
-  # boot.plymouth = {
-  #   enable = true;
-  #   font = "${pkgs.jetbrains-mono}/share/fonts/truetype/JetBrainsMono-Regular.ttf";
-  #   themePackages = [ pkgs.catppuccin-plymouth ];
-  # };
+    boot.loader.systemd-boot.enable = true;
+    boot.loader.efi.canTouchEfiVariables = true;
+    boot.extraModulePackages = with config.boot.kernelPackages; [ v4l2loopback ];
+    boot.kernelModules = [ "v4l2loopback" ];
+    boot.initrd.kernelModules = [ "usbhid" "joydev" "xpad" ];
+    boot.extraModprobeConfig = '' options v4l2loopback devices=1 video_nr=1 card_label="OBS Cam" exclusive_caps=1 bluetooth disable_ertm=1 '';
 }

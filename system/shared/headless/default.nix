@@ -9,7 +9,6 @@
         ../system.nix
     ];
     # Enable Flakes and the new command-line tool
-    nix.settings.experimental-features = [ "nix-command" "flakes" ];
     
     environment.systemPackages = with pkgs; [
         git # Flakes use Git to pull dependencies from data sources, so Git must be installed first
@@ -22,8 +21,6 @@
     ];
 
     programs.tmux.enable = true;
-    # Set default editor to neovim
-    environment.variables.EDITOR = "neovim";
 
     # Support ntfs
     boot.supportedFilesystems = [ "ntfs" ];
