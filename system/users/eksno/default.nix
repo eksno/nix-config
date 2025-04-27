@@ -5,6 +5,7 @@
     imports = [
         ../../shared/desktop/wayland/hyprland
         ./locale.nix
+        ./dev
     ];
 
     users.users.eksno = {

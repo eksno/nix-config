@@ -1,9 +1,9 @@
-
-{ config, lib, pkgs, ... }:
+{ ... }:
 
 {
     imports = [
-        ./python.nix
+        ./c-cpp.nix
         ./nixpacks.nix
+        ./python.nix
     ];
 }

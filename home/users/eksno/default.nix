@@ -5,7 +5,6 @@
         ./git.nix
         ../../shared/desktop
         ./autojump.nix
-        ./dev
     ];
 
     home.username = "eksno";
