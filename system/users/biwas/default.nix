@@ -1,7 +1,7 @@
 { config, pkgs, ... }:
 {
     imports = [
-        ../../shared/desktop/x11/gnome
+        ../../lib/desktop/x11/gnome
         ./locale.nix
         ./steamcontroller.nix
     ];

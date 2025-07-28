@@ -2,7 +2,7 @@
 { config, pkgs, ... }:
 {
     imports = [
-        ../../shared/desktop/wayland/hyprland
+        ../../lib/desktop/wayland/hyprland
         ./locale.nix
     ];
 
