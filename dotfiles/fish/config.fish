@@ -48,3 +48,6 @@ if test -e /etc/NIXOS
     # Add any NixOS-specific settings here
     set -gx NIX_PATH $HOME/.nix-defexpr/channels:/nix/var/nix/profiles/per-user/root/channels
 end
+
+# zoxide
+zoxide init fish --cmd cd | source
