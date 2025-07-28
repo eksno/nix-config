@@ -16,8 +16,8 @@
       pkgs = import inputs.nixpkgs {
         inherit system;
         config = {
-          permittedInsecurePackages = [ ];
           allowUnfree = true;
+          permittedInsecurePackages = [ ];
           packageOverrides = pkgs: {
             intel-vaapi-driver = pkgs.intel-vaapi-driver.override { enableHybridCodec = true; };
           };
@@ -74,9 +74,9 @@
               system
               inputs
               catppuccin
-              pkgs
               ;
           };
+          pkgs = pkgs;
           modules = [
             catppuccin.nixosModules.catppuccin
             ./system/users/eksno

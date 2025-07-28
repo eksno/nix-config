@@ -73,7 +73,4 @@
       ]
     );
   };
-
-  # To allow unfree packages globally for the system (if you're using CUDA)
-  nixpkgs.config.allowUnfree = true;
 }
