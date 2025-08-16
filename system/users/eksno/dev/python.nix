@@ -42,35 +42,5 @@
   ];
 
   environment.variables = {
-    PUPPETEER_SKIP_DOWNLOAD = "true";
-    LD_LIBRARY_PATH = lib.mkForce (
-      lib.makeLibraryPath [
-        pkgs.stdenv.cc.cc.lib
-        pkgs.glibc
-        pkgs.glib
-      ]
-      + ":"
-      + "/run/current-system/sw/lib"
-    ); # Explicitly add system-wide lib paths
-
-    PKG_CONFIG_PATH = lib.mkForce (
-      lib.makeSearchPathOutput "dev" "lib/pkgconfig" [
-        pkgs.openssl
-        pkgs.zlib
-      ]
-      + ":"
-      + "/run/current-system/sw/lib/pkgconfig"
-    ); # Explicitly add system-wide pkgconfig paths
-
-    NIX_LD_LIBRARY_PATH = lib.mkForce (
-      lib.makeLibraryPath [
-        pkgs.stdenv.cc.cc.lib # provides libstdc++.so.6
-        pkgs.glibc # provides glibc
-        pkgs.glib
-        pkgs.zlib # Common dependency
-        # If you uncommented pkgs.cudatoolkit.lib in your shell.nix, you must uncomment it here too
-        pkgs.cudatoolkit.lib
-      ]
-    );
   };
 }

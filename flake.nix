@@ -3,14 +3,13 @@
 
   inputs = {
     zen-browser.url = "github:0xc000022070/zen-browser-flake";
-    catppuccin.url = "github:catppuccin/nix";
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
   };
 
   outputs =
     inputs:
     let
-      catppuccin = inputs.catppuccin;
+      sources = import ./npins;
       nixpkgs = inputs.nixpkgs;
       system = "x86_64-linux";
       pkgs = import inputs.nixpkgs {
@@ -73,12 +72,11 @@
             inherit
               system
               inputs
-              catppuccin
               ;
           };
           pkgs = pkgs;
           modules = [
-            catppuccin.nixosModules.catppuccin
+            (sources.catppuccin + "/modules/nixos")
             ./system/users/eksno
             ./system/hosts/verse
           ];

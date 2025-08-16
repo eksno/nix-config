@@ -6,6 +6,10 @@
   ...
 }:
 {
+  imports = [
+    ./obs.nix
+  ];
+
   programs.nix-ld.enable = true;
   programs.nix-ld.libraries = with pkgs; [
 
@@ -31,7 +35,7 @@
         pkgs.gamescope
       ];
     })
-
+    bitwarden-cli
     git # Flakes use Git to pull dependencies from data sources, so Git must be installed first
     gccgo
     libgcc
@@ -39,6 +43,8 @@
     wget
     curl
     libsecret
+
+    powertop # battery usage monitoring
 
     # file manager
     pcmanfm
@@ -56,7 +62,6 @@
     p7zip
 
     # language related
-    signal-desktop
     nodePackages.pnpm
     nodejs_24
     bun
@@ -100,7 +105,6 @@
     obsidian # Update nevermind is was flake.nix shit <-- Update R.I.P <-- Update WE'RE SO BACK <-- I'm sorry little one, you were too trash for me to try to figure out. https://github.com/NixOS/nixpkgs/issues/302457
     bitwarden # Update WE'RE SO BACK <-- I believed in you, but you had to be a pain.
     vscode
-    obs-studio
     google-chrome
     easyeffects
     lm_sensors
@@ -120,11 +124,11 @@
     postgresql
     qbittorrent
     hoppscotch
-    obs-studio
     gource
     anki
     easyeffects
     discord
+    signal-desktop
     kitty
     dunst # notifications
     libnotify # Required by dunst

@@ -43,24 +43,24 @@
   networking.networkmanager = {
     enable = true;
     # Disable NM’s Wi-Fi powersave features
-    wifi = {
-      powersave = false;
-      scanRandMacAddress = false;
-    };
+    # wifi = {
+    #   powersave = false;
+    #   scanRandMacAddress = false;
+    # };
   };
 
   # One-shot service to kill any lingering hardware power-save
-  systemd.services.disable-wifi-powersave = {
-    description = "Disable Wi-Fi power management";
-    after = [ "network.target" ];
-    wantedBy = [ "multi-user.target" ];
-    serviceConfig = {
-      Type = "oneshot";
-      ExecStart = "${pkgs.iw}/bin/iw dev wlo1 set power_save off";
-      RemainAfterExit = true;
-    };
-  };
-
+  # systemd.services.disable-wifi-powersave = {
+  #   description = "Disable Wi-Fi power management";
+  #   after = [ "network.target" ];
+  #   wantedBy = [ "multi-user.target" ];
+  #   serviceConfig = {
+  #     Type = "oneshot";
+  #     ExecStart = "${pkgs.iw}/bin/iw dev wlo1 set power_save off";
+  #     RemainAfterExit = true;
+  #   };
+  # };
+  #
   ################################################################
   # DNS
   ################################################################

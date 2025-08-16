@@ -5,6 +5,15 @@ return {
     version = false, -- Never set this value to "*"! Never!
     opts = {
       -- add any opts here
+      provider = "openrouter",
+      providers = {
+        openrouter = {
+          __inherited_from = "openai",
+          endpoint = "https://openrouter.ai/api/v1",
+          api_key_name = "OPENROUTER_API_KEY",
+          model = "anthropic/claude-sonnet-4",
+        },
+      },
     },
     -- if you want to build from source then do `make BUILD_FROM_SOURCE=true`
     build = "make",
@@ -57,7 +66,8 @@ return {
             avante_add_files = function(state)
               local node = state.tree:get_node()
               local filepath = node:get_id()
-              local relative_path = require("avante.utils").relative_path(filepath)
+              local relative_path =
+                require("avante.utils").relative_path(filepath)
 
               local sidebar = require("avante").get()
 
@@ -72,7 +82,9 @@ return {
 
               -- remove neo tree buffer
               if not open then
-                sidebar.file_selector:remove_selected_file("neo-tree filesystem [1]")
+                sidebar.file_selector:remove_selected_file(
+                  "neo-tree filesystem [1]"
+                )
               end
             end,
           },

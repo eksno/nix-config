@@ -1,23 +1,5 @@
 {
   "nodes": {
-    "catppuccin": {
-      "inputs": {
-        "nixpkgs": "nixpkgs"
-      },
-      "locked": {
-        "lastModified": 1753702336,
-        "narHash": "sha256-IVFUQV6egGQHnm+I183OT+4ct/ka1IWA5u/0A9I/YV4=",
-        "owner": "catppuccin",
-        "repo": "nix",
-        "rev": "b32de96c3c5384c83b0f4d741ec58a7f97c9ab11",
-        "type": "github"
-      },
-      "original": {
-        "owner": "catppuccin",
-        "repo": "nix",
-        "type": "github"
-      }
-    },
     "home-manager": {
       "inputs": {
         "nixpkgs": [
@@ -41,37 +23,21 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1753250450,
-        "narHash": "sha256-i+CQV2rPmP8wHxj0aq4siYyohHwVlsh40kV89f3nw1s=",
-        "owner": "NixOS",
+        "lastModified": 1755186698,
+        "narHash": "sha256-wNO3+Ks2jZJ4nTHMuks+cxAiVBGNuEBXsT29Bz6HASo=",
+        "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "fc02ee70efb805d3b2865908a13ddd4474557ecf",
+        "rev": "fbcf476f790d8a217c3eab4e12033dc4a0f6d23c",
         "type": "github"
       },
       "original": {
-        "owner": "NixOS",
+        "owner": "nixos",
         "ref": "nixos-unstable",
         "repo": "nixpkgs",
         "type": "github"
       }
     },
     "nixpkgs_2": {
-      "locked": {
-        "lastModified": 1753694789,
-        "narHash": "sha256-cKgvtz6fKuK1Xr5LQW/zOUiAC0oSQoA9nOISB0pJZqM=",
-        "owner": "nixos",
-        "repo": "nixpkgs",
-        "rev": "dc9637876d0dcc8c9e5e22986b857632effeb727",
-        "type": "github"
-      },
-      "original": {
-        "owner": "nixos",
-        "ref": "nixos-unstable",
-        "repo": "nixpkgs",
-        "type": "github"
-      }
-    },
-    "nixpkgs_3": {
       "locked": {
         "lastModified": 1752480373,
         "narHash": "sha256-JHQbm+OcGp32wAsXTE/FLYGNpb+4GLi5oTvCxwSoBOA=",
@@ -89,22 +55,21 @@
     },
     "root": {
       "inputs": {
-        "catppuccin": "catppuccin",
-        "nixpkgs": "nixpkgs_2",
+        "nixpkgs": "nixpkgs",
         "zen-browser": "zen-browser"
       }
     },
     "zen-browser": {
       "inputs": {
         "home-manager": "home-manager",
-        "nixpkgs": "nixpkgs_3"
+        "nixpkgs": "nixpkgs_2"
       },
       "locked": {
-        "lastModified": 1753674409,
-        "narHash": "sha256-jhBdIc802upDu3S/Nu0rgVlIJ39E8KWugQwm/a74MBY=",
+        "lastModified": 1755321573,
+        "narHash": "sha256-U2eUEfy7leG/UJiyHKcAMBSxWZEtY5lKj8hQ4wuB2Wo=",
         "owner": "0xc000022070",
         "repo": "zen-browser-flake",
-        "rev": "e1bf71a0eb5ff9fdcfe83f6e4676ce19dd87f468",
+        "rev": "0772a02b9b2ade8c4017a0213e60ce34381cef5a",
         "type": "github"
       },
       "original": {
