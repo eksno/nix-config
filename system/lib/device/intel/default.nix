@@ -15,11 +15,14 @@
     "i915.enable_dc=2"
   ];
   powerManagement.powertop.enable = true;
+hardware.graphics = {
+  enable = true;
   extraPackages = with pkgs; [
     intel-media-driver
     libvdpau-va-gl
     vpl-gpu-rt
   ];
+};
   environment.sessionVariables = {
     LIBVA_DRIVER_NAME = "iHD";
   }; # Force intel-media-driver

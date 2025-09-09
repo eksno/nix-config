@@ -14,5 +14,6 @@
 
   environment.systemPackages = with pkgs; [
     wl-clipboard
+    wl-screenrec
   ];
 }

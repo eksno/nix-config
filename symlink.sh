@@ -2,6 +2,7 @@
 
 remove() {
     # User Configs
+    rm -rf ~/.config/hypr/*
     rm -rf ~/.config/fish
     rm -rf ~/.config/eww
     rm -rf ~/.config/tmux
@@ -25,6 +26,10 @@ create() {
     # User Configs
     mkdir -p ~/.config/
 
+    ln -s ~/nix-config/dotfiles/hypr/hosts ~/.config/hypr/hosts
+    ln -s ~/nix-config/dotfiles/hypr/users ~/.config/hypr/users
+    ln -s ~/nix-config/dotfiles/hypr/shared ~/.config/hypr/shared
+    ./hypr.sh # source correct hypr files
     ln -s ~/nix-config/dotfiles/fish ~/.config/fish
     ln -s ~/nix-config/dotfiles/tmux ~/.config/tmux
     ln -s ~/nix-config/dotfiles/eww ~/.config/eww
