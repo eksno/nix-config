@@ -8,6 +8,7 @@
 {
   imports = [
     ./obs.nix
+    ./steam.nix
   ];
 
   programs.nix-ld.enable = true;
@@ -64,6 +65,7 @@
     # language related
     nodePackages.pnpm
     nodejs_24
+    deno
     bun
     gnumake
     cargo
@@ -109,7 +111,6 @@
     easyeffects
     lm_sensors
     docker-compose
-    steam
     v4l-utils
     beeper
     whisper-ctranslate2
