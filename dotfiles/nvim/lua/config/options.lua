@@ -10,7 +10,6 @@ vim.opt.softtabstop = 4
 vim.opt.scrolloff = 8
 
 vim.opt.updatetime = 50
-vim.opt.colorcolumn = "81"
 
 -- views can only be fully collapsed with the global statusline
 vim.opt.laststatus = 3
