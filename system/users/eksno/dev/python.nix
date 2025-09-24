@@ -41,29 +41,4 @@
     openssl # Often a dependency for various compiled components
     zlib # Often a dependency for various compiled components
   ];
-
-  # Static base LD_LIBRARY_PATH (for non-interactive/login sessions; resolves conflicts)
-  # Use mkForce to override other modules like python.nix or shells-environment.nix
-  environment.variables.LD_LIBRARY_PATH = lib.mkForce "${pkgs.stdenv.cc.cc.lib}/lib";
-
-  # Dynamic prepend for bash/zsh interactive shells
-  environment.interactiveShellInit = ''
-    # Prepend GCC lib to LD_LIBRARY_PATH if non-empty (POSIX sh syntax for broad compatibility)
-    if [ -n "$LD_LIBRARY_PATH" ]; then
-      export LD_LIBRARY_PATH="${pkgs.stdenv.cc.cc.lib}/lib":$LD_LIBRARY_PATH
-    else
-      export LD_LIBRARY_PATH="${pkgs.stdenv.cc.cc.lib}/lib"
-    fi
-  '';
-
-  # For fish: Generate a system-wide config snippet with fish-specific dynamic prepend
-  # This creates /etc/fish/config.fish.d/00-nixos-ld-library-path.fish (sourced by fish on startup)
-  environment.etc."fish/config.fish.d/00-nixos-ld-library-path.fish".text = ''
-    # Prepend GCC lib to LD_LIBRARY_PATH if set (fish syntax)
-    if set -q LD_LIBRARY_PATH
-      set -gx LD_LIBRARY_PATH ${pkgs.stdenv.cc.cc.lib}/lib $LD_LIBRARY_PATH
-    else
-      set -gx LD_LIBRARY_PATH ${pkgs.stdenv.cc.cc.lib}/lib
-    end
-  '';
 }
