@@ -4,8 +4,6 @@
   inputs = {
     zen-browser.url = "github:0xc000022070/zen-browser-flake";
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-    whisper-overlay.url = "github:oddlama/whisper-overlay";
-    whisper-overlay.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs =

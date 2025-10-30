@@ -1,20 +1,15 @@
 {
   system,
   inputs,
-  config,
   pkgs,
   ...
 }:
 {
   imports = [
     ./obs.nix
-    ./steam.nix
   ];
 
   programs.nix-ld.enable = true;
-  programs.nix-ld.libraries = with pkgs; [
-
-  ];
 
   # file manager auto mount usb
   services.gvfs.enable = true;
@@ -70,7 +65,7 @@
     p7zip
 
     # language related
-    nodePackages.pnpm
+    (pkgs.nodePackages.pnpm.override { nodejs = pkgs.nodejs_24; })
     nodejs_24
     deno
     bun
@@ -120,7 +115,6 @@
     docker-compose
     v4l-utils
     beeper
-    whisper-ctranslate2
     tmux
     code-cursor
     seahorse

@@ -51,3 +51,4 @@ end
 
 # zoxide
 zoxide init fish --cmd cd | source
+fish_add_path $HOME/.local/bin
