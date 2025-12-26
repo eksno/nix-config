@@ -13,3 +13,5 @@ remove
 if ! [[ $1 == 'remove' ]]; then
     create
 fi
+
+hyprctl reload
