@@ -7,6 +7,7 @@ remove() {
     rm -rf ~/.config/eww
     rm -rf ~/.config/tmux
     rm -rf ~/.config/kitty
+    rm -rf ~/.config/mako
     rm -rf ~/.config/nvim
     rm -rf ~/.config/tofi
     rm -rf ~/.config/waybar
@@ -34,6 +35,7 @@ create() {
     ln -s ~/nix-config/dotfiles/tmux ~/.config/tmux
     ln -s ~/nix-config/dotfiles/eww ~/.config/eww
     ln -s ~/nix-config/dotfiles/kitty ~/.config/kitty
+    ln -s ~/nix-config/dotfiles/mako ~/.config/mako
     ln -s ~/nix-config/dotfiles/nvim ~/.config/nvim
     ln -s ~/nix-config/dotfiles/tofi ~/.config/tofi
     ln -s ~/nix-config/dotfiles/waybar ~/.config/waybar
