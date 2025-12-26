@@ -43,10 +43,15 @@
     curl
     libsecret
 
+    wifite2
+    hashcat
+    aircrack-ng
+
     # editor
     neovim
     tree-sitter
 
+    audacity
     powertop # battery usage monitoring
 
     # file manager
@@ -88,7 +93,7 @@
     yq-go # yaml processer https://github.com/mikefarah/yq
     fzf # A command-line fuzzy finder
     fd
-    pinentry
+    pinentry-gnome3
     xorg.libxcvt # for screen sizing
     cmake
     imagemagick
@@ -107,7 +112,7 @@
     helvum
     dbeaver-bin
     obsidian # Update nevermind is was flake.nix shit <-- Update R.I.P <-- Update WE'RE SO BACK <-- I'm sorry little one, you were too trash for me to try to figure out. https://github.com/NixOS/nixpkgs/issues/302457
-    bitwarden # Update WE'RE SO BACK <-- I believed in you, but you had to be a pain.
+    bitwarden-desktop # Update WE'RE SO BACK <-- I believed in you, but you had to be a pain.
     vscode
     google-chrome
     easyeffects
@@ -132,7 +137,7 @@
     discord
     signal-desktop
     kitty
-    dunst # notifications
+    mako # notifications
     libnotify # Required by dunst
     tofi # minimalist app launcher
     grim # screenshot utility
