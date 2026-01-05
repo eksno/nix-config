@@ -1,10 +1,10 @@
-df -h /boot
-sudo nix-env --delete-generations 7d
-sudo nix-collect-garbage -d
+df -h / /boot
+nix-env --delete-generations +10
+nix-collect-garbage
+sudo nix-env -p /nix/var/nix/profiles/system --delete-generations +10
+sudo nix-collect-garbage
 sudo nix-store --gc
-sudo nix-env -p /nix/var/nix/profiles/system --delete-generations +2
-sudo nix-store --gc
-df -h /boot
+df -h / /boot
 ./update.sh
 
 # --- AGGRESSIVE GC, DELETED BROWSER COOKIES AND OTHER STUFF ---
