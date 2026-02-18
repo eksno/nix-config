@@ -10,6 +10,9 @@
   ];
 
   programs.nix-ld.enable = true;
+  programs.nix-ld.libraries = with pkgs; [
+    libsecret
+  ];
 
   # file manager auto mount usb
   services.gvfs.enable = true;
@@ -47,9 +50,13 @@
     hashcat
     aircrack-ng
 
+    # networking
+    protonvpn-gui
+
     # editor
     neovim
     tree-sitter
+    claude-code
 
     audacity
     powertop # battery usage monitoring
@@ -77,7 +84,7 @@
     gnumake
     cargo
     rustc
-    nixfmt-rfc-style
+    nixfmt
     onnxruntime # ai stuff idk
 
     # dev
@@ -94,7 +101,7 @@
     fzf # A command-line fuzzy finder
     fd
     pinentry-gnome3
-    xorg.libxcvt # for screen sizing
+    libxcvt # for screen sizing
     cmake
     imagemagick
     acpi # Power
