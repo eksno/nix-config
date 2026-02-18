@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(echo:*)",
+      "Bash(gnome-keyring-daemon:*)",
+      "Bash(coderabbit --version:*)",
+      "Bash(pgrep:*)",
+      "Bash(coderabbit auth login --help:*)",
+      "Bash(coderabbit configure --help:*)",
+      "Bash(coderabbit --help:*)",
+      "Bash(readlink:*)",
+      "Bash(LD_LIBRARY_PATH=\"/run/current-system/sw/lib\" coderabbit auth login:*)",
+      "Bash(secret-tool clear:*)",
+      "Bash(readelf:*)",
+      "Bash(strace:*)",
+      "WebSearch",
+      "Bash(chmod:*)",
+      "Bash(patchelf:*)",
+      "Bash(nix-shell:*)"
+    ]
+  }
+}
