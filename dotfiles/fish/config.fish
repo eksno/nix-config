@@ -23,13 +23,6 @@ if status is-interactive
     end
 end
 
-# Set up autojump if available
-if test -e /usr/share/autojump/autojump.fish
-    source /usr/share/autojump/autojump.fish
-else if test -e /run/current-system/sw/share/autojump/autojump.fish
-    source /run/current-system/sw/share/autojump/autojump.fish
-end
-
 # Set terminal colors
 if test -e ~/.dir_colors
     if type -q dircolors
