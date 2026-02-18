@@ -6,6 +6,7 @@
     ./boot.nix
     ./networking.nix
     ./bluetooth.nix
+    ./caddy.nix
     ../../lib/device/intel
   ];
 
