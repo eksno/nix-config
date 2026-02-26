@@ -9,6 +9,7 @@ remove() {
     rm -rf ~/.config/kitty
     rm -rf ~/.config/mako
     rm -rf ~/.config/nvim
+    rm -rf ~/.config/btop
     rm -rf ~/.config/tofi
     rm -rf ~/.config/waybar
     rm -rf ~/.config/xdg-desktop-portal
@@ -37,6 +38,7 @@ create() {
     ln -s ~/nix-config/dotfiles/kitty ~/.config/kitty
     ln -s ~/nix-config/dotfiles/mako ~/.config/mako
     ln -s ~/nix-config/dotfiles/nvim ~/.config/nvim
+    ln -s ~/nix-config/dotfiles/btop ~/.config/btop
     ln -s ~/nix-config/dotfiles/tofi ~/.config/tofi
     ln -s ~/nix-config/dotfiles/waybar ~/.config/waybar
     ln -s ~/nix-config/dotfiles/xdg-desktop-portal ~/.config/xdg-desktop-portal
