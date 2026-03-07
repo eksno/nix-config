@@ -3,6 +3,7 @@
 
   inputs = {
     zen-browser.url = "github:0xc000022070/zen-browser-flake";
+    phonetic.url = "github:startino/phonetic";
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
   };
 
@@ -77,6 +78,7 @@
           pkgs = pkgs;
           modules = [
             (sources.catppuccin + "/modules/nixos")
+            inputs.phonetic.nixosModules.default
             ./system/users/eksno
             ./system/hosts/verse
           ];

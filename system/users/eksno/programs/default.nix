@@ -9,6 +9,13 @@
     ./obs.nix
   ];
 
+  nixpkgs.overlays = [ inputs.phonetic.overlays.default ];
+
+  services.phonetic = {
+    enable = true;
+    environmentFile = "/home/eksno/.config/phonetic/config.env";
+  };
+
   programs.nix-ld.enable = true;
   programs.nix-ld.libraries = with pkgs; [
     libsecret
@@ -40,7 +47,6 @@
     })
     bitwarden-cli
     git # Flakes use Git to pull dependencies from data sources, so Git must be installed first
-    gccgo
     libgcc
     wget
     curl
@@ -109,13 +115,14 @@
     bluetuith
 
     # networking tools
+    cloudflared
 
     playerctl # managing eww music
     pulsemixer # TUI audio device and volume control
     speechd
     eww
     waybar
-    libreoffice
+    libreoffice-fresh
     helvum
     dbeaver-bin
     obsidian # Update nevermind is was flake.nix shit <-- Update R.I.P <-- Update WE'RE SO BACK <-- I'm sorry little one, you were too trash for me to try to figure out. https://github.com/NixOS/nixpkgs/issues/302457
@@ -138,7 +145,6 @@
     postgresql
     qbittorrent
     hoppscotch
-    gource
     anki
     easyeffects
     discord
