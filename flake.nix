@@ -65,8 +65,25 @@
             ./system/hosts/ace
           ];
         };
+        # Jorge Lewis (jorge@lewis)
+        lewis = nixpkgs.lib.nixosSystem {
+          system = "x86_64-linux";
+          specialArgs = {
+            inherit
+              system
+              inputs
+              ;
+          };
+          pkgs = pkgs;
+          modules = [
+            (sources.catppuccin + "/modules/nixos")
+            inputs.phonetic.nixosModules.default
+            ./system/users/jorge
+            ./system/hosts/lewis
+          ];
+        };
 
-        # Jonas' Main
+        # Jonas Lindberg (eksno@verse)
         verse = nixpkgs.lib.nixosSystem {
           system = "x86_64-linux";
           specialArgs = {

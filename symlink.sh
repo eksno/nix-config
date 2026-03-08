@@ -33,7 +33,12 @@ create() {
     ln -s ~/nix-config/dotfiles/hypr/shared ~/.config/hypr/shared
     ./hypr.sh # source correct hypr files
     ln -s ~/nix-config/dotfiles/fish ~/.config/fish
-    ln -s ~/nix-config/dotfiles/tmux ~/.config/tmux
+    # Per-user dotfiles
+    if [[ -d ~/nix-config/dotfiles/users/$USER/tmux ]]; then
+        ln -s ~/nix-config/dotfiles/users/$USER/tmux ~/.config/tmux
+    else
+        ln -s ~/nix-config/dotfiles/tmux ~/.config/tmux
+    fi
     ln -s ~/nix-config/dotfiles/eww ~/.config/eww
     ln -s ~/nix-config/dotfiles/kitty ~/.config/kitty
     ln -s ~/nix-config/dotfiles/mako ~/.config/mako
