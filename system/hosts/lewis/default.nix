@@ -12,5 +12,5 @@
 
   services.xserver.exportConfiguration = true;
 
-  networking.hostName = "verse"; # Define your hostname.
+  networking.hostName = "lewis"; # Define your hostname.
 }

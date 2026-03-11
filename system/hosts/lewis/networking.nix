@@ -42,38 +42,17 @@
   ################################################################
   networking.networkmanager = {
     enable = true;
-    dns = "none";
-    # Disable NM’s Wi-Fi powersave features
-    # wifi = {
-    #   powersave = false;
-    #   scanRandMacAddress = false;
-    # };
+    # "default" lets DHCP-provided DNS work (needed for captive portals)
+    # while nameservers below are appended as fallback
+    dns = "default";
   };
 
-  # One-shot service to kill any lingering hardware power-save
-  # systemd.services.disable-wifi-powersave = {
-  #   description = "Disable Wi-Fi power management";
-  #   after = [ "network.target" ];
-  #   wantedBy = [ "multi-user.target" ];
-  #   serviceConfig = {
-  #     Type = "oneshot";
-  #     ExecStart = "${pkgs.iw}/bin/iw dev wlo1 set power_save off";
-  #     RemainAfterExit = true;
-  #   };
-  # };
-  #
   ################################################################
-  # DNS
+  # DNS (appended after DHCP-provided servers)
   ################################################################
   networking.nameservers = [
     "1.1.1.1"
     "1.0.0.1"
   ];
 
-  ################################################################
-  # Local host aliases
-  ################################################################
-  networking.hosts = {
-    "127.0.0.1" = [ "local.echoai.zone" ];
-  };
 }
