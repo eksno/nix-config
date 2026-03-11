@@ -32,13 +32,39 @@ create() {
     ln -s ~/nix-config/dotfiles/hypr/users ~/.config/hypr/users
     ln -s ~/nix-config/dotfiles/hypr/shared ~/.config/hypr/shared
     ./hypr.sh # source correct hypr files
-    ln -s ~/nix-config/dotfiles/fish ~/.config/fish
-    # Per-user dotfiles
+
+    # Fish - shared base + per-user overrides
+    mkdir -p ~/.config/fish/functions
+    for f in ~/nix-config/dotfiles/fish/*; do
+        fname="$(basename "$f")"
+        [[ "$fname" == "functions" ]] && continue
+        [[ -e ~/nix-config/dotfiles/users/$USER/fish/$fname ]] && continue
+        ln -s "$f" ~/.config/fish/"$fname"
+    done
+    for f in ~/nix-config/dotfiles/fish/functions/*; do
+        fname="$(basename "$f")"
+        [[ -e ~/nix-config/dotfiles/users/$USER/fish/functions/$fname ]] && continue
+        ln -s "$f" ~/.config/fish/functions/"$fname"
+    done
+    if [[ -d ~/nix-config/dotfiles/users/$USER/fish ]]; then
+        for f in ~/nix-config/dotfiles/users/$USER/fish/*; do
+            [[ "$(basename "$f")" == "functions" ]] && continue
+            ln -s "$f" ~/.config/fish/"$(basename "$f")"
+        done
+        if [[ -d ~/nix-config/dotfiles/users/$USER/fish/functions ]]; then
+            for f in ~/nix-config/dotfiles/users/$USER/fish/functions/*; do
+                ln -s "$f" ~/.config/fish/functions/"$(basename "$f")"
+            done
+        fi
+    fi
+
+    # Tmux - per-user with shared fallback
     if [[ -d ~/nix-config/dotfiles/users/$USER/tmux ]]; then
         ln -s ~/nix-config/dotfiles/users/$USER/tmux ~/.config/tmux
     else
         ln -s ~/nix-config/dotfiles/tmux ~/.config/tmux
     fi
+
     ln -s ~/nix-config/dotfiles/eww ~/.config/eww
     ln -s ~/nix-config/dotfiles/kitty ~/.config/kitty
     ln -s ~/nix-config/dotfiles/mako ~/.config/mako
