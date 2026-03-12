@@ -71,7 +71,7 @@
     pcmanfm
 
     inputs.zen-browser.packages."${system}".default
-    neofetch # :)
+    fastfetch # :)
     nnn # tui file manager
     lazygit # tui for git
     zoxide
