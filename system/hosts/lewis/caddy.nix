@@ -18,7 +18,9 @@
     virtualHosts."local.openclaw.zone" = {
       extraConfig = ''
         tls internal
-        reverse_proxy http://openclaw.railway.internal:8080
+        reverse_proxy https://openclaw-custom-production.up.railway.app {
+          header_up Host {upstream_hostport}
+        }
       '';
     };
   };
