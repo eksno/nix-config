@@ -9,6 +9,7 @@
 
   imports = [
     ../../lib/desktop/wayland/hyprland
+    ../../lib/power-mode
     ./programs
     ./dev
     ./locale.nix
@@ -25,7 +26,6 @@
     ];
   };
 
-  services.tlp.enable = true;
   services.displayManager.sddm.settings.Autologin.User = "eksno";
   services.openssh.enable = true;
   services.xserver.xkb.layout = "us";

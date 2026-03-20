@@ -65,7 +65,7 @@
     claude-code
 
     audacity
-    powertop # battery usage monitoring
+    powertop # battery usage monitoring (also enabled as service in power-mode module)
 
     # file manager
     pcmanfm
