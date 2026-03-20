@@ -76,6 +76,15 @@ The `verse` configuration additionally imports the Catppuccin NixOS module from 
 - **allowUnfree** is enabled globally. `--impure` flag is used on rebuild.
 - **npins** pins `catppuccin/nix` separately from flake inputs; imported via `import ./npins` in flake.nix.
 
+## MANDATORY: Auto-Commit After Every Change
+
+**ALWAYS commit immediately after completing each logical code change. No exceptions. Never leave changes uncommitted — every edit must be followed by a commit before responding to the user or moving to the next task.**
+
+- Use scoped conventional commits: `feat(scope):`, `fix(scope):`, etc.
+- If a task involves multiple distinct steps (e.g., refactor + new feature + bug fix), each step gets its own commit before moving to the next
+- Do not batch unrelated changes into a single commit
+- Do not wait for the user to ask you to commit — committing is automatic and mandatory after every change
+
 ## Adding a new host
 
 1. Create `system/hosts/{hostname}/` with `default.nix` and `hardware-configuration.nix`

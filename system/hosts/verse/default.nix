@@ -13,9 +13,16 @@
   services.xserver.exportConfiguration = true;
 
   # Cap battery charge at 80% to reduce cell voltage stress and slow degradation
-  services.udev.extraRules = ''
-    ACTION=="add", SUBSYSTEM=="power_supply", ATTR{charge_control_end_threshold}="80"
-  '';
+  systemd.services.battery-charge-threshold = {
+    description = "Set battery charge threshold to 80%";
+    after = [ "multi-user.target" ];
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = "${pkgs.bash}/bin/bash -c 'echo 80 > /sys/class/power_supply/BAT0/charge_control_end_threshold'";
+      RemainAfterExit = true;
+    };
+  };
 
   networking.hostName = "verse"; # Define your hostname.
 }
