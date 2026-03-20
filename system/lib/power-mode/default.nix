@@ -350,6 +350,7 @@ let
         [ -n "$wifi_powersave" ] && set_wifi_powersave "$wifi_powersave"
 
         rm -f "$STATE_DIR/saved-state"
+        rm -f "$STATE_DIR/saved-brightness"
         echo -e "  ''${GREEN}State restored''${RESET}"
       fi
       # Restore per-device PCI runtime PM state
@@ -583,20 +584,38 @@ let
 
       if [ "$level" = "0" ]; then
         restore_state
+        rm -f "$STATE_DIR/saved-brightness"
       else
         save_state
       fi
 
       apply_round "$level"
 
-      # Brightness: level 0 uses restored value, others cap downward
+      # Brightness: only adjust at level >= 7, restore when dropping below
       if [ "$level" != "0" ]; then
-        local bright cur_bright
-        bright=$(round_brightness "$level")
+        local cur_bright
         cur_bright=$(${pkgs.brightnessctl}/bin/brightnessctl -m 2>/dev/null | cut -d',' -f4 | tr -d '%')
         cur_bright="''${cur_bright:-50}"
-        if [ "$cur_bright" -gt "$bright" ]; then
-          set_brightness "$bright"
+
+        if [ "$level" -ge 7 ]; then
+          # Save user's brightness before we lower it
+          local saved_bright=""
+          [ -f "$STATE_DIR/saved-brightness" ] && saved_bright=$(cat "$STATE_DIR/saved-brightness")
+          if [ -z "$saved_bright" ] || [ "$cur_bright" -gt "$saved_bright" ]; then
+            echo "$cur_bright" > "$STATE_DIR/saved-brightness"
+          fi
+          # Apply level brightness (only lower, never raise)
+          local bright
+          bright=$(round_brightness "$level")
+          if [ "$cur_bright" -gt "$bright" ]; then
+            set_brightness "$bright"
+          fi
+        else
+          # Level 1-6: restore brightness if a previous level lowered it
+          if [ -f "$STATE_DIR/saved-brightness" ]; then
+            set_brightness "$(cat "$STATE_DIR/saved-brightness")"
+            rm -f "$STATE_DIR/saved-brightness"
+          fi
         fi
       fi
 
@@ -749,20 +768,27 @@ let
       local cur_bright
       cur_bright=$(${pkgs.brightnessctl}/bin/brightnessctl -m 2>/dev/null | cut -d',' -f4 | tr -d '%')
       cur_bright="''${cur_bright:-50}"
+      local effective_level
 
       if [ "$best_round" = "-1" ]; then
-        # Even R10 can't hit budget under load — apply R10 anyway
         echo -e "  ''${DIM}No level meets budget under load — applying maximum (R10)''${RESET}"
         apply_round 10
-        set_brightness 5
+        effective_level=10
       else
-        local rb
-        rb=$(round_brightness "$best_round")
         echo -e "  Applying level $best_round ($((best_round * 10))%) — calibrated: ''${best_watts}W under load"
         apply_round "$best_round"
-        # Never increase brightness, only decrease
-        if [ "$cur_bright" -gt "$rb" ]; then
-          set_brightness "$rb"
+        effective_level=$best_round
+      fi
+
+      # Brightness: only adjust at level >= 7
+      if [ "$effective_level" -ge 7 ]; then
+        if [ -z "$(cat "$STATE_DIR/saved-brightness" 2>/dev/null)" ] || [ "$cur_bright" -gt "$(cat "$STATE_DIR/saved-brightness" 2>/dev/null || echo 0)" ]; then
+          echo "$cur_bright" > "$STATE_DIR/saved-brightness"
+        fi
+        local bright
+        bright=$(round_brightness "$effective_level")
+        if [ "$cur_bright" -gt "$bright" ]; then
+          set_brightness "$bright"
         fi
       fi
 
