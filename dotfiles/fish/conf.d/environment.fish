@@ -16,7 +16,9 @@ set -gx EDITOR nvim
 set -gx VISUAL nvim
 
 # Set browser
-if type -q firefox
+if type -q zen-beta
+    set -gx BROWSER zen-beta
+else if type -q firefox
     set -gx BROWSER firefox
 else if type -q google-chrome
     set -gx BROWSER google-chrome
