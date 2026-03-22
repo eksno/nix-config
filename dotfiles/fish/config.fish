@@ -15,6 +15,9 @@ for file in ~/.config/fish/conf.d/*.fish
     source $file
 end
 
+# Bitwarden SSH agent
+set -gx SSH_AUTH_SOCK "$HOME/.bitwarden-ssh-agent.sock"
+
 # Set GPG TTY for proper GPG agent operation
 if status is-interactive
     set -gx GPG_TTY (tty)
