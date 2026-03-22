@@ -28,6 +28,9 @@
 
   services.displayManager.sddm.settings.Autologin.User = "jorge";
   services.openssh.enable = true;
+  programs.ssh.extraConfig = ''
+    IdentityAgent ~/.bitwarden-ssh-agent.sock
+  '';
   services.xserver.xkb.layout = "us";
   console.useXkbConfig = true;
   virtualisation.docker.enable = true;
