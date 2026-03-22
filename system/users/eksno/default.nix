@@ -29,6 +29,10 @@
   services.displayManager.sddm.settings.Autologin.User = "eksno";
   services.openssh.enable = true;
   programs.ssh.extraConfig = ''
+    Host 144.76.155.176
+      StrictHostKeyChecking no
+      UserKnownHostsFile /dev/null
+
     IdentityAgent ~/.bitwarden-ssh-agent.sock
   '';
   services.xserver.xkb.layout = "us";
