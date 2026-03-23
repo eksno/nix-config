@@ -28,9 +28,9 @@ create() {
     # User Configs
     mkdir -p ~/.config/
 
-    ln -s ~/nix-config/dotfiles/hypr/hosts ~/.config/hypr/hosts
-    ln -s ~/nix-config/dotfiles/hypr/users ~/.config/hypr/users
-    ln -s ~/nix-config/dotfiles/hypr/shared ~/.config/hypr/shared
+    ln -sf ~/nix-config/dotfiles/hypr/hosts ~/.config/hypr/hosts
+    ln -sf ~/nix-config/dotfiles/hypr/users ~/.config/hypr/users
+    ln -sf ~/nix-config/dotfiles/hypr/shared ~/.config/hypr/shared
     ./hypr.sh # source correct hypr files
 
     # Fish - shared base + per-user overrides
