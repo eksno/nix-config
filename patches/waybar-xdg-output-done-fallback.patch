@@ -1,0 +1,18 @@
+--- a/src/client.cpp
++++ b/src/client.cpp
+@@ -116,5 +116,13 @@ void waybar::Client::handleOutputDescription(void* data, struct zxdg_output_v1*
+     auto s = std::string(description);
+     auto pos = s.find(" (");
+     output.identifier = pos != std::string::npos ? s.substr(0, pos) : s;
++
++    // Hyprland >=0.46 implements xdg_output_manager_v1 with v3 semantics: it sends
++    // wl_output.done instead of zxdg_output_v1.done after each property event. Waybar
++    // binds the manager at version 2 and waits for zxdg_output_v1.done which never
++    // arrives, so handleOutputDone (which creates the bars) is never called.
++    // Work around this by triggering it here once both name and identifier are known.
++    if (!output.name.empty() && output.xdg_output) {
++      handleOutputDone(data, output.xdg_output.get());
++    }
+   } catch (const std::exception& e) {
+     spdlog::warn("caught exception in zxdg_output_v1_listener::description: {}", e.what());
+   }
