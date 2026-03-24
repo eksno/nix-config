@@ -152,6 +152,7 @@
     grim # screenshot utility
     slurp # region selection
     grimblast # hyprland screenshot helper (handles fractional scaling)
+    wayshot # zwlr-screencopy based screenshot (works where grim fails)
     swww # wallpaper engine
     mpvpaper # wallpaper video engine / possibly can remove this
     lz4 # helps swww
