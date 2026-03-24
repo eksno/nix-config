@@ -13,4 +13,9 @@
   services.xserver.exportConfiguration = true;
 
   networking.hostName = "lewis"; # Define your hostname.
+
+  services.openssh = {
+    enable = true;
+    settings.PubkeyAuthentication = true;
+  };
 }
