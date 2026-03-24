@@ -284,6 +284,32 @@ let
       fi
     }
 
+    # ── Charge limit ──
+    set_charge_limit() {
+      local limit="$1"
+      if [ "$limit" -lt 20 ] || [ "$limit" -gt 100 ]; then
+        echo -e "''${RED}Charge limit must be between 20 and 100.''${RESET}"
+        return 1
+      fi
+      if [ ! -f "$BAT/charge_control_end_threshold" ]; then
+        echo -e "''${RED}Battery does not support charge limit (charge_control_end_threshold not found).''${RESET}"
+        return 1
+      fi
+      echo "$limit" > "$BAT/charge_control_end_threshold" 2>/dev/null || {
+        echo -e "''${RED}Failed to set charge limit — write denied.''${RESET}"
+        return 1
+      }
+      echo -e "''${GREEN}Charge limit set to ''${limit}%''${RESET}"
+    }
+
+    get_charge_limit() {
+      if [ -f "$BAT/charge_control_end_threshold" ]; then
+        cat "$BAT/charge_control_end_threshold" 2>/dev/null || echo "100"
+      else
+        echo ""
+      fi
+    }
+
     # ── Save / Restore state ──
     save_state() {
       [ -f "$STATE_DIR/saved-state" ] && return 0
@@ -486,9 +512,18 @@ let
 
       echo ""
       echo -e "''${BOLD}  Battery''${RESET}"
+      local full_wh
+      full_wh=$(calc "$(cat "$BAT/energy_full") / 1000000" 2)
+
+      # Show charge limit if set
+      local charge_limit=""
+      if [ -f "$BAT/charge_control_end_threshold" ]; then
+        charge_limit=$(cat "$BAT/charge_control_end_threshold" 2>/dev/null || echo "")
+      fi
+
       if [ "$status" = "Discharging" ]; then
         echo -e "    ''${DIM}state:''${RESET}       $status"
-        echo -e "    ''${DIM}remaining:''${RESET}   ''${energy} Wh (''${percent}%)"
+        echo -e "    ''${DIM}level:''${RESET}       ''${energy} Wh / ''${full_wh} Wh (''${percent}%)"
 
         local watts hours sum count avg
         watts=$(bat_watts)
@@ -518,9 +553,8 @@ let
           done
         fi
       elif [ "$status" = "Charging" ]; then
-        local watts charge_remaining full_wh hours_to_full
+        local watts charge_remaining hours_to_full
         watts=$(bat_watts)
-        full_wh=$(calc "$(cat "$BAT/energy_full") / 1000000" 2)
         charge_remaining=$(${pkgs.gawk}/bin/awk "BEGIN { printf \"%.2f\", $full_wh - $energy }")
         echo -e "    ''${DIM}state:''${RESET}       $status"
         echo -e "    ''${DIM}level:''${RESET}       ''${energy} Wh / ''${full_wh} Wh (''${percent}%)"
@@ -530,7 +564,12 @@ let
           echo -e "    ''${DIM}full in:''${RESET}     ~''${hours_to_full}h"
         fi
       else
-        echo -e "    ''${DIM}state:''${RESET}       $status (''${percent}%)"
+        echo -e "    ''${DIM}state:''${RESET}       $status"
+        echo -e "    ''${DIM}level:''${RESET}       ''${energy} Wh / ''${full_wh} Wh (''${percent}%)"
+      fi
+
+      if [ -n "$charge_limit" ] && [ "$charge_limit" != "100" ]; then
+        echo -e "    ''${DIM}max charge:''${RESET}  ''${charge_limit}%"
       fi
 
       echo ""
@@ -847,10 +886,15 @@ let
       echo "    calibrate         Benchmark all levels under load (~4 min, run once)"
       echo "    stretch <hours>   Apply optimal level to last <hours>"
       echo ""
+      echo -e "  ''${BOLD}Battery health:''${RESET}"
+      echo "    charge-limit <percent>  Set max charge level (20-100)"
+      echo "    charge-limit            Show current charge limit"
+      echo ""
       echo -e "  ''${BOLD}Examples:''${RESET}"
       echo "    power-mode calibrate"
       echo "    power-mode stretch 10"
       echo "    power-mode powersave"
+      echo "    power-mode charge-limit 80"
       echo "    power-mode status"
       echo ""
     }
@@ -869,6 +913,19 @@ let
         fi
         profile_stretch "$2"
         show_status settle
+        ;;
+      charge-limit)
+        if [ -n "''${2:-}" ]; then
+          set_charge_limit "$2"
+        else
+          local cl
+          cl=$(get_charge_limit)
+          if [ -n "$cl" ]; then
+            echo -e "''${BOLD}Charge limit:''${RESET} ''${cl}%"
+          else
+            echo -e "''${YELLOW}Battery does not support charge limit.''${RESET}"
+          fi
+        fi
         ;;
       status) show_status ;;
       *) usage ;;
