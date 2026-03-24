@@ -151,6 +151,7 @@
     tofi # minimalist app launcher
     grim # screenshot utility
     slurp # region selection
+    grimblast # hyprland screenshot helper (handles fractional scaling)
     swww # wallpaper engine
     mpvpaper # wallpaper video engine / possibly can remove this
     lz4 # helps swww
