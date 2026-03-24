@@ -135,7 +135,15 @@
     obsidian # Update nevermind is was flake.nix shit <-- Update R.I.P <-- Update WE'RE SO BACK <-- I'm sorry little one, you were too trash for me to try to figure out. https://github.com/NixOS/nixpkgs/issues/302457
     bitwarden-desktop # Update WE'RE SO BACK <-- I believed in you, but you had to be a pain.
     vscode
-    google-chrome
+    (pkgs.symlinkJoin {
+      name = "google-chrome";
+      paths = [ pkgs.google-chrome ];
+      buildInputs = [ pkgs.makeWrapper ];
+      postBuild = ''
+        wrapProgram $out/bin/google-chrome-stable \
+          --add-flags "--remote-debugging-port=9222"
+      '';
+    })
     easyeffects
     lm_sensors
     docker-compose
