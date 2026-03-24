@@ -9,16 +9,7 @@
     ./obs.nix
   ];
 
-  nixpkgs.overlays = [
-    inputs.phonetic.overlays.default
-    (final: prev: {
-      waybar = prev.waybar.overrideAttrs (old: {
-        patches = (old.patches or [ ]) ++ [
-          ../../../patches/waybar-xdg-output-done-fallback.patch
-        ];
-      });
-    })
-  ];
+  nixpkgs.overlays = [ inputs.phonetic.overlays.default ];
 
   services.phonetic = {
     enable = true;
