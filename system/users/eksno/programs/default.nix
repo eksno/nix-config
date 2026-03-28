@@ -57,7 +57,7 @@
     aircrack-ng
 
     # networking
-    protonvpn-gui
+    proton-vpn
 
     # editor
     neovim
