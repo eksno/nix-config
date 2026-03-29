@@ -20,8 +20,8 @@
       "format": "<span color='#b4befe'>{icon}</span> {percent}%",
       "format-icons": ["", "", "", "", "", "", "", "", ""],
       "scroll-step": 5,
-      "on-scroll-up": "brightnessctl set 5%-",
-      "on-scroll-down": "brightnessctl set +5%"
+      "on-scroll-up": "brightnessctl set +5%",
+      "on-scroll-down": "brightnessctl -n 5% set 5%-"
     },
     "pulseaudio": {
       "format": "<span color='#b4befe'>{icon}</span> {volume}%",
