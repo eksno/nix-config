@@ -21,7 +21,7 @@
       "format-icons": ["", "", "", "", "", "", "", "", ""],
       "scroll-step": 5,
       "on-scroll-up": "brightnessctl set +5%",
-      "on-scroll-down": "brightnessctl -n $(( $(brightnessctl max) * 5 / 100 )) set 5%-"
+      "on-scroll-down": "bash -c 'MIN=$(( $(brightnessctl max) / 20 )); brightnessctl set 5%-; [ $(brightnessctl get) -lt $MIN ] && brightnessctl set $MIN'"
     },
     "pulseaudio": {
       "format": "<span color='#b4befe'>{icon}</span> {volume}%",
