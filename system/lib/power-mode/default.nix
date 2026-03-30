@@ -36,6 +36,7 @@ let
     fi
     CPU_MAX=$(cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq 2>/dev/null || echo 4500000)
     CPU_MIN=$(cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_min_freq 2>/dev/null || echo 400000)
+    CPU_FLOOR=800000  # Lowest useful freq — no power savings below this
     if [ -n "''${_orig_turbo:-}" ]; then
       echo "$_orig_turbo" > "$PSTATE/no_turbo"
     fi
@@ -408,11 +409,11 @@ let
 
       # Continuous levers: interpolate from performance (0%) to max-save (100%)
       local new_cpu new_rapl_uw new_igpu
-      new_cpu=$(calc_int "$CPU_MAX - $pct / 100 * ($CPU_MAX - 400000)")
+      new_cpu=$(calc_int "$CPU_MAX - $pct / 100 * ($CPU_MAX - $CPU_FLOOR)")
       new_rapl_uw=$(calc_int "28000000 - $pct / 100 * (28000000 - 1000000)")
       new_igpu=$(calc_int "''${GPU_MAX:-2250} - $pct / 100 * (''${GPU_MAX:-2250} - 100)")
 
-      set_min_freq "$CPU_MIN"
+      set_min_freq "$CPU_FLOOR"
       set_max_freq "$new_cpu"
       set_rapl_uw "$new_rapl_uw"
       set_igpu_max "$new_igpu"
