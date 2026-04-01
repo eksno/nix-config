@@ -57,6 +57,7 @@
     aircrack-ng
 
     # networking
+    mosh
     proton-vpn
 
     # editor
