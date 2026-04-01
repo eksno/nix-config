@@ -20,61 +20,81 @@ Multi-user, multi-host NixOS flake configuration ("Chronoverse"). Tracks nixpkgs
 | `./hypr.sh` | Regenerate `hyprland.conf` sourcing user/host configs, then `hyprctl reload` |
 | `./gc.sh` | Garbage collect old generations (keeps last 10), then runs update.sh |
 | `./install.sh` | First-time setup: backs up `/etc/nixos`, symlinks repo there |
+| `./nvidia-offload.sh` | Wrapper to run a command with NVIDIA GPU offload env vars |
 
 All scripts must be run as a normal user (not with sudo directly); they elevate internally as needed. `update.sh` does `git add .` before rebuild because Nix flakes only see staged files.
 
 ## Architecture
 
 ```
-flake.nix                       # Defines 5 NixOS configurations (host + user pairs)
+flake.nix                       # Defines 6 NixOS configurations (host + user pairs)
 system/
   hosts/{hostname}/             # Per-machine: hardware-configuration.nix, boot.nix, networking.nix
   users/{username}/             # Per-user: packages, locale, theme, dev tools
   lib/                          # Shared reusable modules
-    system.nix                  #   Flakes, GC, auto-upgrade, stateVersion
+    system.nix                  #   Flakes, GC, auto-upgrade, stateVersion (25.05)
     fish.nix                    #   Fish shell + plugins (done, fzf-fish, forgit)
     fonts.nix                   #   Font packages
+    power-mode/                 #   CPU/GPU frequency scaling + battery management
     desktop/default.nix         #   Pipewire, CUPS, GNOME Keyring, Catppuccin theming
-    desktop/wayland/            #   Hyprland + SDDM
-    desktop/x11/               #   GNOME on X11
-    device/nvidia/              #   NVIDIA driver config
-    device/intel/               #   Intel graphics + media drivers
+    desktop/wayland/            #   Wayland env vars + wl-clipboard/wl-screenrec
+    desktop/wayland/hyprland/   #   Hyprland + SDDM display manager
+    desktop/x11/               #   X11 base (xclip)
+    desktop/x11/gnome/         #   GDM + GNOME desktop
+    device/nvidia/              #   NVIDIA driver config (beta, open kernel module)
+    device/intel/               #   Intel graphics, media drivers, compute runtime
 dotfiles/                       # App configs symlinked to ~/.config/
   hypr/{hosts,users,shared}/    #   Hyprland: per-host and per-user, composed by hypr.sh
-  nvim/, fish/, kitty/, tmux/,  #   Other app configs
+  nvim/, fish/, kitty/, tmux/   #   Other app configs
   waybar/, mako/, tofi/, eww/
-npins/                          # Pinned deps (catppuccin/nix) outside flake inputs
+  btop/, icons/                 #   Btop themes, icon themes
+  xdg-desktop-portal/          #   XDG portal configs
+  users/{username}/             #   Per-user dotfile overrides (fish, tmux)
+npins/                          # Pinned deps outside flake inputs
+patches/                        # Patches (e.g., waybar XDG output fallback)
+certs/                          # Local CA certificates (caddy)
 ```
 
 ### Flake structure
 
-Each NixOS configuration composes exactly two modules: a user and a host.
+Each NixOS configuration composes a user and a host module. Some additionally import the Catppuccin NixOS module from npins and the Phonetic overlay.
 
 ```nix
 nixosConfigurations.verse = nixpkgs.lib.nixosSystem {
-  modules = [ ./system/users/eksno  ./system/hosts/verse ];
+  modules = [
+    (sources.catppuccin + "/modules/nixos")
+    { nixpkgs.overlays = [ inputs.phonetic.overlays.default ]; }
+    ./system/users/eksno
+    ./system/hosts/verse
+  ];
 };
 ```
 
-| Host | User | Desktop | GPU |
-|------|------|---------|-----|
-| `verse` | `eksno` | Hyprland | Intel |
-| `chuu` | `nabi` | Hyprland | - |
-| `lappy` | `teto` | Hyprland | - |
-| `chrono` | `teto` | Minimal | - |
-| `ace` | `biwas` | GNOME/X11 | NVIDIA |
+**Flake inputs:** `nixpkgs` (unstable), `zen-browser`, `phonetic`
 
-The `verse` configuration additionally imports the Catppuccin NixOS module from npins.
+| Host | User | Desktop | GPU | Extras |
+|------|------|---------|-----|--------|
+| `verse` | `eksno` | Hyprland | Intel | Catppuccin, Phonetic, power-mode, battery cap 80% |
+| `lewis` | `jorge` | Hyprland | Intel | Catppuccin, Phonetic, power-mode, battery cap 85%, Caddy |
+| `chuu` | `nabi` | Hyprland | - | Steam |
+| `lappy` | `teto` | Hyprland | - | Steam, ZSA keyboard, Docker |
+| `chrono` | `teto` | Minimal | - | Steam, ZSA keyboard, Docker |
+| `ace` | `biwas` | GNOME/X11 | NVIDIA | Steam, Docker, DroidCam, ADB |
+
+Additional user directories exist (`lucy`, `tetochrono`) and host directories (`tetomini`) but are not wired into `flake.nix` configurations.
 
 ### Key patterns
 
 - **Packages go in** `system/users/{user}/programs/default.nix` via `environment.systemPackages`.
+- **Dev tools** for `eksno` and `jorge` are in `system/users/{user}/dev/` (Python, Nixpacks, etc.).
 - **Shared modules** in `system/lib/` are imported by user or host configs as needed (e.g., `../../lib/desktop/wayland/hyprland`).
+- **Module import chain:** `hyprland/ -> wayland/ -> desktop/ -> {system.nix, fish.nix, fonts.nix}`. Each level imports its parent.
 - **Hyprland config** is composed at runtime: `hypr.sh` writes a `hyprland.conf` that sources `~/.config/hypr/users/$USER/default.conf` and `~/.config/hypr/hosts/$HOSTNAME/default.conf`.
+- **Dotfile symlinks:** `symlink.sh` links shared configs to `~/.config/` and merges per-user overrides from `dotfiles/users/{username}/` (per-user files take precedence).
 - **Dotfile changes** take effect immediately (they're symlinks), except Hyprland which needs `./hypr.sh` or `hyprctl reload`.
 - **System changes** (anything under `system/`) require `./update.sh` to apply.
 - **allowUnfree** is enabled globally. `--impure` flag is used on rebuild.
-- **npins** pins `catppuccin/nix` separately from flake inputs; imported via `import ./npins` in flake.nix.
+- **npins** pins `catppuccin/nix` (v25.05) separately from flake inputs; imported via `import ./npins` in flake.nix.
 
 ## MANDATORY: Auto-Commit After Every Change
 
@@ -91,4 +111,5 @@ The `verse` configuration additionally imports the Catppuccin NixOS module from 
 2. Create or reuse a user config under `system/users/{username}/`
 3. Add the configuration to `flake.nix` `nixosConfigurations`
 4. Optionally add Hyprland configs in `dotfiles/hypr/hosts/{hostname}/`
-5. Run `./update.sh reconfigure`
+5. Optionally add per-user dotfile overrides in `dotfiles/users/{username}/`
+6. Run `./update.sh reconfigure`
