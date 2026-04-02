@@ -155,9 +155,9 @@
     tofi # minimalist app launcher
     grim # screenshot utility
     slurp # region selection
-    swww # wallpaper engine
+    awww # wallpaper engine (formerly swww)
     mpvpaper # wallpaper video engine / possibly can remove this
-    lz4 # helps swww
+    lz4 # helps awww
     waypaper # gui wallpaper setter / possibly can remove this
     xdg-utils # commands for xdg, setting default apps and such
     ipcalc # it is a calculator for the IPv4/v6 addresses
