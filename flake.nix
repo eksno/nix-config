@@ -22,6 +22,18 @@
             intel-vaapi-driver = pkgs.intel-vaapi-driver.override { enableHybridCodec = true; };
           };
         };
+        overlays = [
+          # claude-code 2.1.88 was yanked from npm; override to 2.1.87
+          (final: prev: {
+            claude-code = prev.claude-code.overrideAttrs (old: {
+              version = "2.1.87";
+              src = prev.fetchzip {
+                url = "https://registry.npmjs.org/@anthropic-ai/claude-code/-/claude-code-2.1.87.tgz";
+                hash = "sha256-jorpY6ao1YgkoTgIk1Ae2BQCbqOuEtwzoIG36BP5nG4=";
+              };
+            });
+          })
+        ];
       };
     in
     {
