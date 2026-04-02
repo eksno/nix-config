@@ -84,7 +84,7 @@
     p7zip
 
     # language related
-    (pkgs.nodePackages.pnpm.override { nodejs = pkgs.nodejs_24; })
+    pnpm
     nodejs_24
     deno
     bun
