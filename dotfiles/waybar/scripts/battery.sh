@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Waybar custom battery module — continuous JSON output
-# Shows: battery %, avg watts (10s rolling), estimated time, power-mode level
+# Shows: battery %, avg watts (20s rolling), estimated time, power-mode level
 
 set -euo pipefail
 
@@ -14,7 +14,7 @@ if [ -z "$BAT" ]; then
 fi
 
 SAMPLES=()
-WINDOW=10
+WINDOW=200
 
 level_name() {
   case "$1" in
@@ -100,10 +100,11 @@ while true; do
   [ -n "$time_str" ] && text="${text} ~${time_str}"
   text="${text} ${lname}"
 
-  tooltip="Battery: ${capacity}%\\nPower: ${avg_w}W (${#SAMPLES[@]}s avg)\\nStatus: ${status}\\nPower Mode: level ${level} (${lname})\\nEstimate: ${time_str:-N/A}"
+  avg_secs=$(awk "BEGIN { printf \"%.0f\", ${#SAMPLES[@]} * 0.1 }")
+  tooltip="Battery: ${capacity}%\\nPower: ${avg_w}W (${avg_secs}s avg)\\nStatus: ${status}\\nPower Mode: level ${level} (${lname})\\nEstimate: ${time_str:-N/A}"
 
   printf '{"text": "%s %s", "tooltip": "%s", "class": "%s", "percentage": %d}\n' \
     "$icon" "$text" "$tooltip" "$class" "$capacity"
 
-  sleep 1
+  sleep 0.1
 done
