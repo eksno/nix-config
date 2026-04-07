@@ -21,7 +21,7 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 7. Rebuilt with `nix build .#nixosConfigurations.lewis.config.system.build.toplevel` — succeeded, produced `/nix/store/65zbigwgrn7ihpfv0fk5lf2ngg0gdbj0-waybar-0.15.0`.
 8. Ran the patched binary directly (skipping system activation) against the live Hyprland session. Logs now show `Bar configured (width: 2304, height: 28) for output: eDP-1`. Bar appears immediately. Fix confirmed end-to-end before activation.
 **Fix:** Regenerated `patches/waybar-xdg-output-done-fallback.patch` with a valid hunk header, and added a waybar overlay in `flake.nix:25` that applies it. The overlay lives on the top-level `pkgs` instance defined in the flake `let` block, so it's picked up by every nixosConfiguration that consumes `pkgs` (currently `lewis`, `verse`; the others use the bare nixpkgs input via `specialArgs.pkgs` and would also benefit if they hit the same bug). After `./update.sh`, waybar 0.15.0 is built with the patch and `handleOutputDescription` triggers `handleOutputDone` once name + xdg_output are populated, creating the bar reliably on single-monitor boots.
-**Commit:** `<sha>` (fill in after committing)
+**Commit:** `de85ad1`
 
 ---
 
