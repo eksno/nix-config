@@ -22,7 +22,18 @@
             intel-vaapi-driver = pkgs.intel-vaapi-driver.override { enableHybridCodec = true; };
           };
         };
-        overlays = [ ];
+        overlays = [
+          # Hyprland >=0.46 sends wl_output.done instead of zxdg_output_v1.done,
+          # so waybar's handleOutputDone never fires and bars are never created
+          # on single-monitor setups. See patches/waybar-xdg-output-done-fallback.patch.
+          (final: prev: {
+            waybar = prev.waybar.overrideAttrs (old: {
+              patches = (old.patches or [ ]) ++ [
+                ./patches/waybar-xdg-output-done-fallback.patch
+              ];
+            });
+          })
+        ];
       };
     in
     {

@@ -6,6 +6,25 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 ---
 
+## 2026-04-07 — waybar-no-bar-on-single-monitor
+
+**Symptom:** On `lewis`, waybar runs but no bar is drawn whenever the laptop is *not* connected to the external HDMI monitor. With the external connected, waybar appears normally on both displays. Restarting waybar by hand doesn't help.
+**Affected:** host `lewis`, user `jorge` (and any host running Hyprland >=0.46 with waybar 0.15.0). `flake.nix:25`, `patches/waybar-xdg-output-done-fallback.patch`. waybar 0.15.0 from nixpkgs unstable, Hyprland 0.54.2.
+**Root cause:** Hyprland >=0.46 implements `xdg_output_manager_v1` with v3 semantics: it sends `wl_output.done` after each output property event instead of `zxdg_output_v1.done`. Waybar binds the manager at v2 and waits on `zxdg_output_v1.done` to fire `handleOutputDone`, which is the only function that actually creates the `Bar` objects. The `done` event never arrives, so no bar is ever created. The patch to fix this had been sitting in `patches/` for a while but **was never wired into any overlay**, so the unpatched waybar 0.15.0 was being installed. The dual-monitor case "worked" because the mirror config (`monitor=eDP-1, ..., mirror, HDMI-A-1`) made the external's output buffer paint on eDP-1 too — the bar still wasn't being created on eDP-1 itself, the user just saw the mirrored pixels from HDMI-A-1.
+**Investigation:**
+1. Confirmed host/user: `lewis`/`jorge`. `hyprctl monitors` showed eDP-1 active at 2880x1800@120 scale 1.25, `mirrorOf: none` (Hyprland silently drops the `mirror, HDMI-A-1` directive when HDMI isn't connected — that part works fine).
+2. `pgrep waybar` showed waybar was running; dotfiles config (`dotfiles/waybar/config`) has no `output:` key so it should appear on all monitors. Process exists, no bar visible — classic "bar never created" symptom.
+3. Killed waybar and reran in foreground. Logs stopped at `Using CSS file ...` — the next expected log line `Bar configured (...) for output: ...` never appeared. That line is emitted from `handleOutputDone`, which strongly suggested the done event was never firing.
+4. Searched repo for waybar overlays/patches. Found `patches/waybar-xdg-output-done-fallback.patch` whose comment described exactly this Hyprland 0.46 / xdg_output_v1 mismatch. Grepped `system/`, `flake.nix` — **nothing applies the patch**. `flake.nix:25` had `overlays = [ ]`. Dead patch.
+5. Verified the upstream fix doesn't exist: fetched waybar master `client.cpp` and checked `handleOutputDescription` — still doesn't call `handleOutputDone`, manager still bound at `ZXDG_OUTPUT_V1_NAME_SINCE_VERSION` (which is v2). The patch is the only fix.
+6. Added an overlay in `flake.nix` that does `prev.waybar.overrideAttrs (old: { patches = (old.patches or []) ++ [ ./patches/waybar-xdg-output-done-fallback.patch ]; })`. First build failed with `malformed patch at line 17` — the patch hunk header `@@ -116,5 +116,13 @@` had the wrong line counts (the additions had been hand-edited and the header never updated). Pulled `Waybar-0.15.0.tar.gz` from GitHub, applied the change with the Edit tool to a copy of `src/client.cpp`, regenerated the patch with `diff -u`. New header is `@@ -111,6 +111,15 @@`.
+7. Rebuilt with `nix build .#nixosConfigurations.lewis.config.system.build.toplevel` — succeeded, produced `/nix/store/65zbigwgrn7ihpfv0fk5lf2ngg0gdbj0-waybar-0.15.0`.
+8. Ran the patched binary directly (skipping system activation) against the live Hyprland session. Logs now show `Bar configured (width: 2304, height: 28) for output: eDP-1`. Bar appears immediately. Fix confirmed end-to-end before activation.
+**Fix:** Regenerated `patches/waybar-xdg-output-done-fallback.patch` with a valid hunk header, and added a waybar overlay in `flake.nix:25` that applies it. The overlay lives on the top-level `pkgs` instance defined in the flake `let` block, so it's picked up by every nixosConfiguration that consumes `pkgs` (currently `lewis`, `verse`; the others use the bare nixpkgs input via `specialArgs.pkgs` and would also benefit if they hit the same bug). After `./update.sh`, waybar 0.15.0 is built with the patch and `handleOutputDescription` triggers `handleOutputDone` once name + xdg_output are populated, creating the bar reliably on single-monitor boots.
+**Commit:** `<sha>` (fill in after committing)
+
+---
+
 ## 2026-04-07 — hypr-screenshot-fractional-scaling
 
 **Symptom:** `Super+v` screenshot bind silently does nothing on the laptop's built-in display (`eDP-1`), but works fine when an external monitor is connected and used. Initial "fix" with `grimblast copy area` advertised `image/png` on the clipboard but the data was 0 bytes — pasted as nothing.

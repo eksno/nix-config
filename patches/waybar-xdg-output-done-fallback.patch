@@ -1,6 +1,6 @@
---- a/src/client.cpp
-+++ b/src/client.cpp
-@@ -116,5 +116,13 @@ void waybar::Client::handleOutputDescription(void* data, struct zxdg_output_v1*
+--- a/src/client.cpp	2026-04-07 21:39:17.841134244 +0700
++++ b/src/client.cpp	2026-04-07 21:39:34.766224274 +0700
+@@ -111,6 +111,15 @@
      auto s = std::string(description);
      auto pos = s.find(" (");
      output.identifier = pos != std::string::npos ? s.substr(0, pos) : s;
