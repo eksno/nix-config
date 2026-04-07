@@ -2,7 +2,7 @@
   "layer": "top",
     "modules-left": ["hyprland/workspaces"],
     "modules-center": ["clock"],
-    "modules-right": ["backlight", "pulseaudio", "bluetooth", "network", "battery"],
+    "modules-right": ["backlight", "pulseaudio", "bluetooth", "network", "custom/battery"],
     "hyprland/workspaces": {
       "format": "{icon}",
       "tooltip": false,
@@ -13,19 +13,19 @@
       }
     },
     "clock": {
-      "format": "<span color='#b4befe'> </span>{:%H:%M}"
+      "format": "<span color='#89b4fa'> </span>{:%H:%M}"
     },
     "backlight": {
       "device": "intel_backlight",
-      "format": "<span color='#b4befe'>{icon}</span> {percent}%",
+      "format": "<span color='#f9e2af'>{icon}</span> {percent}%",
       "format-icons": ["", "", "", "", "", "", "", "", ""],
       "scroll-step": 5,
       "on-scroll-up": "brightnessctl set +5%",
       "on-scroll-down": "bash -c 'MIN=$(( $(brightnessctl max) / 20 )); brightnessctl set 5%-; [ $(brightnessctl get) -lt $MIN ] && brightnessctl set $MIN'"
     },
     "pulseaudio": {
-      "format": "<span color='#b4befe'>{icon}</span> {volume}%",
-      "format-muted": "<span color='#b4befe'></span> muted",
+      "format": "<span color='#cba6f7'>{icon}</span> {volume}%",
+      "format-muted": "<span color='#cba6f7'></span> muted",
       "tooltip": false,
       "format-icons": {
         "headphone": "",
@@ -37,25 +37,24 @@
       "on-scroll-down": "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+"
     },
     "bluetooth": {
-      "format": "<span color='#b4befe'></span> {status}",
+      "format": "<span color='#74c7ec'></span> {status}",
       "format-disabled": "", // an empty format will hide the module
-      "format-connected": "<span color='#b4befe'></span> {num_connections}",
+      "format-connected": "<span color='#74c7ec'></span> {num_connections}",
       "tooltip-format": "{device_enumerate}",
       "tooltip-format-enumerate-connected": "{device_alias}   {device_address}"
     },
     "network": {
       "interface": "wlo1",
       "format": "{ifname}",
-      "format-wifi": "<span color='#b4befe'> </span>{essid}",
+      "format-wifi": "<span color='#94e2d5'> </span>{essid}",
       "format-ethernet": "{ipaddr}/{cidr} ",
-      "format-disconnected": "<span color='#b4befe'>󰖪 </span>No Network",
+      "format-disconnected": "<span color='#94e2d5'>󰖪 </span>No Network",
       "tooltip": false,
       "on-click": "kitty --title nmtui nmtui"
     },
-    "battery": {
-      "format": "<span color='#b4befe'>{icon}</span> {capacity}%",
-      "format-icons": ["", "", "", "", "", "", "", "", "", ""],
-      "format-charging": "<span color='#b4befe'></span> {capacity}%",
-      "tooltip": false,
+    "custom/battery": {
+      "exec": "~/.config/waybar/scripts/battery.sh",
+      "return-type": "json",
+      "tooltip": true
     },
 }

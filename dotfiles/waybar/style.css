@@ -1,3 +1,5 @@
+@import "mocha.css";
+
 * {
   border: none;
   font-family: "Fira Code", "Symbols Nerd Font Mono";
@@ -7,32 +9,73 @@
 }
 
 window#waybar {
-  background-color: #11111b;
+  background-color: @crust;
 }
 
 #custom-arch,
 #workspaces {
-  color: #b4befe;
+  color: @lavender;
   padding-left: 10px;
   padding-right: 10px;
 }
 
 #custom-arch {
   font-size: 20px;
-  color: #b4befe;
+  color: @lavender;
 }
 
 #workspaces button {
-  color: #b4befe;
+  color: @lavender;
 }
 
-#clock,
-#backlight,
-#pulseaudio,
-#bluetooth,
-#network,
-#battery {
-  color: #cdd6f4;
+#workspaces button.active {
+  color: @blue;
+}
+
+#clock {
+  color: @blue;
   padding-left: 10px;
   padding-right: 10px;
+}
+
+#backlight {
+  color: @yellow;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+#pulseaudio {
+  color: @mauve;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+#bluetooth {
+  color: @sapphire;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+#network {
+  color: @teal;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+#custom-battery {
+  color: @green;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+#custom-battery.charging {
+  color: @green;
+}
+
+#custom-battery.warning {
+  color: @yellow;
+}
+
+#custom-battery.critical {
+  color: @red;
 }
