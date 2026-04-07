@@ -631,6 +631,10 @@ let
 
       apply_round "$level"
 
+      # Persist current level so unprivileged tools (e.g. waybar) can read it
+      echo "$level" > "$STATE_DIR/current-level"
+      chmod 644 "$STATE_DIR/current-level"
+
       # Brightness: only adjust at level >= 7, restore when dropping below
       if [ "$level" != "0" ]; then
         local cur_bright
