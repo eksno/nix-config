@@ -950,6 +950,8 @@ let
     mkdir -p "$STATE_DIR"
     APPLIED=""
     [ -f "$STATE_DIR/auto-profile" ] && APPLIED=$(cat "$STATE_DIR/auto-profile")
+    CURRENT_LEVEL=0
+    [ -f "$STATE_DIR/current-level" ] && CURRENT_LEVEL=$(cat "$STATE_DIR/current-level")
 
     calc() {
       ${pkgs.gawk}/bin/awk "BEGIN { printf \"%.''${2:-1}f\", $1 }"
@@ -995,22 +997,36 @@ let
       done
     }
 
+    # Auto-escalate: only apply a level if it saves MORE than what's already set.
+    # Save the user's manual level before first auto-override so we can restore it.
+    auto_apply() {
+      local target_level=$1
+      # Skip if already at or above this saving level
+      [ "$CURRENT_LEVEL" -ge "$target_level" ] && return 0
+      # Save the user's level before first auto-override
+      [ -z "$APPLIED" ] && echo "$CURRENT_LEVEL" > "$STATE_DIR/user-level"
+      ${power-mode}/bin/power-mode "$target_level" > /dev/null 2>&1
+    }
+
     if [ "$STATUS" = "Discharging" ] && [ "$PERCENT" -le 10 ] && [ "$APPLIED" != "emergency" ]; then
       is_bt_on() { ${pkgs.bluez}/bin/bluetoothctl show 2>/dev/null | grep -q "Powered: yes"; }
       is_wifi_on() { ${pkgs.networkmanager}/bin/nmcli radio wifi 2>/dev/null | grep -q "enabled"; }
       is_bt_on && touch "$STATE_DIR/bt-was-on"
       is_wifi_on && touch "$STATE_DIR/wifi-was-on"
-      ${power-mode}/bin/power-mode emergency > /dev/null 2>&1
+      auto_apply 10
       echo "emergency" > "$STATE_DIR/auto-profile"
       notify_with_estimate critical "Battery Critical" "emergency mode"
     elif [ "$STATUS" = "Discharging" ] && [ "$PERCENT" -le 25 ] && [ "$APPLIED" != "powersave" ] && [ "$APPLIED" != "emergency" ]; then
-      ${power-mode}/bin/power-mode powersave > /dev/null 2>&1
+      auto_apply 4
       echo "powersave" > "$STATE_DIR/auto-profile"
       notify_with_estimate normal "Battery Low" "powersave mode"
     elif [ "$STATUS" = "Charging" ] && [ -n "$APPLIED" ]; then
-      ${power-mode}/bin/power-mode 0 > /dev/null 2>&1
-      rm -f "$STATE_DIR/auto-profile"
-      ${pkgs.libnotify}/bin/notify-send -u low -t 5000 "Charging" "State restored"
+      # Restore to the user's last manual level, not hardcoded 0
+      local restore_level=0
+      [ -f "$STATE_DIR/user-level" ] && restore_level=$(cat "$STATE_DIR/user-level")
+      ${power-mode}/bin/power-mode "$restore_level" > /dev/null 2>&1
+      rm -f "$STATE_DIR/auto-profile" "$STATE_DIR/user-level"
+      ${pkgs.libnotify}/bin/notify-send -u low -t 5000 "Charging" "Restored to level $restore_level"
     fi
   '';
 
