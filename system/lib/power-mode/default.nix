@@ -1059,11 +1059,11 @@ in
   };
 
   systemd.user.timers.battery-watchdog = {
-    description = "Poll battery level every 60s";
+    description = "Poll battery level every 1s";
     wantedBy = [ "timers.target" ];
     timerConfig = {
-      OnBootSec = "60s";
-      OnUnitActiveSec = "60s";
+      OnBootSec = "1s";
+      OnUnitActiveSec = "1s";
     };
   };
 }
