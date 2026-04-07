@@ -622,6 +622,10 @@ let
       local name
       name=$(level_name "$level")
 
+      # Persist current level so unprivileged tools (e.g. waybar) can read it
+      echo "$level" > "$STATE_DIR/current-level"
+      chmod 644 "$STATE_DIR/current-level"
+
       if [ "$level" = "0" ]; then
         restore_state
         rm -f "$STATE_DIR/saved-brightness"
@@ -630,10 +634,6 @@ let
       fi
 
       apply_round "$level"
-
-      # Persist current level so unprivileged tools (e.g. waybar) can read it
-      echo "$level" > "$STATE_DIR/current-level"
-      chmod 644 "$STATE_DIR/current-level"
 
       # Brightness: only adjust at level >= 7, restore when dropping below
       if [ "$level" != "0" ]; then
