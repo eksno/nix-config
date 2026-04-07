@@ -20,4 +20,4 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 6. Noted `system/users/jorge/programs/default.nix:163-164` already installs `grimblast` and `wayshot` with comments calling out exactly this fractional-scaling issue, but the keybind was never updated to use them.
 7. Ran `grimblast check` — all required tools (grim, slurp, hyprctl, hyprpicker, wl-copy, jq, notify-send) present.
 **Fix:** Replaced the bind in `dotfiles/hypr/shared/workflow/default/binds/qwerty.conf:15` with `bind = $mainMod, v, exec, grimblast copy area`. Reloaded with `./hypr.sh`. The same broken pattern still exists in `dvp.conf:19`, `dvp.conf:22`, `voyager1H.conf:11`, `voyager2H.conf:21`, and `voyager2H-old.conf:11` for other users — left untouched per scope.
-**Commit:** `<pending>`
+**Commit:** `533693c`
