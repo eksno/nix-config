@@ -999,27 +999,33 @@ let
 
     # Auto-escalate: only apply a level if it saves MORE than what's already set.
     # Save the user's manual level before first auto-override so we can restore it.
+    # Returns 0 if applied, 1 if skipped.
     auto_apply() {
       local target_level=$1
       # Skip if already at or above this saving level
-      [ "$CURRENT_LEVEL" -ge "$target_level" ] && return 0
+      if [ "$CURRENT_LEVEL" -ge "$target_level" ]; then
+        return 1
+      fi
       # Save the user's level before first auto-override
       [ -z "$APPLIED" ] && echo "$CURRENT_LEVEL" > "$STATE_DIR/user-level"
       ${power-mode}/bin/power-mode "$target_level" > /dev/null 2>&1
+      return 0
     }
 
     if [ "$STATUS" = "Discharging" ] && [ "$PERCENT" -le 10 ] && [ "$APPLIED" != "emergency" ]; then
       is_bt_on() { ${pkgs.bluez}/bin/bluetoothctl show 2>/dev/null | grep -q "Powered: yes"; }
       is_wifi_on() { ${pkgs.networkmanager}/bin/nmcli radio wifi 2>/dev/null | grep -q "enabled"; }
-      is_bt_on && touch "$STATE_DIR/bt-was-on"
-      is_wifi_on && touch "$STATE_DIR/wifi-was-on"
-      auto_apply 10
-      echo "emergency" > "$STATE_DIR/auto-profile"
-      notify_with_estimate critical "Battery Critical" "emergency mode"
+      if auto_apply 10; then
+        is_bt_on && touch "$STATE_DIR/bt-was-on"
+        is_wifi_on && touch "$STATE_DIR/wifi-was-on"
+        echo "emergency" > "$STATE_DIR/auto-profile"
+        notify_with_estimate critical "Battery Critical" "emergency mode"
+      fi
     elif [ "$STATUS" = "Discharging" ] && [ "$PERCENT" -le 25 ] && [ "$APPLIED" != "powersave" ] && [ "$APPLIED" != "emergency" ]; then
-      auto_apply 4
-      echo "powersave" > "$STATE_DIR/auto-profile"
-      notify_with_estimate normal "Battery Low" "powersave mode"
+      if auto_apply 4; then
+        echo "powersave" > "$STATE_DIR/auto-profile"
+        notify_with_estimate normal "Battery Low" "powersave mode"
+      fi
     elif [ "$STATUS" = "Charging" ] && [ -n "$APPLIED" ]; then
       # Restore to the user's last manual level, not hardcoded 0
       local restore_level=0
