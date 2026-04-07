@@ -1,61 +1,90 @@
 {
   "layer": "top",
-    "modules-left": ["hyprland/workspaces"],
-    "modules-center": ["clock"],
-    "modules-right": ["backlight", "pulseaudio", "bluetooth", "network", "custom/battery"],
-    "hyprland/workspaces": {
-      "format": "{icon}",
-      "tooltip": false,
-      "all-outputs": true,
-      "format-icons": {
-        "active": "",
-        "default": ""
-      }
+  "modules-left": [
+    "hyprland/workspaces"
+  ],
+  "modules-center": [
+    "clock"
+  ],
+  "modules-right": [
+    "backlight",
+    "pulseaudio",
+    "bluetooth",
+    "network",
+    "custom/battery"
+  ],
+  "hyprland/workspaces": {
+    "format": "{icon}",
+    "tooltip": false,
+    "all-outputs": true,
+    "format-icons": {
+      "active": "",
+      "default": ""
+    }
+  },
+  "clock": {
+    "format": "<span color='#89b4fa'> </span>{:%Y-%m-%d %H:%M:%S (%Z)}",
+    "interval": 1
+  },
+  "backlight": {
+    "device": "intel_backlight",
+    "format": "<span color='#f9e2af'>{icon}</span> {percent}%",
+    "format-icons": [
+      "󰃗",
+      "󰃗",
+      "󰃗",
+      "󰃟",
+      "󰃟",
+      "󰃟",
+      "󰃠",
+      "󰃠",
+      "󰃠"
+    ],
+    "scroll-step": 5,
+    "on-scroll-up": "brightnessctl set +5%",
+    "on-scroll-down": "bash -c 'MIN=$(( $(brightnessctl max) / 20 )); brightnessctl set 5%-; [ $(brightnessctl get) -lt $MIN ] && brightnessctl set $MIN'"
+  },
+  "pulseaudio": {
+    "format": "<span color='#cba6f7'>{icon}</span> {volume}%",
+    "format-muted": "<span color='#cba6f7'></span> muted",
+    "tooltip": false,
+    "format-icons": {
+      "headphone": "",
+      "default": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        ""
+      ]
     },
-    "clock": {
-      "format": "<span color='#89b4fa'> </span>{:%Y-%m-%d %H:%M:%S (%Z)}",
-      "interval": 1
-    },
-    "backlight": {
-      "device": "intel_backlight",
-      "format": "<span color='#f9e2af'>{icon}</span> {percent}%",
-      "format-icons": ["", "", "", "", "", "", "", "", ""],
-      "scroll-step": 5,
-      "on-scroll-up": "brightnessctl set +5%",
-      "on-scroll-down": "bash -c 'MIN=$(( $(brightnessctl max) / 20 )); brightnessctl set 5%-; [ $(brightnessctl get) -lt $MIN ] && brightnessctl set $MIN'"
-    },
-    "pulseaudio": {
-      "format": "<span color='#cba6f7'>{icon}</span> {volume}%",
-      "format-muted": "<span color='#cba6f7'></span> muted",
-      "tooltip": false,
-      "format-icons": {
-        "headphone": "",
-        "default": ["", "", "󰕾", "󰕾", "󰕾", "", "", ""]
-      },
-      "scroll-step": 5,
-      "on-click": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle",
-      "on-scroll-up": "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-",
-      "on-scroll-down": "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+"
-    },
-    "bluetooth": {
-      "format": "<span color='#74c7ec'></span> {status}",
-      "format-disabled": "", // an empty format will hide the module
-      "format-connected": "<span color='#74c7ec'></span> {num_connections}",
-      "tooltip-format": "{device_enumerate}",
-      "tooltip-format-enumerate-connected": "{device_alias}   {device_address}"
-    },
-    "network": {
-      "interface": "wlo1",
-      "format": "{ifname}",
-      "format-wifi": "<span color='#94e2d5'> </span>{essid}",
-      "format-ethernet": "{ipaddr}/{cidr} ",
-      "format-disconnected": "<span color='#94e2d5'>󰖪 </span>No Network",
-      "tooltip": false,
-      "on-click": "kitty --title nmtui nmtui"
-    },
-    "custom/battery": {
-      "exec": "~/.config/waybar/scripts/battery.sh",
-      "return-type": "json",
-      "tooltip": true
-    },
+    "scroll-step": 5,
+    "on-click": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle",
+    "on-scroll-up": "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-",
+    "on-scroll-down": "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+"
+  },
+  "bluetooth": {
+    "format": "<span color='#74c7ec'></span> {status}",
+    "format-disabled": "",
+    "format-connected": "<span color='#74c7ec'></span> {num_connections}",
+    "tooltip-format": "{device_enumerate}",
+    "tooltip-format-enumerate-connected": "{device_alias}   {device_address}"
+  },
+  "network": {
+    "interface": "wlo1",
+    "format": "{ifname}",
+    "format-wifi": "<span color='#94e2d5'> </span>{essid}",
+    "format-ethernet": "{ipaddr}/{cidr} ",
+    "format-disconnected": "<span color='#94e2d5'>󰖪 </span>No Network",
+    "tooltip": false,
+    "on-click": "kitty --title nmtui nmtui"
+  },
+  "custom/battery": {
+    "exec": "~/.config/waybar/scripts/battery.sh",
+    "return-type": "json",
+    "tooltip": true
+  }
 }

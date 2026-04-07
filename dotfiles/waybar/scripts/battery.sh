@@ -71,17 +71,17 @@ while true; do
 
   # Battery icon
   if [ "$status" = "Charging" ]; then
-    icon=""
-  elif [ "$capacity" -ge 90 ]; then icon=""
-  elif [ "$capacity" -ge 80 ]; then icon=""
-  elif [ "$capacity" -ge 70 ]; then icon=""
-  elif [ "$capacity" -ge 60 ]; then icon=""
-  elif [ "$capacity" -ge 50 ]; then icon=""
-  elif [ "$capacity" -ge 40 ]; then icon=""
-  elif [ "$capacity" -ge 30 ]; then icon=""
-  elif [ "$capacity" -ge 20 ]; then icon=""
-  elif [ "$capacity" -ge 10 ]; then icon=""
-  else icon=""
+    icon=""
+  elif [ "$capacity" -ge 90 ]; then icon=""
+  elif [ "$capacity" -ge 80 ]; then icon=""
+  elif [ "$capacity" -ge 70 ]; then icon=""
+  elif [ "$capacity" -ge 60 ]; then icon=""
+  elif [ "$capacity" -ge 50 ]; then icon=""
+  elif [ "$capacity" -ge 40 ]; then icon=""
+  elif [ "$capacity" -ge 30 ]; then icon=""
+  elif [ "$capacity" -ge 20 ]; then icon=""
+  elif [ "$capacity" -ge 10 ]; then icon=""
+  else icon=""
   fi
 
   # CSS class for styling
