@@ -105,6 +105,31 @@ Additional user directories exist (`lucy`, `tetochrono`) and host directories (`
 - Do not batch unrelated changes into a single commit
 - Do not wait for the user to ask you to commit — committing is automatic and mandatory after every change
 
+## MANDATORY: Log Every Fix to FIXES.md
+
+**Whenever you complete a fix for a non-trivial issue (bug, broken behavior, misconfiguration, regression), append an entry to `FIXES.md` in the same commit as the fix.** NixOS is finicky and remembering past issues prevents repeating debugging work.
+
+**Before debugging any new issue, grep `FIXES.md` first** for related symptoms, file paths, or tools — past investigations often contain the answer or rule out dead ends.
+
+Newest entries go at the **top** of the file. Entry format:
+
+    ## YYYY-MM-DD — short kebab-case title
+
+    **Symptom:** what the user observed
+    **Affected:** host/user, key files (use `path:line` format)
+    **Root cause:** the underlying reason
+    **Investigation:**
+    1. step one — what was tried, what was learned
+    2. step two — including dead ends and wrong assumptions
+    3. ...
+    **Fix:** what changed and where
+    **Commit:** `<sha>` (fill in after committing)
+
+- Log fixes only — not feature work, refactors, doc edits, or one-line typo corrections
+- **Include dead ends and wrong turns** in the investigation; the failed paths are often the most useful part for future debugging
+- Keep entries terse but complete — a future Claude (or Jorge) should be able to reproduce the diagnosis from the entry alone
+- It's fine to update an entry's commit sha in a follow-up commit if needed
+
 ## Adding a new host
 
 1. Create `system/hosts/{hostname}/` with `default.nix` and `hardware-configuration.nix`
