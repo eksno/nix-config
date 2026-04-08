@@ -673,8 +673,8 @@ let
       # Save as user's persistent preference (only for manual CLI calls)
       if [ "$_AUTO" = "0" ]; then
         echo "$level" > "$DATA_DIR/user-level"
-        # Temp override: tell the watchdog to back off until state changes
-        touch "$STATE_DIR/manual-override"
+        # Temp override: tell the watchdog to skip auto-escalation up to this level
+        echo "$level" > "$STATE_DIR/manual-override"
       fi
 
       if [ "$level" = "0" ]; then
@@ -1044,9 +1044,14 @@ let
       [ "$PERCENT" -le 25 ] && [ "$target" -lt 9 ] && target=9
     fi
 
-    # Skip auto-escalation if user manually overrode (cleared on plug/unplug/reboot)
+    # Respect manual override: only skip if target isn't above the overridden level
     if [ -f "$STATE_DIR/manual-override" ]; then
-      exit 0
+      override_level=$(cat "$STATE_DIR/manual-override")
+      if [ "$target" -le "$override_level" ] || [ "$target" -le "$CURRENT_LEVEL" ]; then
+        exit 0
+      fi
+      # Target exceeds override — a higher threshold kicked in, clear the override
+      rm -f "$STATE_DIR/manual-override"
     fi
 
     # Only act when current level differs from target
