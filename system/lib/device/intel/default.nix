@@ -6,12 +6,28 @@
     "nouveau"
     "nvidia"
     "bbswitch"
+    "xe"          # Prevent dual GPU driver loading (i915 is primary)
   ];
   boot.kernelModules = [ "kvm-intel" ];
   boot.kernelParams = [
     "i915.enable_guc=3"
     "i915.enable_psr=2"
+    "i915.enable_fbc=1"           # Frame buffer compression
+    "i915.enable_dc=4"            # Deeper display power states
+    "pcie_aspm=force"             # Force ASPM even if BIOS didn't enable
+    "nmi_watchdog=0"              # Disable NMI watchdog (~0.5W)
+    "snd_hda_intel.power_save=1"  # Audio codec power save
+    "iwlwifi.power_save=1"        # WiFi power save
   ];
+
+  boot.extraModprobeConfig = ''
+    options snd_hda_intel power_save=1
+    options iwlwifi power_save=1 power_level=5
+  '';
+
+  # Intel thermal management — reads DPTF tables from BIOS for adaptive tuning
+  services.thermald.enable = true;
+
   hardware.graphics = {
     enable = true;
     extraPackages = with pkgs; [

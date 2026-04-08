@@ -24,5 +24,29 @@
     };
   };
 
+  # Enable Intel workload type hints for firmware power optimization
+  systemd.services.intel-workload-hints = {
+    description = "Enable Intel workload type hints";
+    after = [ "multi-user.target" ];
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = "${pkgs.bash}/bin/bash -c 'echo 1 > /sys/devices/pci0000:00/0000:00:04.0/workload_hint/workload_hint_enable 2>/dev/null || true'";
+      RemainAfterExit = true;
+    };
+  };
+
+  # Disable Thunderbolt/TCSS wakeup sources that block S0ix deep sleep
+  systemd.services.disable-tb-wakeup = {
+    description = "Disable Thunderbolt wakeup sources for deeper sleep";
+    after = [ "multi-user.target" ];
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = "${pkgs.bash}/bin/bash -c 'for src in TXHC TDM0 TRP0 TRP1; do echo $src > /proc/acpi/wakeup 2>/dev/null || true; done'";
+      RemainAfterExit = true;
+    };
+  };
+
   networking.hostName = "verse"; # Define your hostname.
 }
