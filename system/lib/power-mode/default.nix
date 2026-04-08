@@ -1094,6 +1094,9 @@ in
       Type = "oneshot";
       ExecStart = "${battery-watchdog}/bin/battery-watchdog";
     };
+    unitConfig = {
+      StartLimitIntervalSec = 0; # Disable rate limiting for 1s polling
+    };
   };
 
   systemd.user.timers.battery-watchdog = {
