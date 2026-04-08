@@ -673,8 +673,8 @@ let
       # Save as user's persistent preference (only for manual CLI calls)
       if [ "$_AUTO" = "0" ]; then
         echo "$level" > "$DATA_DIR/user-level"
-        # Temp override: tell the watchdog to skip auto-escalation up to this level
-        echo "$level" > "$STATE_DIR/manual-override"
+        # Signal the watchdog that the user manually overrode
+        touch "$STATE_DIR/manual-override"
       fi
 
       if [ "$level" = "0" ]; then
@@ -1033,7 +1033,7 @@ let
     LAST_STATUS=""
     [ -f "$STATE_DIR/last-status" ] && LAST_STATUS=$(cat "$STATE_DIR/last-status")
     if [ "$STATUS" != "$LAST_STATUS" ] && [ -n "$LAST_STATUS" ]; then
-      rm -f "$STATE_DIR/manual-override"
+      rm -f "$STATE_DIR/manual-override" "$STATE_DIR/overridden-target"
     fi
     echo "$STATUS" > "$STATE_DIR/last-status"
 
@@ -1044,14 +1044,21 @@ let
       [ "$PERCENT" -le 25 ] && [ "$target" -lt 9 ] && target=9
     fi
 
-    # Respect manual override: only skip if target isn't above the overridden level
+    # Manual override: user ran power-mode manually, back off until a NEW threshold
+    # On first poll after override, record what auto-target was being suppressed
     if [ -f "$STATE_DIR/manual-override" ]; then
-      override_level=$(cat "$STATE_DIR/manual-override")
-      if [ "$target" -le "$override_level" ] || [ "$target" -le "$CURRENT_LEVEL" ]; then
+      echo "$target" > "$STATE_DIR/overridden-target"
+      rm -f "$STATE_DIR/manual-override"
+    fi
+    if [ -f "$STATE_DIR/overridden-target" ]; then
+      saved_target=$(cat "$STATE_DIR/overridden-target")
+      if [ "$target" -gt "$saved_target" ]; then
+        # A higher threshold kicked in (e.g., crossed ≤25%) — clear and apply
+        rm -f "$STATE_DIR/overridden-target"
+      else
+        # Same or lower threshold — respect the user's override
         exit 0
       fi
-      # Target exceeds override — a higher threshold kicked in, clear the override
-      rm -f "$STATE_DIR/manual-override"
     fi
 
     # Only act when current level differs from target
