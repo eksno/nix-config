@@ -625,8 +625,11 @@ let
       # Persist current level so unprivileged tools (e.g. waybar) can read it
       echo "$level" > "$STATE_DIR/current-level"
       chmod 644 "$STATE_DIR/current-level"
-      # Also persist to survive reboot (boot service restores from this)
       echo "$level" > "$DATA_DIR/last-level"
+      # Save as user's persistent preference (only for manual CLI calls)
+      if [ "$_AUTO" = "0" ]; then
+        echo "$level" > "$DATA_DIR/user-level"
+      fi
 
       if [ "$level" = "0" ]; then
         restore_state
@@ -906,6 +909,13 @@ let
       echo ""
     }
 
+    # --auto flag: called by watchdog, don't overwrite persistent user-level
+    _AUTO=0
+    if [ "''${1:-}" = "--auto" ]; then
+      _AUTO=1
+      shift
+    fi
+
     case "''${1:-}" in
       performance) apply_level 0;  show_status settle ;;
       balanced)    apply_level 2;  show_status settle ;;
@@ -939,20 +949,6 @@ let
     esac
   '';
 
-  power-mode-boot = pkgs.writeShellScriptBin "power-mode-boot" ''
-    DATA_DIR="/var/lib/power-mode"
-    # Prefer user-level (pre-auto-escalation choice) over last-level
-    level=""
-    if [ -f "$DATA_DIR/user-level" ]; then
-      level=$(cat "$DATA_DIR/user-level")
-      rm -f "$DATA_DIR/user-level"
-    elif [ -f "$DATA_DIR/last-level" ]; then
-      level=$(cat "$DATA_DIR/last-level")
-    fi
-    [ -z "$level" ] && exit 0
-    ${power-mode}/bin/power-mode "$level"
-  '';
-
   battery-watchdog = pkgs.writeShellScriptBin "battery-watchdog" ''
     BAT=""
     for b in /sys/class/power_supply/BAT*; do
@@ -964,10 +960,12 @@ let
     STATUS=$(cat "$BAT/status")
     STATE_DIR="/tmp/power-mode"
     mkdir -p "$STATE_DIR"
-    APPLIED=""
-    [ -f "$STATE_DIR/auto-profile" ] && APPLIED=$(cat "$STATE_DIR/auto-profile")
     CURRENT_LEVEL=0
     [ -f "$STATE_DIR/current-level" ] && CURRENT_LEVEL=$(cat "$STATE_DIR/current-level")
+
+    # User's persistent manual choice (survives reboot)
+    USER_LEVEL=0
+    [ -f /var/lib/power-mode/user-level ] && USER_LEVEL=$(cat /var/lib/power-mode/user-level)
 
     calc() {
       ${pkgs.gawk}/bin/awk "BEGIN { printf \"%.''${2:-1}f\", $1 }"
@@ -1013,45 +1011,24 @@ let
       done
     }
 
-    # Auto-escalate: only apply a level if it saves MORE than what's already set.
-    # Save the user's manual level before first auto-override so we can restore it.
-    # Returns 0 if applied, 1 if skipped.
-    auto_apply() {
-      local target_level=$1
-      # Skip if already at or above this saving level
-      if [ "$CURRENT_LEVEL" -ge "$target_level" ]; then
-        return 1
-      fi
-      # Save the user's level before first auto-override (volatile + persistent)
-      if [ -z "$APPLIED" ]; then
-        echo "$CURRENT_LEVEL" > "$STATE_DIR/user-level"
-        echo "$CURRENT_LEVEL" > /var/lib/power-mode/user-level
-      fi
-      ${power-mode}/bin/power-mode "$target_level" > /dev/null 2>&1
-      return 0
-    }
+    # Determine target level: user's choice, bumped up for low battery
+    target=$USER_LEVEL
+    if [ "$STATUS" = "Discharging" ]; then
+      [ "$PERCENT" -le 25 ] && [ "$target" -lt 4 ]  && target=4
+      [ "$PERCENT" -le 10 ] && [ "$target" -lt 10 ] && target=10
+    fi
 
-    if [ "$STATUS" = "Discharging" ] && [ "$PERCENT" -le 10 ] && [ "$APPLIED" != "emergency" ]; then
-      is_bt_on() { ${pkgs.bluez}/bin/bluetoothctl show 2>/dev/null | grep -q "Powered: yes"; }
-      is_wifi_on() { ${pkgs.networkmanager}/bin/nmcli radio wifi 2>/dev/null | grep -q "enabled"; }
-      if auto_apply 10; then
-        is_bt_on && touch "$STATE_DIR/bt-was-on"
-        is_wifi_on && touch "$STATE_DIR/wifi-was-on"
-        echo "emergency" > "$STATE_DIR/auto-profile"
+    # Only act when current level differs from target
+    if [ "$CURRENT_LEVEL" != "$target" ]; then
+      ${power-mode}/bin/power-mode --auto "$target" > /dev/null 2>&1
+
+      if [ "$STATUS" = "Discharging" ] && [ "$target" -ge 10 ] && [ "$target" -gt "$USER_LEVEL" ]; then
         notify_with_estimate critical "Battery Critical" "emergency mode"
-      fi
-    elif [ "$STATUS" = "Discharging" ] && [ "$PERCENT" -le 25 ] && [ "$APPLIED" != "powersave" ] && [ "$APPLIED" != "emergency" ]; then
-      if auto_apply 4; then
-        echo "powersave" > "$STATE_DIR/auto-profile"
+      elif [ "$STATUS" = "Discharging" ] && [ "$target" -ge 4 ] && [ "$target" -gt "$USER_LEVEL" ]; then
         notify_with_estimate normal "Battery Low" "powersave mode"
+      elif [ "$STATUS" = "Charging" ] && [ "$target" -le "$USER_LEVEL" ]; then
+        ${pkgs.libnotify}/bin/notify-send -u low -t 5000 "Charging" "Restored to level $target"
       fi
-    elif [ "$STATUS" = "Charging" ] && [ -n "$APPLIED" ]; then
-      # Restore to the user's last manual level, not hardcoded 0
-      local restore_level=0
-      [ -f "$STATE_DIR/user-level" ] && restore_level=$(cat "$STATE_DIR/user-level")
-      ${power-mode}/bin/power-mode "$restore_level" > /dev/null 2>&1
-      rm -f "$STATE_DIR/auto-profile" "$STATE_DIR/user-level" /var/lib/power-mode/user-level
-      ${pkgs.libnotify}/bin/notify-send -u low -t 5000 "Charging" "Restored to level $restore_level"
     fi
   '';
 
@@ -1073,16 +1050,6 @@ in
     power-mode
     pkgs.brightnessctl
   ];
-
-  # Restore power-mode level on boot
-  systemd.services.power-mode-boot = {
-    description = "Restore power-mode level from last session";
-    wantedBy = [ "multi-user.target" ];
-    serviceConfig = {
-      Type = "oneshot";
-      ExecStart = "${power-mode-boot}/bin/power-mode-boot";
-    };
-  };
 
   # Battery watchdog: user service so it has D-Bus access for notifications
   systemd.user.services.battery-watchdog = {
