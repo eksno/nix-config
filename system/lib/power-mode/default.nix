@@ -1083,14 +1083,20 @@ in
   powerManagement.powertop.enable = true;
 
   # Allow power-mode to run as root without password for wheel users
+  # SETENV needed so sudo doesn't strip env in some contexts
   security.sudo.extraRules = [
     {
       groups = [ "wheel" ];
       commands = [
-        { command = "${power-mode}/bin/power-mode"; options = [ "NOPASSWD" ]; }
+        { command = "${power-mode}/bin/power-mode"; options = [ "NOPASSWD" "SETENV" ]; }
       ];
     }
   ];
+
+  # Allow sudo without a tty (needed for systemd user services calling power-mode)
+  security.sudo.extraConfig = ''
+    Defaults !requiretty
+  '';
 
   environment.systemPackages = [
     power-mode
