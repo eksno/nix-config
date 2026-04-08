@@ -12,6 +12,12 @@
 
   services.xserver.exportConfiguration = true;
 
+  # Clear volatile power-mode state on boot so the watchdog re-applies the
+  # user's level instead of trusting stale files from the previous session
+  systemd.tmpfiles.rules = [
+    "D /tmp/power-mode 1777 root root -"
+  ];
+
   # Cap battery charge at 80% to reduce cell voltage stress and slow degradation
   systemd.services.battery-charge-threshold = {
     description = "Set battery charge threshold to 80%";
