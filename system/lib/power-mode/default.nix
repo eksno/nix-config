@@ -625,6 +625,8 @@ let
       # Persist current level so unprivileged tools (e.g. waybar) can read it
       echo "$level" > "$STATE_DIR/current-level"
       chmod 644 "$STATE_DIR/current-level"
+      # Also persist to survive reboot (boot service restores from this)
+      echo "$level" > "$DATA_DIR/last-level"
 
       if [ "$level" = "0" ]; then
         restore_state
@@ -937,6 +939,20 @@ let
     esac
   '';
 
+  power-mode-boot = pkgs.writeShellScriptBin "power-mode-boot" ''
+    DATA_DIR="/var/lib/power-mode"
+    # Prefer user-level (pre-auto-escalation choice) over last-level
+    level=""
+    if [ -f "$DATA_DIR/user-level" ]; then
+      level=$(cat "$DATA_DIR/user-level")
+      rm -f "$DATA_DIR/user-level"
+    elif [ -f "$DATA_DIR/last-level" ]; then
+      level=$(cat "$DATA_DIR/last-level")
+    fi
+    [ -z "$level" ] && exit 0
+    ${power-mode}/bin/power-mode "$level"
+  '';
+
   battery-watchdog = pkgs.writeShellScriptBin "battery-watchdog" ''
     BAT=""
     for b in /sys/class/power_supply/BAT*; do
@@ -1006,8 +1022,11 @@ let
       if [ "$CURRENT_LEVEL" -ge "$target_level" ]; then
         return 1
       fi
-      # Save the user's level before first auto-override
-      [ -z "$APPLIED" ] && echo "$CURRENT_LEVEL" > "$STATE_DIR/user-level"
+      # Save the user's level before first auto-override (volatile + persistent)
+      if [ -z "$APPLIED" ]; then
+        echo "$CURRENT_LEVEL" > "$STATE_DIR/user-level"
+        echo "$CURRENT_LEVEL" > /var/lib/power-mode/user-level
+      fi
       ${power-mode}/bin/power-mode "$target_level" > /dev/null 2>&1
       return 0
     }
@@ -1031,7 +1050,7 @@ let
       local restore_level=0
       [ -f "$STATE_DIR/user-level" ] && restore_level=$(cat "$STATE_DIR/user-level")
       ${power-mode}/bin/power-mode "$restore_level" > /dev/null 2>&1
-      rm -f "$STATE_DIR/auto-profile" "$STATE_DIR/user-level"
+      rm -f "$STATE_DIR/auto-profile" "$STATE_DIR/user-level" /var/lib/power-mode/user-level
       ${pkgs.libnotify}/bin/notify-send -u low -t 5000 "Charging" "Restored to level $restore_level"
     fi
   '';
@@ -1054,6 +1073,16 @@ in
     power-mode
     pkgs.brightnessctl
   ];
+
+  # Restore power-mode level on boot
+  systemd.services.power-mode-boot = {
+    description = "Restore power-mode level from last session";
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = "${power-mode-boot}/bin/power-mode-boot";
+    };
+  };
 
   # Battery watchdog: user service so it has D-Bus access for notifications
   systemd.user.services.battery-watchdog = {
