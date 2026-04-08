@@ -28,6 +28,12 @@
   # Intel thermal management — reads DPTF tables from BIOS for adaptive tuning
   services.thermald.enable = true;
 
+  # Reduce NVMe/storage wake-ups for power savings
+  boot.kernel.sysctl = {
+    "vm.dirty_writeback_centisecs" = 6000; # 60s instead of 15s
+    "vm.laptop_mode" = 5;                  # Delay disk writes
+  };
+
   hardware.graphics = {
     enable = true;
     extraPackages = with pkgs; [

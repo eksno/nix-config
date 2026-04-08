@@ -376,6 +376,9 @@ let
         [ -n "$aspm" ] && set_aspm "$aspm"
         [ -n "$wifi_powersave" ] && set_wifi_powersave "$wifi_powersave"
 
+        # Bring all cores back online before restoring freq/governor
+        online_all_cores
+
         rm -f "$STATE_DIR/saved-state"
         rm -f "$STATE_DIR/saved-brightness"
         echo -e "  ''${GREEN}State restored''${RESET}"
@@ -403,9 +406,33 @@ let
     # Apply all settings for a specific stretch level (0-10).
     # Self-contained: sets ALL levers to absolute values for that level.
     # Does NOT set brightness — caller handles that (calibrate vs stretch differ).
+    # P-core hotplug: offline P-cores to eliminate leakage current (~1-3W savings)
+    # cpu0 can never be offlined by the kernel, so we skip it
+    offline_pcores() {
+      for cpu in /sys/devices/system/cpu/cpu[0-9]*/online; do
+        local num
+        num=$(echo "$cpu" | grep -o 'cpu[0-9]*' | grep -o '[0-9]*')
+        local max_freq
+        max_freq=$(cat "/sys/devices/system/cpu/cpu$num/cpufreq/cpuinfo_max_freq" 2>/dev/null || echo 0)
+        # P-cores have max freq > 1000 MHz (1000000 kHz)
+        if [ "$max_freq" -gt 1000000 ] && [ "$num" != "0" ]; then
+          echo 0 > "$cpu" 2>/dev/null || true
+        fi
+      done
+    }
+
+    online_all_cores() {
+      for cpu in /sys/devices/system/cpu/cpu[0-9]*/online; do
+        echo 1 > "$cpu" 2>/dev/null || true
+      done
+    }
+
     apply_round() {
       local round=$1
       local pct=$((round * 10))
+
+      # Bring all cores online first so freq/governor writes hit every core
+      online_all_cores
 
       # Continuous levers: interpolate from performance (0%) to max-save (100%)
       local new_cpu new_rapl_uw new_igpu
@@ -437,6 +464,12 @@ let
       set_aspm "$av"
       set_wifi_powersave "$wps"
       set_pci_pm "$ppm"
+
+      # At level >= 8, offline P-cores to eliminate leakage (~1-3W savings)
+      # E-cores and LP E-cores handle idle/light workloads fine
+      if [ "$round" -ge 8 ]; then
+        offline_pcores
+      fi
     }
 
     # Brightness value for a given round (50% base → 5% at round 10)
