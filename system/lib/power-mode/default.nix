@@ -640,13 +640,13 @@ let
 
       apply_round "$level"
 
-      # Brightness: only adjust at level >= 7, restore when dropping below
+      # Brightness: only adjust at emergency (level 10), restore when dropping below
       if [ "$level" != "0" ]; then
         local cur_bright
         cur_bright=$(${pkgs.brightnessctl}/bin/brightnessctl -m 2>/dev/null | cut -d',' -f4 | tr -d '%')
         cur_bright="''${cur_bright:-50}"
 
-        if [ "$level" -ge 7 ]; then
+        if [ "$level" -ge 10 ]; then
           # Save user's brightness before we lower it
           local saved_bright=""
           [ -f "$STATE_DIR/saved-brightness" ] && saved_bright=$(cat "$STATE_DIR/saved-brightness")
@@ -660,7 +660,7 @@ let
             set_brightness "$bright"
           fi
         else
-          # Level 1-6: restore brightness if a previous level lowered it
+          # Level 1-9: restore brightness if emergency previously lowered it
           if [ -f "$STATE_DIR/saved-brightness" ]; then
             set_brightness "$(cat "$STATE_DIR/saved-brightness")"
             rm -f "$STATE_DIR/saved-brightness"
@@ -1014,7 +1014,8 @@ let
     # Determine target level: user's choice, bumped up for low battery
     target=$USER_LEVEL
     if [ "$STATUS" = "Discharging" ]; then
-      [ "$PERCENT" -le 25 ] && [ "$target" -lt 4 ]  && target=4
+      [ "$PERCENT" -le 75 ] && [ "$target" -lt 8 ]  && target=8
+      [ "$PERCENT" -le 25 ] && [ "$target" -lt 9 ]  && target=9
       [ "$PERCENT" -le 10 ] && [ "$target" -lt 10 ] && target=10
     fi
 
@@ -1024,8 +1025,10 @@ let
 
       if [ "$STATUS" = "Discharging" ] && [ "$target" -ge 10 ] && [ "$target" -gt "$USER_LEVEL" ]; then
         notify_with_estimate critical "Battery Critical" "emergency mode"
-      elif [ "$STATUS" = "Discharging" ] && [ "$target" -ge 4 ] && [ "$target" -gt "$USER_LEVEL" ]; then
-        notify_with_estimate normal "Battery Low" "powersave mode"
+      elif [ "$STATUS" = "Discharging" ] && [ "$target" -ge 9 ] && [ "$target" -gt "$USER_LEVEL" ]; then
+        notify_with_estimate normal "Battery Low" "level 9"
+      elif [ "$STATUS" = "Discharging" ] && [ "$target" -ge 8 ] && [ "$target" -gt "$USER_LEVEL" ]; then
+        ${pkgs.libnotify}/bin/notify-send -u low -t 5000 "Battery ≤75%" "Switched to level 8"
       elif [ "$STATUS" = "Charging" ] && [ "$target" -le "$USER_LEVEL" ]; then
         ${pkgs.libnotify}/bin/notify-send -u low -t 5000 "Charging" "Restored to level $target"
       fi
