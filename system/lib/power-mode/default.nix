@@ -491,10 +491,11 @@ let
       local urgency="''${1:-normal}"
       local hints=()
 
-      if [ "$urgency" = "tight" ]; then
-        is_bt_on && hints+=("bluetoothctl power off  (~0.5W)")
-        is_wifi_on && hints+=("nmcli radio wifi off  (~1-2W)")
-      fi
+      is_bt_on && hints+=("bluetoothctl power off  (~0.5W)")
+      is_wifi_on && hints+=("nmcli radio wifi off  (~1-2W)")
+      local bright
+      bright=$(${pkgs.brightnessctl}/bin/brightnessctl -m 2>/dev/null | cut -d',' -f4 | tr -d '%')
+      [ -n "$bright" ] && [ "$bright" -gt 20 ] && hints+=("Lower brightness to 20% or below  (~1-2W)")
       hints+=("Close browsers, Discord, IDEs")
 
       echo ""
@@ -683,42 +684,14 @@ let
 
       apply_round "$level"
 
-      # Brightness: only adjust at emergency (level 10), restore when dropping below
-      if [ "$level" != "0" ]; then
-        local cur_bright
-        cur_bright=$(${pkgs.brightnessctl}/bin/brightnessctl -m 2>/dev/null | cut -d',' -f4 | tr -d '%')
-        cur_bright="''${cur_bright:-50}"
-
-        if [ "$level" -ge 10 ]; then
-          # Save user's brightness before we lower it
-          local saved_bright=""
-          [ -f "$STATE_DIR/saved-brightness" ] && saved_bright=$(cat "$STATE_DIR/saved-brightness")
-          if [ -z "$saved_bright" ] || [ "$cur_bright" -gt "$saved_bright" ]; then
-            echo "$cur_bright" > "$STATE_DIR/saved-brightness"
-          fi
-          # Apply level brightness (only lower, never raise)
-          local bright
-          bright=$(round_brightness "$level")
-          if [ "$cur_bright" -gt "$bright" ]; then
-            set_brightness "$bright"
-          fi
-        else
-          # Level 1-9: restore brightness if emergency previously lowered it
-          if [ -f "$STATE_DIR/saved-brightness" ]; then
-            set_brightness "$(cat "$STATE_DIR/saved-brightness")"
-            rm -f "$STATE_DIR/saved-brightness"
-          fi
-        fi
-      fi
-
       if [ -n "$name" ]; then
         echo -e "''${CYAN}Applied level $level — $name''${RESET}"
       else
         echo -e "''${CYAN}Applied level $level ($((level * 10))%)''${RESET}"
       fi
 
-      if [ "$level" = "10" ]; then
-        recommend_externals tight
+      if [ "$level" -ge 9 ]; then
+        recommend_externals
       fi
     }
 
@@ -1054,22 +1027,19 @@ let
       done
     }
 
-    # Determine target level: user's choice, bumped up for low battery
+    # Determine target level: user's choice, bumped up for low battery (max 9)
     target=$USER_LEVEL
     if [ "$STATUS" = "Discharging" ]; then
-      [ "$PERCENT" -le 75 ] && [ "$target" -lt 8 ]  && target=8
-      [ "$PERCENT" -le 25 ] && [ "$target" -lt 9 ]  && target=9
-      [ "$PERCENT" -le 10 ] && [ "$target" -lt 10 ] && target=10
+      [ "$PERCENT" -le 75 ] && [ "$target" -lt 8 ] && target=8
+      [ "$PERCENT" -le 25 ] && [ "$target" -lt 9 ] && target=9
     fi
 
     # Only act when current level differs from target
     if [ "$CURRENT_LEVEL" != "$target" ]; then
       ${power-mode}/bin/power-mode --auto "$target" > /dev/null 2>&1
 
-      if [ "$STATUS" = "Discharging" ] && [ "$target" -ge 10 ] && [ "$target" -gt "$USER_LEVEL" ]; then
-        notify_with_estimate critical "Battery Critical" "emergency mode"
-      elif [ "$STATUS" = "Discharging" ] && [ "$target" -ge 9 ] && [ "$target" -gt "$USER_LEVEL" ]; then
-        notify_with_estimate normal "Battery Low" "level 9"
+      if [ "$STATUS" = "Discharging" ] && [ "$target" -ge 9 ] && [ "$target" -gt "$USER_LEVEL" ]; then
+        notify_with_estimate critical "Battery Low" "level 9\nConsider lowering brightness"
       elif [ "$STATUS" = "Discharging" ] && [ "$target" -ge 8 ] && [ "$target" -gt "$USER_LEVEL" ]; then
         ${pkgs.libnotify}/bin/notify-send -u low -t 5000 "Battery ≤75%" "Switched to level 8"
       elif [ "$STATUS" = "Charging" ] && [ "$target" -le "$USER_LEVEL" ]; then
