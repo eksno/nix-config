@@ -673,6 +673,8 @@ let
       # Save as user's persistent preference (only for manual CLI calls)
       if [ "$_AUTO" = "0" ]; then
         echo "$level" > "$DATA_DIR/user-level"
+        # Temp override: tell the watchdog to back off until state changes
+        touch "$STATE_DIR/manual-override"
       fi
 
       if [ "$level" = "0" ]; then
@@ -1027,11 +1029,24 @@ let
       done
     }
 
+    # Clear manual override on charging state changes (plug/unplug)
+    LAST_STATUS=""
+    [ -f "$STATE_DIR/last-status" ] && LAST_STATUS=$(cat "$STATE_DIR/last-status")
+    if [ "$STATUS" != "$LAST_STATUS" ] && [ -n "$LAST_STATUS" ]; then
+      rm -f "$STATE_DIR/manual-override"
+    fi
+    echo "$STATUS" > "$STATE_DIR/last-status"
+
     # Determine target level: user's choice, bumped up for low battery (max 9)
     target=$USER_LEVEL
     if [ "$STATUS" = "Discharging" ]; then
       [ "$PERCENT" -le 75 ] && [ "$target" -lt 8 ] && target=8
       [ "$PERCENT" -le 25 ] && [ "$target" -lt 9 ] && target=9
+    fi
+
+    # Skip auto-escalation if user manually overrode (cleared on plug/unplug/reboot)
+    if [ -f "$STATE_DIR/manual-override" ]; then
+      exit 0
     fi
 
     # Only act when current level differs from target
