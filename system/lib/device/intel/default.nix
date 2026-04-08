@@ -18,6 +18,8 @@
     "nmi_watchdog=0"              # Disable NMI watchdog (~0.5W)
     "snd_hda_intel.power_save=1"  # Audio codec power save
     "iwlwifi.power_save=1"        # WiFi power save
+    "acpi.ec_no_wakeup=1"         # Prevent EC spurious wakes during s2idle
+    "usbcore.autosuspend=1"       # USB autosuspend after 1s (default 2s)
   ];
 
   boot.extraModprobeConfig = ''

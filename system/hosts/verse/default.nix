@@ -54,5 +54,17 @@
     };
   };
 
+  # Migrate key IRQs to LP E-cores (cpu20-21) so P-cores/E-cores sleep deeper
+  systemd.services.irq-lp-cores = {
+    description = "Migrate IRQs to LP E-cores for deeper idle";
+    after = [ "multi-user.target" ];
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = "${pkgs.bash}/bin/bash -c 'for irq in $(${pkgs.gnugrep}/bin/grep -l \"i915\\|iwlwifi\\|nvme\\|AudioDSP\" /proc/irq/*/actions 2>/dev/null | cut -d/ -f4); do echo 20-21 > /proc/irq/$irq/smp_affinity_list 2>/dev/null || true; done'";
+      RemainAfterExit = true;
+    };
+  };
+
   networking.hostName = "verse"; # Define your hostname.
 }

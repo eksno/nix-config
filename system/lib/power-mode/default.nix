@@ -378,6 +378,10 @@ let
 
         # Bring all cores back online before restoring freq/governor
         online_all_cores
+        # Restore uncore frequency to hardware max
+        for f in /sys/devices/system/cpu/intel_uncore_frequency/*/max_freq_khz; do
+          cat "$(dirname "$f")/initial_max_freq_khz" > "$f" 2>/dev/null || true
+        done
 
         rm -f "$STATE_DIR/saved-state"
         rm -f "$STATE_DIR/saved-brightness"
@@ -435,15 +439,20 @@ let
       online_all_cores
 
       # Continuous levers: interpolate from performance (0%) to max-save (100%)
-      local new_cpu new_rapl_uw new_igpu
+      local new_cpu new_rapl_uw new_igpu new_uncore
       new_cpu=$(calc_int "$CPU_MAX - $pct / 100 * ($CPU_MAX - $CPU_FLOOR)")
       new_rapl_uw=$(calc_int "28000000 - $pct / 100 * (28000000 - 1000000)")
       new_igpu=$(calc_int "''${GPU_MAX:-2250} - $pct / 100 * (''${GPU_MAX:-2250} - 100)")
+      new_uncore=$(calc_int "3300000 - $pct / 100 * (3300000 - 400000)")
 
       set_min_freq "$CPU_FLOOR"
       set_max_freq "$new_cpu"
       set_rapl_uw "$new_rapl_uw"
       set_igpu_max "$new_igpu"
+      # Cap uncore (ring/memory controller) frequency
+      for f in /sys/devices/system/cpu/intel_uncore_frequency/*/max_freq_khz; do
+        echo "$new_uncore" > "$f" 2>/dev/null || true
+      done
 
       # Discrete levers: accumulate all flips up to this round
       local gov="performance" tv=0 ev="performance" pf="performance"
@@ -455,6 +464,7 @@ let
       [ "$round" -ge 4 ] && tv=1 && sv="power_saving"
       [ "$round" -ge 5 ] && av="powersupersave"
       [ "$round" -ge 7 ] && ev="power"
+      [ "$round" -ge 8 ] && ev="255"  # Max power saving EPP (more aggressive than "power"=192)
 
       set_governor "$gov"
       set_turbo "$tv"
