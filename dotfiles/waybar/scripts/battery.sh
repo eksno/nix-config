@@ -16,6 +16,7 @@ fi
 SAMPLES=()
 WINDOW=600  # 5 minutes at 0.5s intervals
 LAST_LEVEL=""
+LAST_STATUS=""
 
 while true; do
   power_uw=$(cat "$BAT/power_now" 2>/dev/null || echo 0)
@@ -23,13 +24,14 @@ while true; do
   capacity=$(cat "$BAT/capacity" 2>/dev/null || echo 0)
   status=$(cat "$BAT/status" 2>/dev/null || echo "Unknown")
 
-  # Reset samples when power-mode level changes
+  # Reset samples when power-mode level or charging state changes
   level="0"
   [ -f /tmp/power-mode/current-level ] && level=$(cat /tmp/power-mode/current-level 2>/dev/null || echo "0")
-  if [ "$level" != "$LAST_LEVEL" ] && [ -n "$LAST_LEVEL" ]; then
+  if [ -n "$LAST_LEVEL" ] && { [ "$level" != "$LAST_LEVEL" ] || [ "$status" != "$LAST_STATUS" ]; }; then
     SAMPLES=()
   fi
   LAST_LEVEL="$level"
+  LAST_STATUS="$status"
 
   # Add sample to rolling window
   SAMPLES+=("$power_uw")
