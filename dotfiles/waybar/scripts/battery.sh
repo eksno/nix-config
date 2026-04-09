@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Waybar custom battery module — continuous JSON output
-# Shows: battery %, avg watts (5min rolling @ 0.5s), estimated time, power-mode level
+# Shows: battery %, avg watts (10min rolling @ 0.5s), estimated time, power-mode level
 
 set -euo pipefail
 
@@ -14,7 +14,7 @@ if [ -z "$BAT" ]; then
 fi
 
 SAMPLES=()
-WINDOW=600  # 5 minutes at 0.5s intervals
+WINDOW=1200  # 10 minutes at 0.5s intervals
 LAST_LEVEL=""
 LAST_STATUS=""
 
