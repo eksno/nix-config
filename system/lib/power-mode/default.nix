@@ -89,12 +89,17 @@ let
 
     bat_watts() {
       local raw
-      raw=$(cat "$BAT/power_now")
+      raw=$(cat "$BAT/power_now" 2>/dev/null || echo 0)
       if [ "$raw" = "0" ]; then
         echo "0.0"
       else
         calc "$raw / 1000000"
       fi
+    }
+
+    # Read power_now in microwatts with fallback (sysfs can vanish briefly during CPU hotplug)
+    read_power_uw() {
+      cat "$BAT/power_now" 2>/dev/null || echo 0
     }
 
     bat_status() {
@@ -555,12 +560,15 @@ let
 
         # Live-average over 5s if interactive terminal
         if [ -t 1 ]; then
-          sum=$(${pkgs.gawk}/bin/awk "BEGIN { printf \"%.4f\", $(cat "$BAT/power_now") / 1000000 }")
+          local raw_pw
+          raw_pw=$(cat "$BAT/power_now" 2>/dev/null || echo 0)
+          sum=$(${pkgs.gawk}/bin/awk "BEGIN { printf \"%.4f\", $raw_pw / 1000000 }")
           count=1
           for i in $(seq 1 9); do
             sleep 0.5
             local sample
-            sample=$(${pkgs.gawk}/bin/awk "BEGIN { printf \"%.4f\", $(cat "$BAT/power_now") / 1000000 }")
+            raw_pw=$(cat "$BAT/power_now" 2>/dev/null || echo 0)
+            sample=$(${pkgs.gawk}/bin/awk "BEGIN { printf \"%.4f\", $raw_pw / 1000000 }")
             sum=$(${pkgs.gawk}/bin/awk "BEGIN { printf \"%.4f\", $sum + $sample }")
             count=$((count + 1))
             avg=$(calc "$sum / $count")
@@ -690,12 +698,12 @@ let
 
         # 15s measurement (30 samples)
         local sum count avg
-        sum=$(${pkgs.gawk}/bin/awk "BEGIN { printf \"%.4f\", $(cat "$BAT/power_now") / 1000000 }")
+        sum=$(${pkgs.gawk}/bin/awk "BEGIN { printf \"%.4f\", $(read_power_uw) / 1000000 }")
         count=1
         for _ in $(seq 1 29); do
           sleep 0.5
           local sample
-          sample=$(${pkgs.gawk}/bin/awk "BEGIN { printf \"%.4f\", $(cat "$BAT/power_now") / 1000000 }")
+          sample=$(${pkgs.gawk}/bin/awk "BEGIN { printf \"%.4f\", $(read_power_uw) / 1000000 }")
           sum=$(${pkgs.gawk}/bin/awk "BEGIN { printf \"%.4f\", $sum + $sample }")
           count=$((count + 1))
         done
@@ -803,13 +811,13 @@ let
       local measured
       if [ -t 1 ]; then
         local sum count avg
-        sum=$(${pkgs.gawk}/bin/awk "BEGIN { printf \"%.4f\", $(cat "$BAT/power_now") / 1000000 }")
+        sum=$(${pkgs.gawk}/bin/awk "BEGIN { printf \"%.4f\", $(read_power_uw) / 1000000 }")
         count=1
         printf "  Verifying: %sW  \033[2m(sampling)\033[0m              \n" "$sum"
         for i in $(seq 1 9); do
           sleep 0.5
           local sample
-          sample=$(${pkgs.gawk}/bin/awk "BEGIN { printf \"%.4f\", $(cat "$BAT/power_now") / 1000000 }")
+          sample=$(${pkgs.gawk}/bin/awk "BEGIN { printf \"%.4f\", $(read_power_uw) / 1000000 }")
           sum=$(${pkgs.gawk}/bin/awk "BEGIN { printf \"%.4f\", $sum + $sample }")
           count=$((count + 1))
           avg=$(calc "$sum / $count")
@@ -936,7 +944,7 @@ let
       local energy watts hours notif_id
 
       energy=$(calc "$(cat "$BAT/energy_now") / 1000000" 2)
-      watts=$(calc "$(cat "$BAT/power_now") / 1000000")
+      watts=$(calc "$(read_power_uw) / 1000000")
       hours="?"
       [ "$watts" != "0.0" ] && hours=$(calc "$energy / $watts")
 
@@ -948,12 +956,12 @@ let
         "''${PERCENT}% — $profile\n''${energy} Wh at ''${watts}W\n~''${hours}h remaining")
 
       local sum count avg
-      sum=$(calc "$(cat "$BAT/power_now") / 1000000" 4)
+      sum=$(calc "$(read_power_uw) / 1000000" 4)
       count=1
       for _ in $(seq 1 9); do
         sleep 0.5
         local sample
-        sample=$(calc "$(cat "$BAT/power_now") / 1000000" 4)
+        sample=$(calc "$(read_power_uw) / 1000000" 4)
         sum=$(${pkgs.gawk}/bin/awk "BEGIN { printf \"%.4f\", $sum + $sample }")
         count=$((count + 1))
         avg=$(calc "$sum / $count")
