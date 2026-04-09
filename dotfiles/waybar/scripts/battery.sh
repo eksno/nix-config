@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Waybar custom battery module — continuous JSON output
-# Shows: battery %, avg watts (20s rolling @ 0.1s intervals), estimated time, power-mode level
+# Shows: battery %, avg watts (5min rolling @ 0.5s), estimated time, power-mode level
 
 set -euo pipefail
 
@@ -14,17 +14,22 @@ if [ -z "$BAT" ]; then
 fi
 
 SAMPLES=()
-WINDOW=200
-
-level_name() {
-  echo "L$1"
-}
+WINDOW=600  # 5 minutes at 0.5s intervals
+LAST_LEVEL=""
 
 while true; do
   power_uw=$(cat "$BAT/power_now" 2>/dev/null || echo 0)
   energy_uw=$(cat "$BAT/energy_now" 2>/dev/null || echo 0)
   capacity=$(cat "$BAT/capacity" 2>/dev/null || echo 0)
   status=$(cat "$BAT/status" 2>/dev/null || echo "Unknown")
+
+  # Reset samples when power-mode level changes
+  level="0"
+  [ -f /tmp/power-mode/current-level ] && level=$(cat /tmp/power-mode/current-level 2>/dev/null || echo "0")
+  if [ "$level" != "$LAST_LEVEL" ] && [ -n "$LAST_LEVEL" ]; then
+    SAMPLES=()
+  fi
+  LAST_LEVEL="$level"
 
   # Add sample to rolling window
   SAMPLES+=("$power_uw")
@@ -58,10 +63,7 @@ while true; do
     fi
   fi
 
-  # Power-mode level
-  level="0"
-  [ -f /tmp/power-mode/current-level ] && level=$(cat /tmp/power-mode/current-level 2>/dev/null || echo "0")
-  lname=$(level_name "$level")
+  lname="L$level"
 
   # Battery icon
   if [ "$status" = "Charging" ]; then
@@ -94,11 +96,11 @@ while true; do
   [ -n "$time_str" ] && text="${text} ~${time_str}"
   text="${text} ${lname}"
 
-  avg_secs=$(awk "BEGIN { printf \"%.0f\", ${#SAMPLES[@]} * 0.1 }")
-  tooltip="Battery: ${capacity}%\\nPower: ${avg_w}W (${avg_secs}s avg)\\nStatus: ${status}\\nPower Mode: level ${level} (${lname})\\nEstimate: ${time_str:-N/A}"
+  avg_secs=$(awk "BEGIN { printf \"%.0f\", ${#SAMPLES[@]} * 0.5 }")
+  tooltip="Battery: ${capacity}%\\nPower: ${avg_w}W (${avg_secs}s avg)\\nStatus: ${status}\\nPower Mode: ${lname}\\nEstimate: ${time_str:-N/A}"
 
   printf '{"text": "%s %s", "tooltip": "%s", "class": "%s", "percentage": %d}\n' \
     "$icon" "$text" "$tooltip" "$class" "$capacity"
 
-  sleep 0.1
+  sleep 0.5
 done
