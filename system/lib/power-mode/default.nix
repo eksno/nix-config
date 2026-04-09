@@ -1068,6 +1068,7 @@ in
     timerConfig = {
       OnBootSec = "1s";
       OnUnitActiveSec = "1s";
+      AccuracySec = "1s"; # Override default 1min batching
     };
   };
 }
