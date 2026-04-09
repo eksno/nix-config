@@ -53,7 +53,7 @@ while true; do
     total_min=$(awk "BEGIN { printf \"%d\", ($energy_uw / $avg_uw) * 60 }")
     h=$((total_min / 60))
     m=$((total_min % 60))
-    time_str=$(printf "%dh%02dm" "$h" "$m")
+    time_str=$(printf "%d:%02d" "$h" "$m")
   elif [ "$status" = "Charging" ] && [ "$avg_uw" -gt 0 ]; then
     full_uw=$(cat "$BAT/energy_full" 2>/dev/null || echo "$energy_uw")
     remaining=$((full_uw - energy_uw))
@@ -61,7 +61,7 @@ while true; do
       total_min=$(awk "BEGIN { printf \"%d\", ($remaining / $avg_uw) * 60 }")
       h=$((total_min / 60))
       m=$((total_min % 60))
-      time_str=$(printf "%dh%02dm" "$h" "$m")
+      time_str=$(printf "%d:%02d" "$h" "$m")
     fi
   fi
 
@@ -69,17 +69,17 @@ while true; do
 
   # Battery icon + direction arrow
   if [ "$status" = "Charging" ]; then
-    icon="▲ "
-  elif [ "$capacity" -ge 90 ]; then icon="▼ "
-  elif [ "$capacity" -ge 80 ]; then icon="▼ "
-  elif [ "$capacity" -ge 70 ]; then icon="▼ "
-  elif [ "$capacity" -ge 60 ]; then icon="▼ "
-  elif [ "$capacity" -ge 50 ]; then icon="▼ "
-  elif [ "$capacity" -ge 40 ]; then icon="▼ "
-  elif [ "$capacity" -ge 30 ]; then icon="▼ "
-  elif [ "$capacity" -ge 20 ]; then icon="▼ "
-  elif [ "$capacity" -ge 10 ]; then icon="▼ "
-  else icon="▼ "
+    icon=""
+  elif [ "$capacity" -ge 90 ]; then icon=""
+  elif [ "$capacity" -ge 80 ]; then icon=""
+  elif [ "$capacity" -ge 70 ]; then icon=""
+  elif [ "$capacity" -ge 60 ]; then icon=""
+  elif [ "$capacity" -ge 50 ]; then icon=""
+  elif [ "$capacity" -ge 40 ]; then icon=""
+  elif [ "$capacity" -ge 30 ]; then icon=""
+  elif [ "$capacity" -ge 20 ]; then icon=""
+  elif [ "$capacity" -ge 10 ]; then icon=""
+  else icon=""
   fi
 
   # CSS class for styling
@@ -95,7 +95,7 @@ while true; do
 
   # Build display text
   text="${capacity}% ${avg_w}W"
-  [ -n "$time_str" ] && text="${text} ~${time_str}"
+  [ -n "$time_str" ] && text="${text} ${time_str}"
   text="${text} ${lname}"
 
   avg_secs=$(awk "BEGIN { printf \"%.0f\", ${#SAMPLES[@]} * 0.5 }")
