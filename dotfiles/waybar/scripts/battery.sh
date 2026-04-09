@@ -17,13 +17,7 @@ SAMPLES=()
 WINDOW=200
 
 level_name() {
-  case "$1" in
-    0) echo "perf" ;;
-    2) echo "bal" ;;
-    4) echo "save" ;;
-    10) echo "emer" ;;
-    *) echo "L$1" ;;
-  esac
+  echo "L$1"
 }
 
 while true; do

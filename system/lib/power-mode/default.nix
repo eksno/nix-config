@@ -652,13 +652,7 @@ let
 
     # ── Apply a level (0-10) with save/restore logic ──
     level_name() {
-      case "$1" in
-        0) echo "performance" ;;
-        2) echo "balanced" ;;
-        4) echo "powersave" ;;
-        10) echo "emergency" ;;
-        *) echo "" ;;
-      esac
+      echo "L$1"
     }
 
     apply_level() {
@@ -686,11 +680,7 @@ let
 
       apply_round "$level"
 
-      if [ -n "$name" ]; then
-        echo -e "''${CYAN}Applied level $level — $name''${RESET}"
-      else
-        echo -e "''${CYAN}Applied level $level ($((level * 10))%)''${RESET}"
-      fi
+      echo -e "''${CYAN}Applied $name ($((level * 10))%)''${RESET}"
 
       if [ "$level" -ge 9 ]; then
         recommend_externals
@@ -1030,12 +1020,14 @@ let
     }
 
     # Clear manual override on charging state changes (plug/unplug)
+    # Use per-user file to avoid SDDM ownership conflicts
     LAST_STATUS=""
-    [ -f "$STATE_DIR/last-status" ] && LAST_STATUS=$(cat "$STATE_DIR/last-status")
+    STATUS_FILE="$STATE_DIR/last-status-$(id -u)"
+    [ -f "$STATUS_FILE" ] && LAST_STATUS=$(cat "$STATUS_FILE")
     if [ "$STATUS" != "$LAST_STATUS" ] && [ -n "$LAST_STATUS" ]; then
       rm -f "$STATE_DIR/manual-override" "$STATE_DIR/overridden-target"
     fi
-    echo "$STATUS" > "$STATE_DIR/last-status"
+    echo "$STATUS" > "$STATUS_FILE"
 
     # Determine target level: user's choice, bumped up for low battery (max 9)
     target=$USER_LEVEL
