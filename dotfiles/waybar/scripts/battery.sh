@@ -61,25 +61,25 @@ while true; do
       total_min=$(awk "BEGIN { printf \"%d\", ($remaining / $avg_uw) * 60 }")
       h=$((total_min / 60))
       m=$((total_min % 60))
-      time_str=$(printf "%dh%02dm full" "$h" "$m")
+      time_str=$(printf "%dh%02dm" "$h" "$m")
     fi
   fi
 
   lname="L$level"
 
-  # Battery icon
+  # Battery icon + direction arrow
   if [ "$status" = "Charging" ]; then
-    icon=""
-  elif [ "$capacity" -ge 90 ]; then icon=""
-  elif [ "$capacity" -ge 80 ]; then icon=""
-  elif [ "$capacity" -ge 70 ]; then icon=""
-  elif [ "$capacity" -ge 60 ]; then icon=""
-  elif [ "$capacity" -ge 50 ]; then icon=""
-  elif [ "$capacity" -ge 40 ]; then icon=""
-  elif [ "$capacity" -ge 30 ]; then icon=""
-  elif [ "$capacity" -ge 20 ]; then icon=""
-  elif [ "$capacity" -ge 10 ]; then icon=""
-  else icon=""
+    icon="▲ "
+  elif [ "$capacity" -ge 90 ]; then icon="▼ "
+  elif [ "$capacity" -ge 80 ]; then icon="▼ "
+  elif [ "$capacity" -ge 70 ]; then icon="▼ "
+  elif [ "$capacity" -ge 60 ]; then icon="▼ "
+  elif [ "$capacity" -ge 50 ]; then icon="▼ "
+  elif [ "$capacity" -ge 40 ]; then icon="▼ "
+  elif [ "$capacity" -ge 30 ]; then icon="▼ "
+  elif [ "$capacity" -ge 20 ]; then icon="▼ "
+  elif [ "$capacity" -ge 10 ]; then icon="▼ "
+  else icon="▼ "
   fi
 
   # CSS class for styling
