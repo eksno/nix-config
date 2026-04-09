@@ -638,7 +638,9 @@ let
       if [ "$_AUTO" = "0" ]; then
         echo "$level" > "$DATA_DIR/user-level"
         # Signal the watchdog that the user manually overrode
+        # chown to the calling user so the watchdog (user service) can delete it
         touch "$STATE_DIR/manual-override"
+        [ -n "''${SUDO_UID:-}" ] && chown "$SUDO_UID" "$STATE_DIR/manual-override"
       fi
 
       if [ "$level" = "0" ]; then
