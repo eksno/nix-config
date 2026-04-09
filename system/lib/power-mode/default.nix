@@ -6,7 +6,7 @@ let
 
     # Self-elevate to root — sysfs and RAPL require it
     if [ "$(id -u)" != "0" ]; then
-      exec sudo "$(readlink -f "$0")" "$@"
+      exec /run/wrappers/bin/sudo "$(readlink -f "$0")" "$@"
     fi
 
     # Auto-detect battery
