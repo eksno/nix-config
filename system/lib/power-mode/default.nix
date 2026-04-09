@@ -165,24 +165,11 @@ let
       [ -f "$PSTATE/no_turbo" ] && echo "$1" > "$PSTATE/no_turbo"
     }
 
-    set_rapl() {
-      if [ -d "$RAPL" ]; then
-        local uw=$(($1 * 1000000))
-        echo "$uw" > "$RAPL/constraint_0_power_limit_uw"
-        echo "$((uw + 2000000))" > "$RAPL/constraint_1_power_limit_uw"
-      fi
-    }
-
-    # RAPL with raw microwatts (for stretch interpolation)
     set_rapl_uw() {
       if [ -d "$RAPL" ]; then
         echo "$1" > "$RAPL/constraint_0_power_limit_uw"
         echo "$(($1 + 2000000))" > "$RAPL/constraint_1_power_limit_uw"
       fi
-    }
-
-    set_brightness() {
-      ${pkgs.brightnessctl}/bin/brightnessctl set "''${1}%" > /dev/null 2>&1 || true
     }
 
     set_platform_profile() {
@@ -323,7 +310,6 @@ let
         echo "rapl_pl2=$(cat "$RAPL/constraint_1_power_limit_uw" 2>/dev/null || echo "30000000")"
         echo "epp=$(get_epp)"
         echo "platform_profile=$(cat "$PLATFORM_PROFILE" 2>/dev/null || echo "balanced")"
-        echo "brightness=$(${pkgs.brightnessctl}/bin/brightnessctl -m 2>/dev/null | cut -d',' -f4 | tr -d '%')"
         echo "igpu_max=$(get_igpu_max)"
         echo "igpu_slpc=$(get_igpu_slpc)"
         echo "aspm=$(get_aspm)"
@@ -340,7 +326,7 @@ let
     restore_state() {
       if [ -f "$STATE_DIR/saved-state" ]; then
         local turbo="" governor="" cpu_max="" cpu_min="" rapl_pl1="" rapl_pl2=""
-        local epp="" platform_profile="" brightness="" igpu_max="" igpu_slpc="" aspm=""
+        local epp="" platform_profile="" igpu_max="" igpu_slpc="" aspm=""
         local wifi_powersave=""
         while IFS='=' read -r key val; do
           case "$key" in
@@ -352,13 +338,18 @@ let
             rapl_pl2) rapl_pl2="$val" ;;
             epp) epp="$val" ;;
             platform_profile) platform_profile="$val" ;;
-            brightness) brightness="$val" ;;
             igpu_max) igpu_max="$val" ;;
             igpu_slpc) igpu_slpc="$val" ;;
             aspm) aspm="$val" ;;
             wifi_powersave) wifi_powersave="$val" ;;
           esac
         done < "$STATE_DIR/saved-state"
+
+        # Online all cores + restore uncore FIRST so freq/governor writes hit everything
+        online_all_cores
+        for f in /sys/devices/system/cpu/intel_uncore_frequency/*/max_freq_khz; do
+          cat "$(dirname "$f")/initial_max_freq_khz" > "$f" 2>/dev/null || true
+        done
 
         # Unlock freq range before restoring (avoids min > max errors)
         set_min_freq "$CPU_MIN"
@@ -370,21 +361,12 @@ let
         [ -n "$rapl_pl2" ] && echo "$rapl_pl2" > "$RAPL/constraint_1_power_limit_uw" 2>/dev/null || true
         [ -n "$epp" ] && set_epp "$epp"
         [ -n "$platform_profile" ] && set_platform_profile "$platform_profile"
-        [ -n "$brightness" ] && set_brightness "$brightness"
         [ -n "$igpu_max" ] && set_igpu_max "$igpu_max"
         [ -n "$igpu_slpc" ] && set_igpu_slpc "$igpu_slpc"
         [ -n "$aspm" ] && set_aspm "$aspm"
         [ -n "$wifi_powersave" ] && set_wifi_powersave "$wifi_powersave"
 
-        # Bring all cores back online before restoring freq/governor
-        online_all_cores
-        # Restore uncore frequency to hardware max
-        for f in /sys/devices/system/cpu/intel_uncore_frequency/*/max_freq_khz; do
-          cat "$(dirname "$f")/initial_max_freq_khz" > "$f" 2>/dev/null || true
-        done
-
         rm -f "$STATE_DIR/saved-state"
-        rm -f "$STATE_DIR/saved-brightness"
         echo -e "  ''${GREEN}State restored''${RESET}"
       fi
       # Restore per-device PCI runtime PM state
@@ -482,13 +464,7 @@ let
       fi
     }
 
-    # Brightness value for a given round (50% base → 5% at round 10)
-    round_brightness() {
-      calc_int "50 - $1 * 10 / 100 * (50 - 5)"
-    }
-
     recommend_externals() {
-      local urgency="''${1:-normal}"
       local hints=()
 
       is_bt_on && hints+=("bluetoothctl power off  (~0.5W)")
@@ -650,15 +626,9 @@ let
       echo ""
     }
 
-    # ── Apply a level (0-10) with save/restore logic ──
-    level_name() {
-      echo "L$1"
-    }
-
+    # ── Apply a level (0-9) with save/restore logic ──
     apply_level() {
       local level=$1
-      local name
-      name=$(level_name "$level")
 
       # Persist current level so unprivileged tools (e.g. waybar) can read it
       echo "$level" > "$STATE_DIR/current-level"
@@ -673,14 +643,13 @@ let
 
       if [ "$level" = "0" ]; then
         restore_state
-        rm -f "$STATE_DIR/saved-brightness"
       else
         save_state
       fi
 
       apply_round "$level"
 
-      echo -e "''${CYAN}Applied $name ($((level * 10))%)''${RESET}"
+      echo -e "''${CYAN}Applied L$level ($((level * 10))%)''${RESET}"
 
       if [ "$level" -ge 9 ]; then
         recommend_externals
@@ -711,11 +680,8 @@ let
 
       for round in $(seq 0 10); do
         local pct=$((round * 10))
-        local bright
-        bright=$(round_brightness "$round")
 
         apply_round "$round"
-        set_brightness "$bright"
 
         # 5s settle
         sleep 5
@@ -822,31 +788,12 @@ let
 
       save_state
 
-      local cur_bright
-      cur_bright=$(${pkgs.brightnessctl}/bin/brightnessctl -m 2>/dev/null | cut -d',' -f4 | tr -d '%')
-      cur_bright="''${cur_bright:-50}"
-      local effective_level
-
       if [ "$best_round" = "-1" ]; then
-        echo -e "  ''${DIM}No level meets budget under load — applying maximum (R10)''${RESET}"
-        apply_round 10
-        effective_level=10
+        echo -e "  ''${DIM}No level meets budget under load — applying maximum (R9)''${RESET}"
+        apply_round 9
       else
         echo -e "  Applying level $best_round ($((best_round * 10))%) — calibrated: ''${best_watts}W under load"
         apply_round "$best_round"
-        effective_level=$best_round
-      fi
-
-      # Brightness: only adjust at level >= 7
-      if [ "$effective_level" -ge 7 ]; then
-        if [ -z "$(cat "$STATE_DIR/saved-brightness" 2>/dev/null)" ] || [ "$cur_bright" -gt "$(cat "$STATE_DIR/saved-brightness" 2>/dev/null || echo 0)" ]; then
-          echo "$cur_bright" > "$STATE_DIR/saved-brightness"
-        fi
-        local bright
-        bright=$(round_brightness "$effective_level")
-        if [ "$cur_bright" -gt "$bright" ]; then
-          set_brightness "$bright"
-        fi
       fi
 
       # Quick 5s verification at actual current load
@@ -880,7 +827,7 @@ let
         echo -e "  ''${GREEN}Verified: ''${measured}W — ~''${hours}h (target: ''${target_hours}h)''${RESET}"
       else
         echo -e "  ''${YELLOW}Verified: ''${measured}W — realistic: ~''${hours}h (target was ''${target_hours}h)''${RESET}"
-        recommend_externals tight
+        recommend_externals
       fi
     }
 
@@ -893,12 +840,13 @@ let
       echo "    power-mode stretch <hours>"
       echo "    power-mode status"
       echo ""
-      echo -e "  ''${BOLD}Levels (0-10):''${RESET}"
+      echo -e "  ''${BOLD}Levels (0-9):''${RESET}"
       echo "    0  performance   Full speed, turbo on, 28W"
       echo "    2  balanced      Moderate savings, turbo on, 20W"
-      echo "    4  powersave     Turbo off, 10W, 32% brightness"
-      echo "    10 emergency     800 MHz, 4W, 5% brightness"
-      echo "    1-10             Any level for fine-grained control"
+      echo "    4  powersave     Turbo off, 10W"
+      echo "    8                P-cores offline, EPP max savings"
+      echo "    9                Maximum usable power saving"
+      echo "    1-9              Any level for fine-grained control"
       echo ""
       echo -e "  ''${BOLD}Stretch mode:''${RESET}"
       echo "    calibrate         Benchmark all levels under load (~4 min, run once)"
