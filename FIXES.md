@@ -14,7 +14,7 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 **Investigation:**
 1. Checked `hyprctl monitors` — availableModes maxes out at 1920x1080@100Hz; no 1440p modes exist
 **Fix:** Changed monitor line to `1920x1080@100` in `monitor.conf`
-**Commit:** `<sha>`
+**Commit:** `88fb1ce`
 
 ---
 
