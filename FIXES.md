@@ -6,6 +6,18 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 ---
 
+## 2026-04-10 — external-monitor-unsupported-resolution
+
+**Symptom:** Hyprland reported the configured resolution (2560x1440@100) was not supported on the external monitor
+**Affected:** lewis/jorge, `dotfiles/hypr/users/jorge/default/monitor.conf:8`
+**Root cause:** Commit `4beee8a` set HDMI-A-1 to 2560x1440@100, but the Xiaomi Mi Monitor only supports up to 1920x1080@100Hz (confirmed via `hyprctl monitors` available modes list)
+**Investigation:**
+1. Checked `hyprctl monitors` — availableModes maxes out at 1920x1080@100Hz; no 1440p modes exist
+**Fix:** Changed monitor line to `1920x1080@100` in `monitor.conf`
+**Commit:** `<sha>`
+
+---
+
 ## 2026-04-07 — waybar-no-bar-on-single-monitor
 
 **Symptom:** On `lewis`, waybar runs but no bar is drawn whenever the laptop is *not* connected to the external HDMI monitor. With the external connected, waybar appears normally on both displays. Restarting waybar by hand doesn't help.
