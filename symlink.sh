@@ -1,5 +1,20 @@
 #!/usr/bin/env bash
 
+DOTFILES="$HOME/nix-config/dotfiles"
+DEFAULT="$DOTFILES/default"
+OVERRIDE="$DOTFILES/users/$USER"
+
+# Link $DEFAULT/<name> (or $OVERRIDE/<name> if present) into $target.
+link_config() {
+    local name="$1"
+    local target="$2"
+    if [[ -e "$OVERRIDE/$name" ]]; then
+        ln -s "$OVERRIDE/$name" "$target"
+    else
+        ln -s "$DEFAULT/$name" "$target"
+    fi
+}
+
 remove() {
     # User Configs
     rm -rf ~/.config/hypr/*
@@ -28,56 +43,52 @@ create() {
     # User Configs
     mkdir -p ~/.config/
 
-    ln -sf ~/nix-config/dotfiles/hypr/hosts ~/.config/hypr/hosts
-    ln -sf ~/nix-config/dotfiles/hypr/users ~/.config/hypr/users
-    ln -sf ~/nix-config/dotfiles/hypr/shared ~/.config/hypr/shared
+    # Hypr - composed at runtime from hosts/users/shared sub-dirs by hypr.sh
+    ln -sf "$DEFAULT/hypr/hosts" ~/.config/hypr/hosts
+    ln -sf "$DEFAULT/hypr/users" ~/.config/hypr/users
+    ln -sf "$DEFAULT/hypr/shared" ~/.config/hypr/shared
     ./hypr.sh # source correct hypr files
 
-    # Fish - shared base + per-user overrides
+    # Fish - per-file override merging (not dir-level) so a user can override
+    # a single file like fish_variables without needing to copy the whole config.
     mkdir -p ~/.config/fish/functions
-    for f in ~/nix-config/dotfiles/fish/*; do
+    for f in "$DEFAULT"/fish/*; do
         fname="$(basename "$f")"
         [[ "$fname" == "functions" ]] && continue
-        [[ -e ~/nix-config/dotfiles/users/$USER/fish/$fname ]] && continue
+        [[ -e "$OVERRIDE/fish/$fname" ]] && continue
         ln -s "$f" ~/.config/fish/"$fname"
     done
-    for f in ~/nix-config/dotfiles/fish/functions/*; do
+    for f in "$DEFAULT"/fish/functions/*; do
         fname="$(basename "$f")"
-        [[ -e ~/nix-config/dotfiles/users/$USER/fish/functions/$fname ]] && continue
+        [[ -e "$OVERRIDE/fish/functions/$fname" ]] && continue
         ln -s "$f" ~/.config/fish/functions/"$fname"
     done
-    if [[ -d ~/nix-config/dotfiles/users/$USER/fish ]]; then
-        for f in ~/nix-config/dotfiles/users/$USER/fish/*; do
+    if [[ -d "$OVERRIDE/fish" ]]; then
+        for f in "$OVERRIDE"/fish/*; do
             [[ "$(basename "$f")" == "functions" ]] && continue
             ln -s "$f" ~/.config/fish/"$(basename "$f")"
         done
-        if [[ -d ~/nix-config/dotfiles/users/$USER/fish/functions ]]; then
-            for f in ~/nix-config/dotfiles/users/$USER/fish/functions/*; do
+        if [[ -d "$OVERRIDE/fish/functions" ]]; then
+            for f in "$OVERRIDE"/fish/functions/*; do
                 ln -s "$f" ~/.config/fish/functions/"$(basename "$f")"
             done
         fi
     fi
 
-    # Tmux - per-user with shared fallback
-    if [[ -d ~/nix-config/dotfiles/users/$USER/tmux ]]; then
-        ln -s ~/nix-config/dotfiles/users/$USER/tmux ~/.config/tmux
-    else
-        ln -s ~/nix-config/dotfiles/tmux ~/.config/tmux
-    fi
-
-    ln -s ~/nix-config/dotfiles/eww ~/.config/eww
-    ln -s ~/nix-config/dotfiles/kitty ~/.config/kitty
-    ln -s ~/nix-config/dotfiles/mako ~/.config/mako
-    ln -s ~/nix-config/dotfiles/nvim ~/.config/nvim
-    ln -s ~/nix-config/dotfiles/btop ~/.config/btop
-    ln -s ~/nix-config/dotfiles/tofi ~/.config/tofi
-    ln -s ~/nix-config/dotfiles/waybar ~/.config/waybar
-    ln -s ~/nix-config/dotfiles/xdg-desktop-portal ~/.config/xdg-desktop-portal
+    link_config tmux ~/.config/tmux
+    link_config eww ~/.config/eww
+    link_config kitty ~/.config/kitty
+    link_config mako ~/.config/mako
+    link_config nvim ~/.config/nvim
+    link_config btop ~/.config/btop
+    link_config tofi ~/.config/tofi
+    link_config waybar ~/.config/waybar
+    link_config xdg-desktop-portal ~/.config/xdg-desktop-portal
 
     # Locals
     mkdir -p ~/.local/share
 
-    ln -s ~/nix-config/dotfiles/icons ~/.local/share/icons
+    link_config icons ~/.local/share/icons
     # Fonts
     ln -s /run/current-system/sw/share/X11/fonts ~/.local/share/fonts
 

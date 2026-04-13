@@ -25,7 +25,7 @@
 
   # No need for symlinks as symlink.sh handles this
   # The symlink.sh script creates:
-  # ln -s ~/nix-config/dotfiles/fish ~/.config/fish
+  # ln -s ~/nix-config/dotfiles/default/fish ~/.config/fish
 
   # Fallback to fish from bash
   # programs.bash.interactiveShellInit = ''

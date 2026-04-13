@@ -44,12 +44,13 @@ system/
     device/nvidia/              #   NVIDIA driver config (beta, open kernel module)
     device/intel/               #   Intel graphics, media drivers, compute runtime
 dotfiles/                       # App configs symlinked to ~/.config/
-  hypr/{hosts,users,shared}/    #   Hyprland: per-host and per-user, composed by hypr.sh
-  nvim/, fish/, kitty/, tmux/   #   Other app configs
-  waybar/, mako/, tofi/, eww/
-  btop/, icons/                 #   Btop themes, icon themes
-  xdg-desktop-portal/          #   XDG portal configs
-  users/{username}/             #   Per-user dotfile overrides (fish, tmux)
+  default/                      #   Default configs for all users
+    hypr/{hosts,users,shared}/  #     Hyprland: per-host and per-user, composed by hypr.sh
+    nvim/, fish/, kitty/, tmux/ #     Other app configs
+    waybar/, mako/, tofi/, eww/
+    btop/, icons/               #     Btop themes, icon themes
+    xdg-desktop-portal/         #     XDG portal configs
+  users/{username}/             #   Per-user dotfile overrides (shadow default/)
 npins/                          # Pinned deps outside flake inputs
 patches/                        # Patches (e.g., waybar XDG output fallback)
 certs/                          # Local CA certificates (caddy)

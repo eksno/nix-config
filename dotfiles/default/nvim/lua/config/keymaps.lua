@@ -5,7 +5,7 @@
 vim.keymap.set(
   "n",
   "<leader>sv",
-  ":source ~/nix-config/dotfiles/nvim/init.lua <cr>"
+  ":source ~/nix-config/dotfiles/default/nvim/init.lua <cr>"
 )
 
 vim.keymap.set("v", "J", ":m '>+1<CR>gv=gv")
