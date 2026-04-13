@@ -17,7 +17,7 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 5. `git ls-files dotfiles/default/tmux/plugins/` showed a single entry with `git ls-tree HEAD` mode `160000` — a submodule, not a regular dir
 6. `.gitmodules` section header still referenced `dotfiles/tmux/plugins/tpm` while `path =` was correct
 **Fix:** Renamed `.gitmodules` section header to `[submodule "dotfiles/default/tmux/plugins/tpm"]` and ran `git submodule sync`. Downstream users run `git submodule update --init --recursive` once to populate TPM; thereafter `prefix+I` works.
-**Commit:** TBD
+**Commit:** `c5d991e`
 
 ## 2026-04-08 — meteor-lake-power-floor
 
