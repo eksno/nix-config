@@ -49,7 +49,33 @@ create() {
     ln -sf "$DEFAULT/hypr/shared" ~/.config/hypr/shared
     ./hypr.sh # source correct hypr files
 
-    link_config fish ~/.config/fish
+    # Fish - per-file override merging (not dir-level) so a user can ship
+    # just the files they care about (e.g. one function) while inheriting
+    # the rest of the shared fish config.
+    mkdir -p ~/.config/fish/functions
+    for f in "$DEFAULT"/fish/*; do
+        fname="$(basename "$f")"
+        [[ "$fname" == "functions" ]] && continue
+        [[ -e "$OVERRIDE/fish/$fname" ]] && continue
+        ln -s "$f" ~/.config/fish/"$fname"
+    done
+    for f in "$DEFAULT"/fish/functions/*; do
+        fname="$(basename "$f")"
+        [[ -e "$OVERRIDE/fish/functions/$fname" ]] && continue
+        ln -s "$f" ~/.config/fish/functions/"$fname"
+    done
+    if [[ -d "$OVERRIDE/fish" ]]; then
+        for f in "$OVERRIDE"/fish/*; do
+            [[ "$(basename "$f")" == "functions" ]] && continue
+            ln -s "$f" ~/.config/fish/"$(basename "$f")"
+        done
+        if [[ -d "$OVERRIDE/fish/functions" ]]; then
+            for f in "$OVERRIDE"/fish/functions/*; do
+                ln -s "$f" ~/.config/fish/functions/"$(basename "$f")"
+            done
+        fi
+    fi
+
     link_config tmux ~/.config/tmux
     link_config eww ~/.config/eww
     link_config kitty ~/.config/kitty
