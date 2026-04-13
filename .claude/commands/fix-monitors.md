@@ -16,8 +16,8 @@ source = ~/.config/hypr/hosts/$HOSTNAME/default.conf  # sourced SECOND (wins)
 
 ### 2. Locate all monitor configs
 
-- User-level: `dotfiles/hypr/users/$USER/default/monitor.conf`
-- Host-level: `dotfiles/hypr/hosts/$HOSTNAME/default/monitor.conf`
+- User-level: `dotfiles/default/hypr/users/$USER/default/monitor.conf`
+- Host-level: `dotfiles/default/hypr/hosts/$HOSTNAME/default/monitor.conf`
 
 Check both files for conflicts. If the host defines monitors that the user config already handles, clear the host-level monitor definitions and add a comment pointing to the user config.
 

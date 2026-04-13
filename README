@@ -18,7 +18,7 @@
 `cp /etc/nixos.bak/hardware-configuration.nix ./system/hosts/[desired hostname]/hardware-configuration.nix`
 
 Configure `./system/hosts/[desired hostname]/default.nix`
-Configure `./dotfiles/hypr/hosts/[desired hostname]/default.nix`
+Configure `./dotfiles/default/hypr/hosts/[desired hostname]/default.nix`
 
 Configure all user specific files including some dotfiles (hypr) for everything
 to work properly. TODO: Elaborate on this
