@@ -21,19 +21,6 @@
       "name": "nixpkgs-unstable",
       "url": "https://releases.nixos.org/nixpkgs/nixpkgs-25.11pre844295.a595dde4d0d3/nixexprs.tar.xz",
       "hash": "sha256-2ILJtWugqmMyZnaWnHh+5yyw8RZWbKu9rVdeWmrBVhY="
-    },
-    "nixpkgs-claude-code": {
-      "type": "Git",
-      "repository": {
-        "type": "GitHub",
-        "owner": "NixOS",
-        "repo": "nixpkgs"
-      },
-      "branch": null,
-      "revision": "e15b555928ee12ff3758b69a251bb5ce2a8648a1",
-      "url": "https://api.github.com/repos/NixOS/nixpkgs/tarball/e15b555928ee12ff3758b69a251bb5ce2a8648a1",
-      "hash": "sha256-LC2a7tHGDjDjd3gt38oJfv+stK3KBEWBWn5Dq+6JUi0=",
-      "submodules": false
     }
   },
   "version": 6

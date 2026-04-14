@@ -1,7 +1,6 @@
 {
   system,
   inputs,
-  claudeCodePkgs,
   pkgs,
   ...
 }:
@@ -60,7 +59,7 @@
     # editor
     neovim
     tree-sitter
-    claudeCodePkgs.claude-code
+    claude-code
 
     audacity
     powertop # battery usage monitoring
