@@ -23,9 +23,20 @@ if [[ -z "${OUT:-}" || "$OUT" == "<unknown>" ]]; then
     exit 1
 fi
 
+# If $OUT is a mirror, wayshot can't capture it ("No output found!") — the
+# compositor only exposes the mirror target via wlr-screencopy. Resolve the
+# mirror chain to the real output before capturing.
+MONITORS_JSON=$(hyprctl monitors all -j)
+for _ in 1 2 3; do
+    MIRROR_OF=$(echo "$MONITORS_JSON" | jq -r --arg name "$OUT" '.[] | select(.name==$name) | .mirrorOf')
+    [[ "$MIRROR_OF" == "none" || -z "$MIRROR_OF" || "$MIRROR_OF" == "null" ]] && break
+    OUT=$(echo "$MONITORS_JSON" | jq -r --arg id "$MIRROR_OF" '.[] | select((.id|tostring)==$id) | .name')
+done
+
 # Slurp's coordinates are in logical (compositor) space; wayshot captures
-# at physical pixels. Multiply by the output's scale to get buffer coords.
-SCALE=$(hyprctl monitors -j | jq -r --arg name "$OUT" '.[] | select(.name==$name) | .scale')
+# at physical pixels. Multiply by the resolved output's scale to get buffer
+# coords (mirror targets can have a different scale than the source).
+SCALE=$(echo "$MONITORS_JSON" | jq -r --arg name "$OUT" '.[] | select(.name==$name) | .scale')
 if [[ -z "$SCALE" || "$SCALE" == "null" ]]; then
     notify-send "Screenshot" "Could not read scale for $OUT" -u critical
     exit 1
