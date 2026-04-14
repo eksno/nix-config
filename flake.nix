@@ -24,6 +24,10 @@
         };
         overlays = [ ];
       };
+      claudeCodePkgs = import sources.nixpkgs-claude-code {
+        inherit system;
+        config.allowUnfree = true;
+      };
     in
     {
       nixosConfigurations = {
@@ -71,6 +75,7 @@
           system = "x86_64-linux";
           specialArgs = {
             inherit
+              claudeCodePkgs
               system
               inputs
               ;
