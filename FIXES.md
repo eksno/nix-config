@@ -16,7 +16,7 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 4. Confirmed `setw -g pane-base-index 1` in tmux.conf means pane indices start at 1, matching save file
 5. Script was created in `431eb4d` (2026-04-02) with the bug from day one — never worked. Renamed in `b772ef7` (2026-04-13), no logic change
 **Fix:** Changed single quotes to `$'...'` ANSI-C quoting on line 8 so `\t` becomes actual tab characters before being passed to tmux.
-**Commit:** `<sha>`
+**Commit:** `fd2c7c0`
 
 ## 2026-04-13 — tpm-submodule-stale-section-name
 
