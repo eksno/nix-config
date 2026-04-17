@@ -5,7 +5,7 @@
 save_file="$(readlink -f ~/.local/share/tmux/resurrect/last)"
 [ -f "$save_file" ] || exit 1
 
-pane_id="$(tmux display-message -p '#{session_name}\t#{window_index}\t#{pane_index}')"
+pane_id="$(tmux display-message -p $'#{session_name}\t#{window_index}\t#{pane_index}')"
 session="${pane_id%%	*}"
 rest="${pane_id#*	}"
 window="${rest%%	*}"
