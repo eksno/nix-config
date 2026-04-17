@@ -33,10 +33,6 @@
   programs.gamescope.enable = true;
   programs.gamemode.enable = true;
 
-  programs.fish.shellAliases = {
-    avante = "nvim -c 'lua vim.defer_fn(function()require(\"avante.api\").zen_mode()end, 100)'";
-  };
-
   # System-wide program configurations (converted from home-manager)
   environment.systemPackages = with pkgs; [
     # games
