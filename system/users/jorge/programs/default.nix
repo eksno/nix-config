@@ -248,6 +248,7 @@
     vi = "nvim";
     vim = "nvim";
     vimdiff = "nvim -d";
+    cc = "claude";
   };
 
   # GitHub CLI configuration
