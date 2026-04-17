@@ -1,1 +1,4 @@
 .claude/worktrees/
+
+# Claude scratch directory for artifacts, test outputs, debugging
+.scratch/

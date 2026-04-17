@@ -54,6 +54,7 @@ dotfiles/                       # App configs symlinked to ~/.config/
 npins/                          # Pinned deps outside flake inputs
 patches/                        # Patches (e.g., waybar XDG output fallback)
 certs/                          # Local CA certificates (caddy)
+.scratch/                       # Gitignored: Claude artifacts, debug logs, test outputs
 ```
 
 ### Flake structure
@@ -96,6 +97,10 @@ Additional user directories exist (`lucy`, `tetochrono`) and host directories (`
 - **System changes** (anything under `system/`) require `./update.sh` to apply.
 - **allowUnfree** is enabled globally. `--impure` flag is used on rebuild.
 - **npins** pins `catppuccin/nix` (v25.05) separately from flake inputs; imported via `import ./npins` in flake.nix.
+
+## Scratch directory
+
+`.scratch/` is a gitignored directory for Claude to store temporary artifacts — test outputs, debug logs, exploration notes, diffs, etc. Nothing in `.scratch/` is committed. Use it freely during debugging and investigation.
 
 ## MANDATORY: Auto-Commit After Every Change
 
