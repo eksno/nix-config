@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Multi-user, multi-host NixOS flake configuration ("Chronoverse"). Tracks nixpkgs unstable. No home-manager -- all user configs are system-level Nix options and dotfiles symlinked from the repo.
 
-**Important:** Check `$HOSTNAME` and `$USER` on the current machine to determine which NixOS configuration is active. Use the host/user table below to find the correct `system/hosts/` and `system/users/` directories to modify -- do not edit configs for other host/user pairs unless asked.
+**Important:** Determine which NixOS configuration is active on the current machine before editing. Prefer `fastfetch --logo none` (or `fastfetch -l none --format json`) — it returns host, user, OS, kernel, uptime, and much more in one call. If fastfetch isn't available or fails, fall back to `echo $HOSTNAME $USER`. Then use the host/user table below to find the correct `system/hosts/` and `system/users/` directories to modify -- do not edit configs for other host/user pairs unless asked.
 
 ## Commands
 
