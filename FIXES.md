@@ -27,13 +27,24 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 1. `services.displayManager.sddm.settings.Autologin.Session = "Hyprland"` — SDDM expects the `.desktop` filename, so autologin silently failed every boot (`Unable to find autologin session entry "Hyprland"`) and fell back to the greeter.
 2. The Hyprland nixpkgs package ships both `hyprland.desktop` and `hyprland-uwsm.desktop`, but `programs.uwsm.enable` was never set, so the uwsm systemd --user units (`wayland-session-bindpid@.service`, etc.) weren't installed. When SDDM's last-session memory picked `hyprland-uwsm.desktop`, `uwsm start` died with `systemctl --user start wayland-session-bindpid@<pid>.service` exit 5 (unit not found). SDDM respawned without a working session — visually this looks like a hung boot console.
+
    **Investigation:**
+
 3. Mistook `nscd.service: Start request repeated too quickly.` as the cause — spent time chasing the NSS target restart storm. Confirmed it was noise by observing the same cycle on the currently-working boot 0 (happens because every new NSS-dependent service re-evaluates `nss-{user-,}lookup.target`, cascading to nsncd).
 4. Diffed SDDM session selection across boots: failed boots (-2, -3) both had `Session "...hyprland-uwsm.desktop" selected, command: ".../uwsm start -e -D Hyprland hyprland.desktop"`; working boot 0 had `hyprland.desktop` → `start-hyprland` directly.
 5. Found `uwsm[…]: Command '['systemctl', '--user', 'start', 'wayland-session-bindpid@<pid>.service']' returned non-zero exit status 5` immediately before session death on failed boots. Grep of `system/` for `uwsm` returned zero hits, confirming the units were missing from the user unit path.
 6. Also noticed `Autologin.Session = "Hyprland"` never matched a `.desktop` file — autologin has been silently broken the whole time, which is why the greeter (with its sticky last-session) was reached at all.
    **Fix:** In `system/lib/desktop/wayland/hyprland/default.nix`, set `programs.uwsm.enable = true;` (installs the uwsm user units so the uwsm session path works) and change `Autologin.Session = "Hyprland"` to `Autologin.Session = "hyprland.desktop"` (matches SDDM's lookup, restores autologin). Per-user `Autologin.User` was already set in each user's own config (`system/users/{eksno,jorge}/default.nix:29`).
    **Commit:** `<sha>`
+
+**Investigation:**
+
+1. Mistook `nscd.service: Start request repeated too quickly.` as the cause — spent time chasing the NSS target restart storm. Confirmed it was noise by observing the same cycle on the currently-working boot 0 (happens because every new NSS-dependent service re-evaluates `nss-{user-,}lookup.target`, cascading to nsncd).
+2. Diffed SDDM session selection across boots: failed boots (-2, -3) both had `Session "...hyprland-uwsm.desktop" selected, command: ".../uwsm start -e -D Hyprland hyprland.desktop"`; working boot 0 had `hyprland.desktop` → `start-hyprland` directly.
+3. Found `uwsm[…]: Command '['systemctl', '--user', 'start', 'wayland-session-bindpid@<pid>.service']' returned non-zero exit status 5` immediately before session death on failed boots. Grep of `system/` for `uwsm` returned zero hits, confirming the units were missing from the user unit path.
+4. Also noticed `Autologin.Session = "Hyprland"` never matched a `.desktop` file — autologin has been silently broken the whole time, which is why the greeter (with its sticky last-session) was reached at all.
+   **Fix:** In `system/lib/desktop/wayland/hyprland/default.nix`, set `programs.uwsm.enable = true;` (installs the uwsm user units so the uwsm session path works) and change `Autologin.Session = "Hyprland"` to `Autologin.Session = "hyprland.desktop"` (matches SDDM's lookup, restores autologin). Per-user `Autologin.User` was already set in each user's own config (`system/users/{eksno,jorge}/default.nix:29`).
+   **Commit:** `edba39d`
 
 ## 2026-04-17 — mosh-restore-tab-quoting
 
