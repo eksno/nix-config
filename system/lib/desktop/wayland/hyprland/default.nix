@@ -13,7 +13,7 @@
 
     settings = {
       Autologin = {
-        Session = "hyprland.desktop";
+        Session = "hyprland-uwsm.desktop";
       };
     };
 
