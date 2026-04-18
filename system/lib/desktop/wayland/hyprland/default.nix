@@ -5,6 +5,7 @@
   ];
 
   programs.hyprland.enable = true;
+  programs.uwsm.enable = true;
 
   services.displayManager.sddm = {
     enable = true;
@@ -12,7 +13,7 @@
 
     settings = {
       Autologin = {
-        Session = "Hyprland";
+        Session = "hyprland.desktop";
       };
     };
 
