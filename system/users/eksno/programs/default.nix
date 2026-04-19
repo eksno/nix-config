@@ -141,7 +141,6 @@
     tofi # minimalist app launcher
     grim # screenshot utility
     slurp # region selection
-    wtype # type unicode characters via Wayland (for Norwegian letter binds)
     age # file encryption, used by secure-askpass for sudo password storage
     awww # wallpaper engine (formerly swww)
     mpvpaper # wallpaper video engine / possibly can remove this

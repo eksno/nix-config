@@ -4,6 +4,21 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-04-19 — norwegian-binds-wtype-electron-chromium
+
+**Symptom:** `ALT+a/o/e` Hyprland binds (å/ø/æ via `wtype`) worked in Zen (Firefox) and native Wayland apps but silently did nothing in Discord, Beeper, Chrome — i.e. any Electron/Chromium client. Zen was the outlier, not the Electron apps.
+**Affected:** verse/eksno, `dotfiles/default/hypr/users/eksno/default/norwegian.conf`, `system/users/eksno/default.nix`, `system/users/eksno/programs/default.nix`.
+**Root cause:** `wtype` injects keystrokes via the Wayland `virtual_keyboard_unstable_v1` protocol. Firefox honors it; Chromium/Electron deliberately ignore it (their Ozone backend only accepts input-method-unstable-v2 or real HID events — assumed to be a hardening choice against headless keystroke spoofing). So there was nothing wrong with the binds, they just couldn't reach Electron surfaces. `NIXOS_OZONE_WL=1` is already set (Electron runs native Wayland, not XWayland), which rules out the usual "Electron is on XWayland" explanation and confirms the protocol-ignore behavior.
+**Investigation:**
+1. `grep -i discord` + `grep wtype` → found the binds in `norwegian.conf` and the `wtype` package in `programs/default.nix:144`. Confirmed setup is `wtype` (Wayland-only), US kb_layout, no compose key.
+2. Checked `NIXOS_OZONE_WL=1` → set in `system/lib/desktop/wayland/default.nix:12`. Rules out the XWayland hypothesis — Electron is already running native Wayland. So the failure is at the protocol layer, not the display-server layer.
+3. Options considered: (a) `ydotool` via `/dev/uinput` — bypasses Wayland protocols entirely, works in any app; (b) `wl-copy` + simulated `Ctrl+V` — zero setup but clobbers clipboard and breaks wherever Ctrl+V isn't paste. Picked (a).
+4. Enabled `programs.ydotool.enable = true;`. First rebuild brought up `ydotoold.service` but the socket landed at `/run/ydotoold/socket` owned `root:ydotool` mode 0660, *not* the `$XDG_RUNTIME_DIR/.ydotool_socket` default ydotool looks for — so `ydotool` CLI errored with "failed to connect socket". Fix: add `eksno` to the `ydotool` group and set `environment.sessionVariables.YDOTOOL_SOCKET = "/run/ydotoold/socket";`.
+5. Gotcha: group membership and `YDOTOOL_SOCKET` only take effect on new login sessions — the running Hyprland process inherits the old credentials, so binds will still fail until the user logs out and back in. `newgrp ydotool` activates the group for a subshell but won't help Hyprland itself.
+6. Open risk not yet verified end-to-end: `ydotool type` sends raw keycodes via uinput, which the kernel then maps through the current xkb layout. On US layout, å/ø/æ have no native keycode — whether ydotool 1.0.4 does anything special (e.g. ctrl+shift+u unicode-entry in GTK, or KEY_UNKNOWN) is unconfirmed. If typing non-ASCII still fails after re-login, the fallback is `wl-copy $CHAR && ydotool key 29:1 47:1 47:0 29:0` (ctrl+v).
+**Fix:** Swap `wtype` → `ydotool type` in `norwegian.conf`, enable `programs.ydotool.enable`, add `eksno` to `ydotool` group, set `YDOTOOL_SOCKET=/run/ydotoold/socket`, drop `wtype` from `programs/default.nix` (ydotool replaces it for this use case).
+**Commit:** `<pending>`
+
 ## 2026-04-19 — secure-askpass-age-ssh-agent-gate
 
 **Symptom:** After the earlier `secure-askpass-silent-dialog-deny` fix, `sudo -A whoami` still failed with `Error: No password found in secure storage` even though `~/.sudo_askpass.age` existed and `age -d -i ~/.ssh/id_ed25519 ~/.sudo_askpass.age` at the shell printed the password fine.

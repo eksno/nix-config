@@ -23,6 +23,7 @@
       "networkmanager"
       "wheel"
       "docker"
+      "ydotool" # access to /run/ydotoold/socket for keystroke injection
     ];
   };
 
@@ -39,4 +40,9 @@
   console.useXkbConfig = true;
   virtualisation.docker.enable = true;
   security.polkit.enable = true;
+
+  # ydotool injects keystrokes via /dev/uinput so Electron/Chromium apps
+  # (which ignore virtual_keyboard_unstable_v1 that wtype uses) receive them.
+  programs.ydotool.enable = true;
+  environment.sessionVariables.YDOTOOL_SOCKET = "/run/ydotoold/socket";
 }
