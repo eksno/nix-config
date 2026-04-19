@@ -6,7 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Multi-user, multi-host NixOS flake configuration ("Chronoverse"). Tracks nixpkgs unstable. No home-manager -- all user configs are system-level Nix options and dotfiles symlinked from the repo.
 
-**Important:** Determine which NixOS configuration is active on the current machine before editing. Prefer `fastfetch --logo none --show-errors` — it returns host, user, OS, kernel, uptime, DE/WM, theme, and much more in one call (errors included, since "No DE found" / "No themes found" are themselves useful signals about the system). If fastfetch isn't available or fails, fall back to `echo $HOSTNAME $USER`. Then use the host/user table below to find the correct `system/hosts/` and `system/users/` directories to modify -- do not edit configs for other host/user pairs unless asked.
+**Important:** Determine which NixOS configuration is active on the current machine before editing. You **MUST** run `fastfetch --logo none --show-errors` first — it returns host, user, OS, kernel, uptime, DE/WM, theme, and much more in one call (errors included, since "No DE found" / "No themes found" are themselves useful signals about the system). The extra context matters: host/user alone is not enough — desktop, kernel, and theme state frequently inform the right fix.
+
+Do **NOT** substitute `echo $HOSTNAME $USER` as a shortcut just because it's faster or because you only think you need host/user. The only acceptable reason to fall back to `echo $HOSTNAME $USER` is if `fastfetch` literally fails to run (command not found, non-zero exit, or empty output). If fastfetch works, use its output — even if it feels like overkill for the task. Then use the host/user table below to find the correct `system/hosts/` and `system/users/` directories to modify -- do not edit configs for other host/user pairs unless asked.
 
 ## Commands
 
