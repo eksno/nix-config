@@ -141,6 +141,7 @@
     tofi # minimalist app launcher
     grim # screenshot utility
     slurp # region selection
+    wtype # type unicode characters via Wayland (for Norwegian letter binds)
     awww # wallpaper engine (formerly swww)
     mpvpaper # wallpaper video engine / possibly can remove this
     lz4 # helps awww
