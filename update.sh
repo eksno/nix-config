@@ -125,3 +125,15 @@ if $do_nix; then
 
     df -h /boot
 fi
+
+# ---- Proactively configure secure-askpass if missing ----
+# Lets `sudo -A` work in non-TTY shells (Claude Code's `!`, scripts, etc.)
+# without weakening sudoers. Prompts only when no encrypted password file exists.
+askpass_manager="$HOME/.local/share/secure-askpass/askpass-manager"
+if [[ -x "$askpass_manager" ]] \
+   && [[ ! -e "$HOME/.sudo_askpass.age" ]] \
+   && [[ ! -e "$HOME/.sudo_askpass.ssh" ]]; then
+    echo
+    echo "secure-askpass isn't configured yet — setting it up now so \`sudo -A\` works."
+    "$askpass_manager" set
+fi
