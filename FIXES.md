@@ -4,6 +4,20 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-04-19 — secure-askpass-age-ssh-agent-gate
+
+**Symptom:** After the earlier `secure-askpass-silent-dialog-deny` fix, `sudo -A whoami` still failed with `Error: No password found in secure storage` even though `~/.sudo_askpass.age` existed and `age -d -i ~/.ssh/id_ed25519 ~/.sudo_askpass.age` at the shell printed the password fine.
+**Affected:** verse/eksno, out-of-repo `~/.local/share/secure-askpass/askpass` (the GlassOnTin/secure-askpass `decrypt_with_age()` function). Surfaces on any host whose user has only a passphraseless key and no persistent ssh-agent holding it.
+**Root cause:** `decrypt_with_age()` is unconditionally gated on `ensure_ssh_key_loaded()` before doing anything, and that helper fails for passphraseless keys. Flow: starts its own ssh-agent via `ssh-agent -s`, runs `ssh-add -l` (new agent → no keys loaded), doesn't match the key fingerprint, calls `prompt_ssh_passphrase()`. The user's ed25519 key was created with `-N ""` (empty passphrase), so the prompt returns an empty string, the helper treats that as "user cancelled" and returns `False`, and `decrypt_with_age` bails before ever invoking `age`. The SSH-key fallback (`decrypt_with_ssh_key`) then fails independently because `openssl pkeyutl -decrypt` in openssl 3.x can't read OpenSSH-format keys at all. Net result: both decrypt paths fail; the script prints "No password found" even though the file is right there.
+**Investigation:**
+1. Ran `sudo -A whoami` → `No password found in secure storage`. `ls ~/.sudo_askpass.*` confirmed `~/.sudo_askpass.age` (369 bytes, 600). So file exists; decrypt is failing.
+2. Shell-level sanity check: `age -d -i ~/.ssh/id_ed25519 ~/.sudo_askpass.age` → printed the password. So age + key pair are correct — the script's wrapper is the problem.
+3. Dead end: first assumed an openssl/format mismatch from the original `id_rsa` (OpenSSH format, passphrase-protected). Regenerated `id_ed25519 -N ""` and re-ran `askpass-manager set` — same failure, which ruled out the key format being the issue and pointed at the age wrapper itself.
+4. Read `askpass:526-553` — saw the unconditional `ensure_ssh_key_loaded()` gate. Traced it to `askpass:425-475`: starts a fresh ssh-agent, finds the key unloaded, prompts for passphrase, gets empty, returns False. `age -d -i` doesn't actually need any agent when the key file is unencrypted, so the check is spurious for this setup.
+5. Considered **NixOS-side fixes** (`programs.ssh.startAgent = true` + `exec-once = ssh-add ~/.ssh/id_ed25519` in hyprland startup.conf) so an agent with the key would be sitting there across sessions. Rejected: the eksno user's `programs.ssh.extraConfig` already points `IdentityAgent` at `~/.bitwarden-ssh-agent.sock` for git, and layering a second agent on top adds moving parts and depends on Hyprland starting before any sudo call — fragile. Also doesn't help non-Hyprland sessions (TTY, early-boot scripts).
+**Fix:** Patched `~/.local/share/secure-askpass/askpass:526-553` locally to try `age -d -i SSH_KEY` **first**, and only fall back to `ensure_ssh_key_loaded()` + retry if that first attempt fails (i.e. the key is passphrase-encrypted and age genuinely needs the agent). Passphraseless keys now decrypt directly; passphrase-protected keys preserve the original behavior. Not committed to this repo — secure-askpass is cloned per-machine under `~/.local/share` and isn't nix-managed; `git pull` inside that clone will revert the patch. Re-applying is a two-line edit documented by this entry.
+**Commit:** out-of-tree (patch lives in `~/.local/share/secure-askpass/askpass`)
+
 ## 2026-04-19 — secure-askpass-silent-dialog-deny
 
 **Symptom:** `sudo -A whoami` (via Claude Code / non-TTY) exits with `Error: Security check failed` and syslog line `sudo-askpass[…]: User denied sudo access via dialog` — but **no dialog ever appeared on screen** for the user to click.
