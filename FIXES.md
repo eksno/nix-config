@@ -17,7 +17,7 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 5. Gotcha: group membership and `YDOTOOL_SOCKET` only take effect on new login sessions — the running Hyprland process inherits the old credentials, so binds will still fail until the user logs out and back in. `newgrp ydotool` activates the group for a subshell but won't help Hyprland itself.
 6. Open risk not yet verified end-to-end: `ydotool type` sends raw keycodes via uinput, which the kernel then maps through the current xkb layout. On US layout, å/ø/æ have no native keycode — whether ydotool 1.0.4 does anything special (e.g. ctrl+shift+u unicode-entry in GTK, or KEY_UNKNOWN) is unconfirmed. If typing non-ASCII still fails after re-login, the fallback is `wl-copy $CHAR && ydotool key 29:1 47:1 47:0 29:0` (ctrl+v).
 **Fix:** Swap `wtype` → `ydotool type` in `norwegian.conf`, enable `programs.ydotool.enable`, add `eksno` to `ydotool` group, set `YDOTOOL_SOCKET=/run/ydotoold/socket`, drop `wtype` from `programs/default.nix` (ydotool replaces it for this use case).
-**Commit:** `<pending>`
+**Commit:** `979f810`
 
 ## 2026-04-19 — secure-askpass-age-ssh-agent-gate
 
