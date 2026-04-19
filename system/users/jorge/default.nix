@@ -16,6 +16,8 @@
     ./theme.nix
   ];
 
+  dotfiles.username = "jorge";
+
   users.users.jorge = {
     isNormalUser = true;
     description = "Jorge Lewis";

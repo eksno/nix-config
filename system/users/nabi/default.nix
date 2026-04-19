@@ -6,6 +6,8 @@
         ./locale.nix
     ];
 
+    dotfiles.username = "nabi";
+
     programs = {
         steam = {
             enable = true;

@@ -6,6 +6,8 @@
         ./locale.nix
     ];
 
+    dotfiles.username = "teto";
+
     programs = {
         steam = {
             enable = true;

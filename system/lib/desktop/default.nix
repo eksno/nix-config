@@ -6,6 +6,7 @@
 }:
 {
   imports = [
+    ../dotfiles.nix
     ../fish.nix
     ../fonts.nix
     ../system.nix

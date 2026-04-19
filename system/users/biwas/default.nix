@@ -6,6 +6,8 @@
     ./steamcontroller.nix
   ];
 
+  dotfiles.username = "biwas";
+
   users.users.biwas = {
     isNormalUser = true;
     description = "Biwas Bhandari";
