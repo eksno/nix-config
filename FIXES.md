@@ -4,6 +4,23 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-04-19 — secure-askpass-silent-dialog-deny
+
+**Symptom:** `sudo -A whoami` (via Claude Code / non-TTY) exits with `Error: Security check failed` and syslog line `sudo-askpass[…]: User denied sudo access via dialog` — but **no dialog ever appeared on screen** for the user to click.
+**Affected:** verse/eksno (any host/user invoking the out-of-repo secure-askpass at `/home/eksno/.local/share/secure-askpass/askpass`), `system/lib/desktop/default.nix`, `~/.local/share/secure-askpass/askpass-config.json`.
+**Root cause:** `show_confirmation_dialog()` in the askpass script tries three GUI backends in order — tkinter, PyGObject/GTK, zenity — and on this box **all three are unavailable**: system `python3` ships without `_tkinter`, `gi` (PyGObject) isn't installed, and `zenity` isn't on PATH. Each branch raises/returns silently; the function falls through to `return False`. Because `DISPLAY` *is* set (Xwayland), the TOTP headless fallback is also skipped (`if 'DISPLAY' not in os.environ`). So askpass logs the misleading "User denied" message without ever rendering anything.
+**Investigation:**
+1. Ran `sudo -A whoami` with `SUDO_ASKPASS` sourced from `/etc/set-environment` — got `Security check failed` and no visible dialog.
+2. `journalctl | grep askpass` showed `User denied sudo access via dialog` each run — initially assumed it was the user misclicking or the dialog appearing on the wrong monitor.
+3. Traced `check_security()` → `show_confirmation_dialog()` in the askpass script. Noted the three GUI backends and the "DISPLAY set → skip TOTP" logic.
+4. Probed each backend: `python3 -c 'import tkinter'` → `ModuleNotFoundError: _tkinter`; `python3 -c 'import gi'` → `ModuleNotFoundError`; `which zenity` → empty. Confirmed all three paths silently fail.
+5. Dead end: briefly wondered if the dialog was rendering off-screen or behind other windows — ruled out once `HAS_GUI = False` was confirmed, since the tkinter branch is gated on that flag.
+**Fix:** Two-layer fix so this works across the flake and not just eksno:
+- `system/lib/desktop/default.nix`: add `zenity` and `(python3.withPackages (ps: [ ps.tkinter ]))` to `environment.systemPackages` so every desktop host has at least one working dialog backend. Put in the shared desktop module (not a per-user file) because any user that later opts into secure-askpass needs the same GUI fallbacks.
+- `~/.local/share/secure-askpass/askpass-config.json`: set `require_user_confirmation: false`. Unblocks sudo immediately without a rebuild, and also means the GUI path is optional rather than a hard dependency. This file lives outside the repo (out-of-tree askpass clone) so it isn't tracked — document here.
+Also note: `sudo -A` needs `SUDO_ASKPASS` in the caller's env. NixOS writes it via `environment.variables` → `/etc/set-environment` (bash/zsh-shaped), but **fish doesn't source that file**, so from a fish shell `sudo -A` fails with empty `SUDO_ASKPASS`. Not fixed here — separate concern — but logged so future-us doesn't re-diagnose.
+**Commit:** `<sha>`
+
 ## 2026-04-17 — hypr-screenshot-mirror-logical-size
 
 **Symptom:** `Super+v` screenshot on `lewis`/`jorge` captures the wrong region when the external HDMI-A-1 is mirroring the laptop. The PNG that lands on the clipboard shows content from the top-left of the screen instead of whatever the user actually selected — consistently offset, dimensions wrong.

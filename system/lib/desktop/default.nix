@@ -40,6 +40,12 @@
   # links /libexec from derivations to /run/current-system/sw
   environment.pathsToLink = [ "/libexec" ];
 
+  # GUI helpers for secure-askpass confirmation dialog (tkinter / zenity fallbacks).
+  environment.systemPackages = with pkgs; [
+    zenity
+    (python3.withPackages (ps: [ ps.tkinter ]))
+  ];
+
   xdg.portal.config.common.default = "*";
 
   # Theming
