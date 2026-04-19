@@ -27,7 +27,12 @@ if ! $do_nix && ! $do_symlink; then
     do_nix=true
 fi
 
-sudo echo "Authenticated." || exit
+# Use `sudo -A` when SUDO_ASKPASS is set (lets non-TTY callers like Claude Code
+# authenticate via secure-askpass); fall back to plain `sudo` otherwise.
+SUDO=("sudo")
+[[ -n "$SUDO_ASKPASS" ]] && SUDO=("sudo" "-A")
+
+"${SUDO[@]}" echo "Authenticated." || exit
 
 # It won't find paths not staged, we git add .
 git add .
@@ -73,7 +78,7 @@ if $do_symlink; then
     rm -rf ~/.config/xdg-desktop-portal
     rm -rf ~/.local/share/icons
     rm -rf ~/.local/share/fonts
-    sudo rm -rf /root/.config
+    "${SUDO[@]}" rm -rf /root/.config
 
     # Create
     mkdir -p ~/.config/
@@ -102,20 +107,20 @@ if $do_symlink; then
     link_config icons ~/.local/share/icons
     ln -s /run/current-system/sw/share/X11/fonts ~/.local/share/fonts
 
-    sudo mkdir -p /root/.config/
-    sudo ln -s ~/.config /root/.config
+    "${SUDO[@]}" mkdir -p /root/.config/
+    "${SUDO[@]}" ln -s ~/.config /root/.config
 fi
 
 # ---- Nix rebuild ----
 if $do_nix; then
     # Update flake.lock (make sure it's synced up, can fail but should be fine)
-    sudo nix flake update
+    "${SUDO[@]}" nix flake update
 
     # It won't find paths not staged, we git add .
     git add .
 
     # Apply the updates
-    sudo nixos-rebuild switch --flake "./#$host" --impure
+    "${SUDO[@]}" nixos-rebuild switch --flake "./#$host" --impure
 
     # It won't find paths not staged, we git add .
     git add .
