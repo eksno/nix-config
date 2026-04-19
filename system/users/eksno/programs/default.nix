@@ -142,6 +142,7 @@
     grim # screenshot utility
     slurp # region selection
     wtype # type unicode characters via Wayland (for Norwegian letter binds)
+    age # file encryption, used by secure-askpass for sudo password storage
     awww # wallpaper engine (formerly swww)
     mpvpaper # wallpaper video engine / possibly can remove this
     lz4 # helps awww
@@ -229,6 +230,11 @@
   # Neovim as default editor
   environment.variables.EDITOR = "nvim";
   environment.variables.VISUAL = "nvim";
+
+  # secure-askpass: lets `sudo -A` read password from encrypted file so
+  # Claude Code / non-TTY shells can run privileged commands.
+  # Repo cloned manually to ~/.local/share/secure-askpass (see FIXES.md).
+  environment.variables.SUDO_ASKPASS = "/home/eksno/.local/share/secure-askpass/askpass";
 
   # Create aliases for vi, vim, and vimdiff
   environment.shellAliases = {
