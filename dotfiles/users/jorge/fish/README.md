@@ -28,11 +28,11 @@ This directory contains the configuration files for the Fish shell.
 
 ## Installation
 
-This configuration is automatically linked by the `symlink.sh` script from the nix-config repository.
+This configuration is automatically linked by `./update.sh symlink` from the nix-config repository.
 
 ```bash
-# Run symlink.sh to set up the configuration
-~/nix-config/symlink.sh
+# Create the dotfile symlinks
+~/nix-config/update.sh symlink
 ```
 
 ## Dependencies

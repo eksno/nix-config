@@ -6,7 +6,7 @@ Diagnose and fix Hyprland monitor issues (mirroring, resolution, layout) for the
 
 ### 1. Check source order
 
-`hypr.sh` builds `hyprland.conf` as:
+The `symlink` step of `update.sh` builds `hyprland.conf` as:
 ```
 source = ~/.config/hypr/users/$USER/default.conf   # sourced FIRST
 source = ~/.config/hypr/hosts/$HOSTNAME/default.conf  # sourced SECOND (wins)
@@ -51,6 +51,6 @@ monitor=HDMI-A-1, 1920x1080@100, 0x0, 1
 ### 6. Apply and verify
 
 ```bash
-hyprctl reload          # or ./hypr.sh
+hyprctl reload          # or ./update.sh symlink
 hyprctl monitors        # confirm mirrorOf and resolutions
 ```

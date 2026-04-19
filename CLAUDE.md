@@ -12,12 +12,11 @@ Multi-user, multi-host NixOS flake configuration ("Chronoverse"). Tracks nixpkgs
 
 | Command | Purpose |
 |---------|---------|
-| `./update.sh` | Rebuild system: stages files, updates flake lock, runs `nixos-rebuild switch --flake "./#$HOSTNAME" --impure` |
-| `./update.sh reconfigure` | Rebuild with manual host selection (use when hostname is "nixos" or changing hosts) |
-| `./update.sh symlink` | Rebuild and re-symlink dotfiles |
-| `./symlink.sh` | Create dotfile symlinks from `dotfiles/` to `~/.config/` and `~/.local/share/` |
-| `./symlink.sh remove` | Remove all dotfile symlinks |
-| `./hypr.sh` | Regenerate `hyprland.conf` sourcing user/host configs, then `hyprctl reload` |
+| `./update.sh` | Rebuild system: stages files, updates flake lock, runs `nixos-rebuild switch --flake "./#$HOSTNAME" --impure` (equivalent to `./update.sh nix`) |
+| `./update.sh nix` | Only do the nix rebuild (no symlinks) |
+| `./update.sh symlink` | Only (re)create dotfile symlinks from `dotfiles/` into `~/.config/` and `~/.local/share/`, regenerate `hyprland.conf`, and `hyprctl reload` |
+| `./update.sh nix symlink` | Symlink then rebuild (order matches old `./update.sh symlink`) |
+| `./update.sh reconfigure` | Symlink + rebuild with manual host selection (use when hostname is "nixos" or changing hosts). Can be combined with `nix`/`symlink` to scope the action. |
 | `./gc.sh` | Garbage collect old generations (keeps last 10), then runs update.sh |
 | `./install.sh` | First-time setup: backs up `/etc/nixos`, symlinks repo there |
 | `./nvidia-offload.sh` | Wrapper to run a command with NVIDIA GPU offload env vars |
@@ -45,7 +44,7 @@ system/
     device/intel/               #   Intel graphics, media drivers, compute runtime
 dotfiles/                       # App configs symlinked to ~/.config/
   default/                      #   Default configs for all users
-    hypr/{hosts,users,shared}/  #     Hyprland: per-host and per-user, composed by hypr.sh
+    hypr/{hosts,users,shared}/  #     Hyprland: per-host and per-user, composed by `update.sh symlink`
     nvim/, fish/, kitty/, tmux/ #     Other app configs
     waybar/, mako/, tofi/, eww/
     btop/, icons/               #     Btop themes, icon themes
@@ -91,9 +90,9 @@ Additional user directories exist (`lucy`, `tetochrono`) and host directories (`
 - **Dev tools** for `eksno` and `jorge` are in `system/users/{user}/dev/` (Python, Nixpacks, etc.).
 - **Shared modules** in `system/lib/` are imported by user or host configs as needed (e.g., `../../lib/desktop/wayland/hyprland`).
 - **Module import chain:** `hyprland/ -> wayland/ -> desktop/ -> {system.nix, fish.nix, fonts.nix}`. Each level imports its parent.
-- **Hyprland config** is composed at runtime: `hypr.sh` writes a `hyprland.conf` that sources `~/.config/hypr/users/$USER/default.conf` and `~/.config/hypr/hosts/$HOSTNAME/default.conf`.
-- **Dotfile symlinks:** `symlink.sh` links shared configs to `~/.config/` and merges per-user overrides from `dotfiles/users/{username}/` (per-user files take precedence).
-- **Dotfile changes** take effect immediately (they're symlinks), except Hyprland which needs `./hypr.sh` or `hyprctl reload`.
+- **Hyprland config** is composed at runtime: the `symlink` step of `update.sh` writes a `hyprland.conf` that sources `~/.config/hypr/users/$USER/default.conf` and `~/.config/hypr/hosts/$HOSTNAME/default.conf`.
+- **Dotfile symlinks:** `./update.sh symlink` links shared configs to `~/.config/` and merges per-user overrides from `dotfiles/users/{username}/` (per-user files take precedence).
+- **Dotfile changes** take effect immediately (they're symlinks), except Hyprland which needs `./update.sh symlink` or `hyprctl reload`.
 - **System changes** (anything under `system/`) require `./update.sh` to apply.
 - **allowUnfree** is enabled globally. `--impure` flag is used on rebuild.
 - **npins** pins `catppuccin/nix` (v25.05) separately from flake inputs; imported via `import ./npins` in flake.nix.

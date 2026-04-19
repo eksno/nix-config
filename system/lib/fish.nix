@@ -23,8 +23,7 @@
     tmux
   ];
 
-  # No need for symlinks as symlink.sh handles this
-  # The symlink.sh script creates:
+  # No need for symlinks as `./update.sh symlink` handles this, creating:
   # ln -s ~/nix-config/dotfiles/default/fish ~/.config/fish
 
   # Fallback to fish from bash
