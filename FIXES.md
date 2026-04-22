@@ -18,7 +18,7 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 6. Split the pipeline into tempfile-staged steps (`wayshot -> $TMP`, `magick $TMP -> $CROP`, `wl-copy < $CROP`) with explicit exit-code and size checks on each. Second retry logged `slurp rc=0 out='358 635 630 259 eDP-1'`, `wayshot ok: 660946 bytes`, `crop ok: 5511 bytes`, `wl-copy ok`, `post-clipboard types: image/png`. User confirmed paste worked in the target app.
 7. Dead ends / ruled out: wayshot itself failing (`wayshot -o eDP-1 /tmp/x.png` produces a valid 549KB PNG, exits 0 — the MESA line is a warning, not an error); stale clipboard owner blocking wl-copy (wl-copy unconditionally takes ownership when it runs, so the GLFW owner we saw was the survivor of a prior no-op run, not an interposing process).
    **Fix:** Rewrote the capture tail in `screenshot-region.sh` to stage through tempfiles instead of a pipeline, with `set -uo pipefail` (dropped `-e`) and explicit `die` / `notify-send` on every nonzero rc or empty output. Also made silent-abort paths (slurp cancel, zero-size region) exit `0` without a notification, and every real failure (output-unknown, scale-missing, wayshot/magick/wl-copy errors) now raises a notify-send so the user sees it next time instead of silently falling back to whatever was on the clipboard before.
-**Commit:** `<pending>`
+**Commit:** `98d031a`
 
 ## 2026-04-19 — norwegian-binds-wtype-electron-chromium
 
