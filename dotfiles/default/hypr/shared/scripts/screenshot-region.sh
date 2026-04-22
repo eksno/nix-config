@@ -13,14 +13,29 @@
 # case slurp's output-relative coords are in the mirror's logical space
 # and must be remapped into the source's logical space before cropping.
 # See FIXES.md "hypr-screenshot-mirrored-output" for the background.
+#
+# Steps are run against tempfiles rather than a single wayshot|magick|wl-copy
+# pipeline: under `set -e` + `pipefail`, any noisy stderr from wayshot's
+# MESA stack or a mid-pipeline EPIPE could silently abort the whole chain
+# before wl-copy wrote, leaving the previous clipboard owner in place.
+# See FIXES.md "hypr-screenshot-pipeline-swallowed-errors".
 
-set -euo pipefail
+set -uo pipefail
 
-read -r X Y W H OUT < <(slurp -f '%X %Y %w %h %o') || exit 0
+die() {
+    notify-send "Screenshot" "$1" -u critical
+    exit 1
+}
+
+SLURP_OUT=$(slurp -f '%X %Y %w %h %o') || exit 0
+[[ -z "$SLURP_OUT" ]] && exit 0
+read -r X Y W H OUT <<< "$SLURP_OUT"
+
+# Zero-size selection (click without drag) -> nothing to do.
+[[ "$W" == "0" || "$H" == "0" ]] && exit 0
 
 if [[ -z "${OUT:-}" || "$OUT" == "<unknown>" ]]; then
-    notify-send "Screenshot" "Could not determine output for selection" -u critical
-    exit 1
+    die "Could not determine output for selection"
 fi
 
 MONITORS=$(hyprctl monitors all -j)
@@ -61,8 +76,7 @@ H=$(awk -v v="$H" -v m="$mirror_h" -v s="$src_h" 'BEGIN { print v * s / m }')
 # Source-logical -> source physical pixels for the crop.
 SCALE=$(mon_field "$SRC" scale)
 if [[ -z "$SCALE" || "$SCALE" == "null" ]]; then
-    notify-send "Screenshot" "Could not read scale for $SRC" -u critical
-    exit 1
+    die "Could not read scale for $SRC"
 fi
 
 PX=$(awk -v v="$X" -v s="$SCALE" 'BEGIN { printf "%.0f", v * s }')
@@ -70,6 +84,16 @@ PY=$(awk -v v="$Y" -v s="$SCALE" 'BEGIN { printf "%.0f", v * s }')
 PW=$(awk -v v="$W" -v s="$SCALE" 'BEGIN { printf "%.0f", v * s }')
 PH=$(awk -v v="$H" -v s="$SCALE" 'BEGIN { printf "%.0f", v * s }')
 
-wayshot -o "$SRC" - 2>/dev/null \
-    | magick - -crop "${PW}x${PH}+${PX}+${PY}" +repage png:- \
-    | wl-copy -t image/png
+TMP=$(mktemp --suffix=.png)
+CROP="${TMP%.png}.crop.png"
+trap 'rm -f "$TMP" "$CROP"' EXIT
+
+if ! wayshot -o "$SRC" "$TMP" 2>/dev/null || [[ ! -s "$TMP" ]]; then
+    die "wayshot failed on $SRC"
+fi
+
+if ! magick "$TMP" -crop "${PW}x${PH}+${PX}+${PY}" +repage "$CROP" 2>/dev/null || [[ ! -s "$CROP" ]]; then
+    die "magick crop failed (${PW}x${PH}+${PX}+${PY})"
+fi
+
+wl-copy -t image/png < "$CROP" || die "wl-copy failed"

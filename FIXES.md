@@ -4,6 +4,22 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-04-22 — hypr-screenshot-pipeline-swallowed-errors
+
+**Symptom:** `Super+v` on `lewis`/`jorge` stopped landing an image on the clipboard. `wl-paste --list-types` after a screenshot showed `application/glfw+clipboard-<pid>` + text types — i.e. a prior GLFW app was still the clipboard owner, `wl-copy` never took it. Slurp overlay appeared and the drag worked; no notify-send fired; Hyprland bind and symlink were fine.
+**Affected:** host `lewis`, user `jorge`. `dotfiles/default/hypr/shared/scripts/screenshot-region.sh`.
+**Root cause:** The capture pipeline was `wayshot -o "$SRC" - 2>/dev/null | magick - -crop ... png:- | wl-copy -t image/png` under `set -euo pipefail`. Two failure modes can break it silently: (a) wayshot on this Intel-only `lewis` box still emits the `MESA-LOADER: failed to open nvidia-drm` loader warning on stderr which is muted by `2>/dev/null`, and under `set -e` + `pipefail` any transient nonzero wayshot exit (or mid-pipeline EPIPE from magick finishing first) kills the pipeline with no clipboard write and no visible trace; (b) slurp cancelled via Esc/single-click takes the `|| exit 0` branch without any notify-send, which looks identical to "nothing happened" to the user. No log, no notification, prior clipboard contents untouched.
+**Investigation:**
+1. Grepped FIXES.md for "screenshot" → three prior entries (`fractional-scaling`, `mirrored-output`, `mirror-logical-size`). Ruled out the mirror/scale regressions: `hyprctl monitors all -j` showed laptop-only eDP-1 at scale 1.25, `mirrorOf: "none"`, so the logical-remap no-op path should hit.
+2. Ran the pipeline manually: `wayshot -o eDP-1 - | magick - -crop "400x300+100+100" +repage png:- | wl-copy -t image/png` → `wl-paste --list-types` reported `image/png`. Pipeline works end-to-end when run cold. So the bug is state-dependent, not a straight logic bug.
+3. Checked bind wiring: `hyprctl binds` showed `Super+v` → `~/.config/hypr/shared/scripts/screenshot-region.sh` → symlink to the repo path. Active layout is `qwerty.conf`, so the expected bind is the active one.
+4. `readlink -f` on the symlink and `ls -la` on the path confirmed the activation script deployed the live version. Rules out "edits not applied."
+5. Instrumented the script: redirected stderr via `exec 2> >(tee -a /tmp/screenshot-region.log >&2)` and added per-step exit-code checks + `notify-send` on failure. First user retry: log had only the date header, nothing else. That meant the script exited at the `read -r ... < <(slurp ...) || exit 0` line — slurp was cancelled or returned empty. Not our failure mode, but exposed that a cancelled slurp is indistinguishable from a silent failure at this instrumentation level.
+6. Split the pipeline into tempfile-staged steps (`wayshot -> $TMP`, `magick $TMP -> $CROP`, `wl-copy < $CROP`) with explicit exit-code and size checks on each. Second retry logged `slurp rc=0 out='358 635 630 259 eDP-1'`, `wayshot ok: 660946 bytes`, `crop ok: 5511 bytes`, `wl-copy ok`, `post-clipboard types: image/png`. User confirmed paste worked in the target app.
+7. Dead ends / ruled out: wayshot itself failing (`wayshot -o eDP-1 /tmp/x.png` produces a valid 549KB PNG, exits 0 — the MESA line is a warning, not an error); stale clipboard owner blocking wl-copy (wl-copy unconditionally takes ownership when it runs, so the GLFW owner we saw was the survivor of a prior no-op run, not an interposing process).
+   **Fix:** Rewrote the capture tail in `screenshot-region.sh` to stage through tempfiles instead of a pipeline, with `set -uo pipefail` (dropped `-e`) and explicit `die` / `notify-send` on every nonzero rc or empty output. Also made silent-abort paths (slurp cancel, zero-size region) exit `0` without a notification, and every real failure (output-unknown, scale-missing, wayshot/magick/wl-copy errors) now raises a notify-send so the user sees it next time instead of silently falling back to whatever was on the clipboard before.
+**Commit:** `<pending>`
+
 ## 2026-04-19 — norwegian-binds-wtype-electron-chromium
 
 **Symptom:** `ALT+a/o/e` Hyprland binds (å/ø/æ via `wtype`) worked in Zen (Firefox) and native Wayland apps but silently did nothing in Discord, Beeper, Chrome — i.e. any Electron/Chromium client. Zen was the outlier, not the Electron apps.
