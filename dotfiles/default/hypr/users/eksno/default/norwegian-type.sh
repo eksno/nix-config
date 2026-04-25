@@ -14,7 +14,10 @@ case "$class" in
     discord|beeper|slack|spotify|code|*chrome*|*chromium*|*electron*)
         old=$(wl-paste --no-newline 2>/dev/null || true)
         printf %s "$char" | wl-copy
-        ydotool key 29:1 47:1 47:0 29:0
+        # Release any modifiers the user is still physically holding before
+        # firing Ctrl+V — otherwise a held ALT turns the paste into Ctrl+Alt+V
+        # in Discord (no-op). 42/54 = L/R Shift, 56/100 = L/R Alt.
+        ydotool key 42:0 54:0 56:0 100:0 29:1 47:1 47:0 29:0
         (sleep 0.2; printf %s "$old" | wl-copy) >/dev/null 2>&1 &
         ;;
     *)
