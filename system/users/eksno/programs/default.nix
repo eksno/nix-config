@@ -141,6 +141,7 @@
     tofi # minimalist app launcher
     grim # screenshot utility
     slurp # region selection
+    wtype # virtual_keyboard_unstable_v1 typer; used for non-Electron norwegian binds
     age # file encryption, used by secure-askpass for sudo password storage
     awww # wallpaper engine (formerly swww)
     mpvpaper # wallpaper video engine / possibly can remove this

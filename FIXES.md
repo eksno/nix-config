@@ -4,6 +4,19 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-04-25 — norwegian-binds-ydotool-unicode-dropped
+
+**Symptom:** After the 2026-04-19 swap from `wtype` to `ydotool type`, the `ALT+a/o/e` binds for å/ø/æ stopped working *everywhere* — not just Electron. The binds fired (Hyprland logged the exec, `ydotool type -- å` exited 0), but no character appeared in any focused window.
+**Affected:** verse/eksno, `dotfiles/default/hypr/users/eksno/default/norwegian.conf`, `dotfiles/default/hypr/users/eksno/default/norwegian-type.sh` (new), `system/users/eksno/programs/default.nix`.
+**Root cause:** `ydotool type` writes raw keycodes through `/dev/uinput`; the kernel then maps them through the active xkb layout. On a US layout, å/ø/æ have no native keycode. ydotool 1.0.4 falls back to GTK-style Ctrl+Shift+U `<hex>` Enter unicode entry, which only works when an input-method daemon (IBus / fcitx) is running. No IM is configured on this box, so the unicode-entry sequence is consumed as raw key chords with no effect — silently dropping the character in every app, not just Electron. The 2026-04-19 entry flagged this exact "open risk not yet verified" but the fix shipped anyway.
+**Investigation:**
+1. Verified the plumbing: `ydotoold.service` active, socket `/run/ydotoold/socket` (mode 0660, group `ydotool`), eksno in the `ydotool` group, `YDOTOOL_SOCKET` present in Hyprland's `/proc/$pid/environ`. So the daemon path is fine — the issue is what ydotool emits, not whether it reaches the kernel.
+2. `ydotool type -- å` from a shell exited 0 but nothing showed up when focused on a kitty window. Combined with the 2026-04-19 note, that points at unicode handling in ydotool itself, not at permissions or layout fallback.
+3. Considered installing fcitx5 + the unicode-IM module to make ydotool's Ctrl+Shift+U fallback succeed. Rejected: huge surface area (full IM stack, autostart, env wiring) for typing six characters.
+4. Settled on a class-aware split: keep `wtype` for native Wayland surfaces (terminals, Zen, GTK, Qt) where it was always working, and use `wl-copy <char>` + `ydotool key Ctrl+V` only for Electron/Chromium clients. wtype writes via `virtual_keyboard_unstable_v1` which understands unicode strings directly, so it handles å/ø/æ fine wherever the protocol is honored. Old clipboard contents are restored ~200 ms after paste so the user's clipboard isn't permanently clobbered.
+**Fix:** New script `dotfiles/default/hypr/users/eksno/default/norwegian-type.sh` branches on `hyprctl activewindow` class. `norwegian.conf` rewritten to call the script. Re-added `wtype` to `system/users/eksno/programs/default.nix` (it was dropped in the 2026-04-19 fix). `ydotool` stays for the Ctrl+V keystroke; Electron path uses both. Requires rebuild + Hyprland reload to pick up wtype and the new bind targets.
+**Commit:** _<pending>_
+
 ## 2026-04-19 — norwegian-binds-wtype-electron-chromium
 
 **Symptom:** `ALT+a/o/e` Hyprland binds (å/ø/æ via `wtype`) worked in Zen (Firefox) and native Wayland apps but silently did nothing in Discord, Beeper, Chrome — i.e. any Electron/Chromium client. Zen was the outlier, not the Electron apps.
