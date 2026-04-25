@@ -4,6 +4,20 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-04-25 — builtin-audio-disappeared-wireplumber-profile-off
+
+**Symptom:** Built-in laptop speakers and mic vanished from the audio menu. Only the USB Hollyland wireless microphone and (when paired) Bluetooth headset showed up. PipeWire fallback "Dummy Output" was the only sink. Hardware was untouched.
+**Affected:** verse/eksno (ASUS Zenbook UX3405MA Meteor Lake), runtime WirePlumber state in `~/.local/state/wireplumber/{default-profile,default-routes,default-nodes}`. No nix-config files changed.
+**Root cause:** WirePlumber had the `alsa_card.pci-0000_00_1f.3-platform-skl_hda_dsp_generic` card sitting on profile `off` and refused to switch. The only `HiFi` profile the card currently enumerates is named `HiFi (HDMI1, HDMI2, HDMI3, Headphones, Mic1, Mic2)` and was reporting `available=no`, because UCM gates that profile on Headphones-jack-detect and nothing was plugged in. The saved `default-routes` referenced a *different* profile name with `…Speaker)` instead of `…Headphones)` — proof the SOF/UCM topology profile naming changed under a recent unstable bump (kernel 7.0.1, NixOS 26.05 unstable). The previously-elected profile name no longer existed, the replacement was unavailable, so WP picked `off`.
+**Investigation:**
+1. `fastfetch` confirmed verse/eksno, kernel 7.0.1. `wpctl status` showed device 44 (Meteor Lake-P HD Audio Controller) listed under Devices but exposing zero Sinks, only "Dummy Output" — so PipeWire saw the card but had no endpoints for it. Active source was the Hollyland USB mic only.
+2. Ruled out kernel/firmware: `journalctl -k -b 0 | grep -iE "sof|hda"` showed `sof-audio-pci-intel-mtl` booting firmware 2.14.1.1, ALC294 codec attaching, both CS35L41 smart amps binding with calibrated DSP firmware, topology `intel/sof-ipc4-tplg/sof-hda-generic-2ch.tplg` loading, card0 `sofhdadsp` created with Mic/Headphone/HDMI inputs. ALSA layer was healthy. `cat /proc/asound/cards` confirmed card0 present.
+3. `pw-dump` for device 44 → `params.Profile` = `off`, `EnumProfile` listed exactly one HiFi profile and it was `available=no`. That answered "why no sinks": no profile, no nodes.
+4. `cat ~/.local/state/wireplumber/default-profile` named the HiFi profile correctly, but `default-routes` had history under a *different* profile name (`…Speaker)` vs `…Headphones)`) — meaning the topology had recently changed names underneath stable user state.
+5. Considered: clearing all WP state files. Rejected as first step: too blunt and would also nuke per-app stream-properties, BT pairings' route prefs, etc. Tried the surgical path first.
+**Fix:** `wpctl set-profile 44 1` forced the only HiFi profile active despite `available=no`. That immediately materialized 4 sinks (HDMI×3 + Headphones) and 2 internal mic sources. `systemctl --user restart wireplumber` then re-elected profiles cleanly — and on this pass the card actually came up with the *other* profile, `HiFi (…Speaker)`, exposing a true Speaker sink (priority-elected as default). Bumped volume from the saved 0.0 with `wpctl set-volume <id> 0.6` and unmuted. No code changes; no rebuild needed; survives reboot because the corrected profile/route is now persisted in `default-{profile,routes,nodes}`.
+**Commit:** `<pending>` (FIXES.md entry only — runtime state fix, no nix-config change)
+
 ## 2026-04-25 — tmux-restore-mosh-script-not-symlinked
 
 **Symptom:** `~/.config/tmux/scripts/restore-mosh.sh` not found; tmux-resurrect couldn't restore mosh-client panes after the dotfiles activation-script migration.
