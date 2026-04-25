@@ -16,7 +16,7 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 4. `cat ~/.local/state/wireplumber/default-profile` named the HiFi profile correctly, but `default-routes` had history under a *different* profile name (`…Speaker)` vs `…Headphones)`) — meaning the topology had recently changed names underneath stable user state.
 5. Considered: clearing all WP state files. Rejected as first step: too blunt and would also nuke per-app stream-properties, BT pairings' route prefs, etc. Tried the surgical path first.
 **Fix:** `wpctl set-profile 44 1` forced the only HiFi profile active despite `available=no`. That immediately materialized 4 sinks (HDMI×3 + Headphones) and 2 internal mic sources. `systemctl --user restart wireplumber` then re-elected profiles cleanly — and on this pass the card actually came up with the *other* profile, `HiFi (…Speaker)`, exposing a true Speaker sink (priority-elected as default). Bumped volume from the saved 0.0 with `wpctl set-volume <id> 0.6` and unmuted. No code changes; no rebuild needed; survives reboot because the corrected profile/route is now persisted in `default-{profile,routes,nodes}`.
-**Commit:** `<pending>` (FIXES.md entry only — runtime state fix, no nix-config change)
+**Commit:** `639f4dd` (FIXES.md entry only — runtime state fix, no nix-config change)
 
 ## 2026-04-25 — tmux-restore-mosh-script-not-symlinked
 
