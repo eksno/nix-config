@@ -4,6 +4,18 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-04-25 — tmux-restore-mosh-script-not-symlinked
+
+**Symptom:** `~/.config/tmux/scripts/restore-mosh.sh` not found; tmux-resurrect couldn't restore mosh-client panes after the dotfiles activation-script migration.
+**Affected:** verse/eksno, `system/lib/dotfiles.nix:73`, references from `dotfiles/default/tmux/tmux.conf:70` (`@resurrect-processes`).
+**Root cause:** The 2026-04-19 migration from `symlink.sh` to `system/lib/dotfiles.nix` switched tmux from a directory symlink to file-level symlinks (because TPM writes into `plugins/`). The new block only linked `tmux.conf` and `tmux-nerd-font-window-name.yml`, dropping the `scripts/` subdirectory. `restore-mosh.sh` lived in the repo but was never deployed to `~/.config/tmux/`, so resurrect's exec path resolved to nothing.
+**Investigation:**
+1. `ls ~/.config/tmux/` → only `tmux.conf` + yml symlinks + `plugins/`. No `scripts/`. Repo path `dotfiles/default/tmux/scripts/restore-mosh.sh` exists and is executable, so the file isn't lost — just unlinked.
+2. Read `system/lib/dotfiles.nix` tmux block → confirmed the activation script only `ln -sf`s the two known files. No glob, no scripts dir.
+3. Considered switching tmux back to a full directory symlink. Rejected: TPM still needs to write into `plugins/`, which is the whole reason file-level symlinks were chosen. Cleanest fix is one extra `ln -sfn` for `scripts/` since it's a read-only dir of executables.
+**Fix:** Added `ln -sfn "$_src/scripts" "$cfg/tmux/scripts"` to the tmux block in `system/lib/dotfiles.nix`. After `./update.sh`, `~/.config/tmux/scripts → nix-config/dotfiles/default/tmux/scripts` and resurrect can find `restore-mosh.sh`.
+**Commit:** `<pending>`
+
 ## 2026-04-25 — norwegian-binds-ydotool-unicode-dropped
 
 **Symptom:** After the 2026-04-19 swap from `wtype` to `ydotool type`, the `ALT+a/o/e` binds for å/ø/æ stopped working *everywhere* — not just Electron. The binds fired (Hyprland logged the exec, `ydotool type -- å` exited 0), but no character appeared in any focused window.
@@ -16,6 +28,8 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 4. Settled on a class-aware split: keep `wtype` for native Wayland surfaces (terminals, Zen, GTK, Qt) where it was always working, and use `wl-copy <char>` + `ydotool key Ctrl+V` only for Electron/Chromium clients. wtype writes via `virtual_keyboard_unstable_v1` which understands unicode strings directly, so it handles å/ø/æ fine wherever the protocol is honored. Old clipboard contents are restored ~200 ms after paste so the user's clipboard isn't permanently clobbered.
 **Fix:** New script `dotfiles/default/hypr/users/eksno/default/norwegian-type.sh` branches on `hyprctl activewindow` class. `norwegian.conf` rewritten to call the script. Re-added `wtype` to `system/users/eksno/programs/default.nix` (it was dropped in the 2026-04-19 fix). `ydotool` stays for the Ctrl+V keystroke; Electron path uses both. Requires rebuild + Hyprland reload to pick up wtype and the new bind targets.
 **Commit:** `32a8207`
+
+**Follow-up (4a153e7):** Initial Electron path only worked when ALT was tap-released before the bind fired. Holding ALT while pressing a/o/e turned the synthesized paste into Ctrl+**Alt**+V, which Discord ignores. Script now injects release events for both Alts (56, 100) and both Shifts (42, 54) before sending Ctrl+V (29:1 47:1 47:0 29:0). The kernel/uinput state then matches what the paste keystroke needs even while the user keeps the modifier physically held. wtype path is unaffected — no synthesized chord, no modifier collision.
 
 ## 2026-04-19 — norwegian-binds-wtype-electron-chromium
 
