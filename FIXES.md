@@ -15,7 +15,7 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 3. Considered installing fcitx5 + the unicode-IM module to make ydotool's Ctrl+Shift+U fallback succeed. Rejected: huge surface area (full IM stack, autostart, env wiring) for typing six characters.
 4. Settled on a class-aware split: keep `wtype` for native Wayland surfaces (terminals, Zen, GTK, Qt) where it was always working, and use `wl-copy <char>` + `ydotool key Ctrl+V` only for Electron/Chromium clients. wtype writes via `virtual_keyboard_unstable_v1` which understands unicode strings directly, so it handles å/ø/æ fine wherever the protocol is honored. Old clipboard contents are restored ~200 ms after paste so the user's clipboard isn't permanently clobbered.
 **Fix:** New script `dotfiles/default/hypr/users/eksno/default/norwegian-type.sh` branches on `hyprctl activewindow` class. `norwegian.conf` rewritten to call the script. Re-added `wtype` to `system/users/eksno/programs/default.nix` (it was dropped in the 2026-04-19 fix). `ydotool` stays for the Ctrl+V keystroke; Electron path uses both. Requires rebuild + Hyprland reload to pick up wtype and the new bind targets.
-**Commit:** _<pending>_
+**Commit:** `32a8207`
 
 ## 2026-04-19 — norwegian-binds-wtype-electron-chromium
 
