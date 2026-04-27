@@ -15,7 +15,7 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 3. `identify -verbose` on the three `wayshot-*.png` artifacts in the worktree showed `Colorspace: sRGB`, `Gamma: 0.454545`, no ICC profile chunk — confirming the file/buffer mismatch hypothesis instead of a wide-gamut PNG that was simply being rendered narrowly.
 4. Considered three fixes: (a) `render:cm_enabled = 0` — one-line, kills CM globally for Hyprland; (b) re-tag in the screenshot pipeline via `magick "$TMP" -strip -colorspace sRGB`, keeping CM on for normal use; (c) live with it. Picked (a): single non-HDR Samsung laptop panel, no CM benefit being captured today, and (b) only patches `screenshot-region.sh` — bare `wayshot` calls would still produce wrong files.
 **Fix:** New `dotfiles/default/hypr/users/jorge/default/render.conf` setting `render { cm_enabled = 0 }`. Sourced automatically via the existing `source = ~/.config/hypr/users/jorge/default/**.conf` glob in `users/jorge/default.conf`. Applied live with `hyprctl reload`; `hyprctl getoption render:cm_enabled` afterwards returned `int: 0, set: true`. Verified with a fresh `wayshot -o eDP-1 /tmp/cm-off-test.png` — now matches the visible screen.
-**Commit:** `<pending>`
+**Commit:** `f3eee94`
 
 ## 2026-04-22 — hypr-screenshot-pipeline-swallowed-errors
 
