@@ -4,6 +4,19 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-04-27 — hypr-screenshot-color-management-tint
+
+**Symptom:** `wayshot` PNGs taken on `lewis` (`Super+v` region capture and bare `wayshot -o eDP-1 ...`) looked tinted / washed-out / "filtered" when viewed in Chrome, Claude desktop, etc., but the screen itself looked normal. No night-light or red-shift utility involved.
+**Affected:** host `lewis`, user `jorge`. New file `dotfiles/default/hypr/users/jorge/default/render.conf`. Same root cause would hit any other Hyprland host on this flake (verse/eksno, chuu/nabi, lappy/teto, chrono/teto) but only jorge's config was touched per request scope.
+**Root cause:** Hyprland 0.49+ flipped `render:cm_enabled` to `1` by default. With CM on, the compositor composes its framebuffer in a CM working space and `hyprctl monitors` reports `colorManagementPreset: "srgb"` for the output. `zwlr-screencopy` hands that buffer to `wayshot`, but `wayshot` writes a PNG tagged plain sRGB / gamma 2.2 with **no embedded ICC profile**. The pixel data and the file's color tag disagree, so any downstream viewer assuming sRGB decodes it with a slightly wrong transfer/primaries — visually a global colorgrade. The on-screen image is unaffected because the monitor receives the correctly-CM'd output, not the captured buffer.
+**Investigation:**
+1. Ruled out a night-light / shader path: `pgrep -af 'hyprsunset|wlsunset|gammastep|redshift'` had no hits, `hyprctl getoption decoration:screen_shader` returned empty, `misc:cm_auto_hdr` doesn't exist on this build. So no user-installed filter is in play.
+2. `hyprctl getoption render:cm_enabled` → `int: 1, set: false` (compositor default, not user-set). `hyprctl monitors -j` confirmed `colorManagementPreset: "srgb"` on eDP-1, which is what Hyprland reports when CM is active for an SDR output.
+3. `identify -verbose` on the three `wayshot-*.png` artifacts in the worktree showed `Colorspace: sRGB`, `Gamma: 0.454545`, no ICC profile chunk — confirming the file/buffer mismatch hypothesis instead of a wide-gamut PNG that was simply being rendered narrowly.
+4. Considered three fixes: (a) `render:cm_enabled = 0` — one-line, kills CM globally for Hyprland; (b) re-tag in the screenshot pipeline via `magick "$TMP" -strip -colorspace sRGB`, keeping CM on for normal use; (c) live with it. Picked (a): single non-HDR Samsung laptop panel, no CM benefit being captured today, and (b) only patches `screenshot-region.sh` — bare `wayshot` calls would still produce wrong files.
+**Fix:** New `dotfiles/default/hypr/users/jorge/default/render.conf` setting `render { cm_enabled = 0 }`. Sourced automatically via the existing `source = ~/.config/hypr/users/jorge/default/**.conf` glob in `users/jorge/default.conf`. Applied live with `hyprctl reload`; `hyprctl getoption render:cm_enabled` afterwards returned `int: 0, set: true`. Verified with a fresh `wayshot -o eDP-1 /tmp/cm-off-test.png` — now matches the visible screen.
+**Commit:** `<pending>`
+
 ## 2026-04-22 — hypr-screenshot-pipeline-swallowed-errors
 
 **Symptom:** `Super+v` on `lewis`/`jorge` stopped landing an image on the clipboard. `wl-paste --list-types` after a screenshot showed `application/glfw+clipboard-<pid>` + text types — i.e. a prior GLFW app was still the clipboard owner, `wl-copy` never took it. Slurp overlay appeared and the drag worked; no notify-send fired; Hyprland bind and symlink were fine.
