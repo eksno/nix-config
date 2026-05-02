@@ -17,6 +17,8 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 **Fix:** Rewrote `layerrules.conf` as `layerrule = match:namespace ^(tofi)$, no_anim 1`. `hyprctl reload config-only` followed by `hyprctl configerrors` now returns empty, and tofi's layer surface skips the global `animation = fade, 1, 10, default` (1000 ms) — the perceived "tofi takes a second to open" lag is gone.
 **Commit:** `1707a3a`
 
+**Follow-up (362279e):** Syntax was correct but tofi still faded in/out. Tofi's layer-shell namespace is hardcoded as `"launcher"` in `src/main.c` (`zwlr_layer_shell_v1_get_layer_surface(..., "launcher")`), not `"tofi"` — so `match:namespace ^(tofi)$` never matched. Changed the regex to `^(launcher)$`. Lesson for future layer rules: the `app_id`/process name is *not* the layer namespace — always check the upstream source for the literal string passed when creating the layer surface, or `hyprctl layers` while the surface is alive.
+
 ## 2026-04-25 — builtin-audio-disappeared-wireplumber-profile-off
 
 **Symptom:** Built-in laptop speakers and mic vanished from the audio menu. Only the USB Hollyland wireless microphone and (when paired) Bluetooth headset showed up. PipeWire fallback "Dummy Output" was the only sink. Hardware was untouched.
