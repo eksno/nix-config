@@ -3,6 +3,19 @@
     # Support flakes
     nix.settings.experimental-features = [ "nix-command" "flakes" ];
 
+    # Community binary caches — appended to cache.nixos.org so default trust
+    # stays intact. Each saves source rebuilds for packages we actually use.
+    nix.settings.extra-substituters = [
+      "https://nix-community.cachix.org"
+      "https://hyprland.cachix.org"
+      "https://catppuccin.cachix.org"
+    ];
+    nix.settings.extra-trusted-public-keys = [
+      "nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs="
+      "hyprland.cachix.org-1:a7pgxzMz7+chwVL3/pzj6jIBMioiJM7ypFP8PwtkuGc="
+      "catppuccin.cachix.org-1:noG/4HkbhJb+lUAdKrph6LaozJvAeEEZj4N732IysmU="
+    ];
+
     # This automatically performs a garbage collection of old Nix store generations
     nix.gc.automatic = true;
 
