@@ -4,6 +4,19 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-05-02 — hyprland-layerrule-syntax-changed-0.54
+
+**Symptom:** Adding `layerrule = noanim, tofi` to disable tofi's fade-in animation produced `Config error … invalid field noanim: missing a value` on `hyprctl reload`. Same shape for `blur, tofi` and every other rule keyword tested — it wasn't the effect name, it was the syntax itself.
+**Affected:** verse/eksno (Hyprland 0.54.3), `dotfiles/default/hypr/shared/utility/layerrules.conf`.
+**Root cause:** Hyprland 0.54 rewrote how `layerrule` is parsed. `handleLayerrule` in `src/config/ConfigManager.cpp:3024` now splits each comma-separated entry on the first **space** into a `key value` pair, with `match:<prop>` distinguishing matchers from effects. The old single-rule `layerrule = RULE, NAMESPACE` form was removed without a back-compat shim — supplying just `noanim` (no space, no value) trips the very first guard and returns the misleading "missing a value" error. Independently, the effect identifiers were renamed to snake_case (`no_anim`, `blur_popups`, `ignore_alpha`, `dim_around` — see `src/desktop/rule/layerRule/LayerRuleEffectContainer.cpp`).
+**Investigation:**
+1. `hyprctl configerrors` was empty initially, but `hyprctl reload config-only` re-parses and prints fresh errors. The empty output earlier was misleading because errors are only re-emitted on reload.
+2. Tried four variants via `hyprctl keyword layerrule …` — comma vs no-comma, `namespace:tofi`, regex `^(tofi)$` — all returned the same "invalid field NOANIM: missing a value." Switched to other rules (`blur, tofi`, `ignorezero, tofi`) — same error. That ruled out tofi/namespace and pointed at the keyword parser itself.
+3. Considered the new special-category block form (`layerrule NAME { match:namespace = …; no_anim = 1 }`) since `addSpecialCategory("layerrule", {.key = "name"})` is registered. Wrote it that way; got `config option <layerrule tofi-instant:match:namespace> does not exist` on every sub-key. Looks like `addSpecialConfigValue` for the match/effect keys runs in `reloadRuleConfigs()` but the parser still doesn't expose them through the block form in 0.54.3 — at least not in a way that worked here. Abandoned the block route.
+4. Read `handleLayerrule` directly. The parser splits each comma-entry on the first space; `match:` prefix means matcher, otherwise it's an effect; the rest of the string after the space is the value. That's the active code path, not the block form.
+**Fix:** Rewrote `layerrules.conf` as `layerrule = match:namespace ^(tofi)$, no_anim 1`. `hyprctl reload config-only` followed by `hyprctl configerrors` now returns empty, and tofi's layer surface skips the global `animation = fade, 1, 10, default` (1000 ms) — the perceived "tofi takes a second to open" lag is gone.
+**Commit:** `1707a3a`
+
 ## 2026-04-25 — builtin-audio-disappeared-wireplumber-profile-off
 
 **Symptom:** Built-in laptop speakers and mic vanished from the audio menu. Only the USB Hollyland wireless microphone and (when paired) Bluetooth headset showed up. PipeWire fallback "Dummy Output" was the only sink. Hardware was untouched.
