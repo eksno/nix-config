@@ -56,10 +56,14 @@ window#waybar {
   padding-right: 10px;
 }
 
-#network {
+#custom-network {
   color: @teal;
   padding-left: 10px;
   padding-right: 10px;
+}
+
+#custom-network.disconnected {
+  color: @overlay0;
 }
 
 #custom-battery {
