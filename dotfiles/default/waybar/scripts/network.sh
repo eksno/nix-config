@@ -22,7 +22,7 @@ while true; do
     txrate=$(awk -F': ' '/tx bitrate:/ {sub(/^[ \t]+/, "", $2); print $2; exit}' <<<"$link")
     freq=$(awk '/freq:/ {print $2; exit}' <<<"$link")
     short_ssid="${ssid:0:3}"
-    text=$(printf " %s %sdBm" "$short_ssid" "$signal")
+    text=$(printf " %s %sdBm" "$short_ssid" "$signal")
     ttip=$(printf "SSID: %s\nSignal: %s dBm\nFreq: %s MHz\nTX: %s" "$ssid" "$signal" "$freq" "$txrate")
 
     jq -cn \
