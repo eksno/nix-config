@@ -1,11 +1,10 @@
 {
   "layer": "top",
   "modules-left": [
+    "clock",
     "hyprland/workspaces"
   ],
-  "modules-center": [
-    "clock"
-  ],
+  "modules-center": [],
   "modules-right": [
     "backlight",
     "pulseaudio",
@@ -23,7 +22,7 @@
     }
   },
   "clock": {
-    "format": "<span color='#89b4fa'> </span>{:%Y-%m-%d %H:%M:%S (%Z)}",
+    "format": "{:%Y-%m-%d %H:%M:%S (%Z)}",
     "interval": 1
   },
   "backlight": {
