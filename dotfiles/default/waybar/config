@@ -10,7 +10,7 @@
     "backlight",
     "pulseaudio",
     "bluetooth",
-    "network",
+    "custom/network",
     "custom/battery"
   ],
   "hyprland/workspaces": {
@@ -79,14 +79,10 @@
     "tooltip-format-enumerate-connected-battery": "{device_alias}\t{device_address}\t{device_battery_percentage}%",
     "on-click": "kitty --title bluetuith bluetuith"
   },
-  "network": {
-    "interface": "wlo1",
-    "interval": 1,
-    "format": "{ifname}",
-    "format-wifi": "<span color='#94e2d5'> </span>{essid:.3} {signaldBm}dBm",
-    "format-ethernet": "{ipaddr}/{cidr} ",
-    "format-disconnected": "<span color='#94e2d5'>󰖪 </span>No Network",
-    "tooltip": false,
+  "custom/network": {
+    "exec": "~/.config/waybar/scripts/network.sh wlo1",
+    "return-type": "json",
+    "tooltip": true,
     "on-click": "kitty --title nmtui nmtui"
   },
   "custom/battery": {
