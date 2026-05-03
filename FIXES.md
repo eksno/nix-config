@@ -4,6 +4,19 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-05-03 — waybar-network-signal-stuck-on-ewma
+
+**Symptom:** Waybar's wifi `{signaldBm}` placeholder displayed a value (e.g. `-52 dBm`) that never moved, even with `interval: 1` and a hard waybar restart. `iw dev wlo1 link` reported a different, slightly fluctuating value (`-58` ↔ `-60`) at the same moments.
+**Affected:** verse/eksno, `dotfiles/default/waybar/config` (network module), `dotfiles/default/waybar/scripts/network.sh` (new).
+**Root cause:** Waybar's built-in network module reads `NL80211_STA_INFO_SIGNAL_AVG` (or beacon-signal-avg), not `NL80211_STA_INFO_SIGNAL`. That AVG is an EWMA computed by the kernel/driver over the lifetime of the connection. After ~70 minutes of association each new sample contributes a vanishing fraction, so the value freezes for all practical purposes — the bar looked broken but was reporting exactly what the kernel handed it.
+**Investigation:**
+1. Suspected SIGUSR2 wasn't re-arming the interval timer. Hard-restarted waybar; no change. Ruled out reload semantics.
+2. Sampled `iw dev wlo1 link` once per second — value held at `-58` for 14s, drifted to `-57` once. Concluded WiFi RSSI on a stationary laptop genuinely is mostly flat. Premature "this is fine" answer to user.
+3. User pushed back: waybar showed `-52` while `iw` showed `-58`. That's a 6 dBm gap, not just smoothing — different *source*.
+4. `iw dev wlo1 station dump` exposes both `signal:` (instant, with min/max bracket) and `signal avg:` plus `beacon signal avg:`. The AVG values matched waybar's reading; instant matched `iw link`. Confirmed waybar reads the AVG field.
+**Fix:** Added `dotfiles/default/waybar/scripts/network.sh` — continuous-JSON custom module that shells out to `iw dev <iface> link` every 1s and emits `{signal} dBm` from the instantaneous field. Replaced the built-in `network` module with `custom/network` in waybar config. Tooltip now shows SSID, signal, freq, and TX bitrate (more useful than the old empty tooltip anyway).
+**Commit:** `6f40c3d`
+
 ## 2026-05-02 — hyprland-layerrule-syntax-changed-0.54
 
 **Symptom:** Adding `layerrule = noanim, tofi` to disable tofi's fade-in animation produced `Config error … invalid field noanim: missing a value` on `hyprctl reload`. Same shape for `blur, tofi` and every other rule keyword tested — it wasn't the effect name, it was the syntax itself.
