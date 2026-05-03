@@ -8,7 +8,7 @@
   "modules-right": [
     "backlight",
     "pulseaudio",
-    "bluetooth",
+    "custom/bluetooth",
     "custom/network",
     "custom/battery"
   ],
@@ -65,17 +65,10 @@
     "on-scroll-up": "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-",
     "on-scroll-down": "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+"
   },
-  "bluetooth": {
-    "format": "<span color='#74c7ec'></span>",
-    "format-disabled": "",
-    "format-off": "<span color='#74c7ec'></span> off",
-    "format-on": "<span color='#74c7ec'></span>",
-    "format-connected": "<span color='#74c7ec'></span> {num_connections}",
-    "format-connected-battery": "<span color='#74c7ec'></span> {device_alias:.3} {device_battery_percentage}%",
-    "tooltip-format": "{controller_alias}\t{controller_address}",
-    "tooltip-format-connected": "{controller_alias}\t{controller_address}\n\n{num_connections} connected\n\n{device_enumerate}",
-    "tooltip-format-enumerate-connected": "{device_alias}\t{device_address}",
-    "tooltip-format-enumerate-connected-battery": "{device_alias}\t{device_address}\t{device_battery_percentage}%",
+  "custom/bluetooth": {
+    "exec": "~/.config/waybar/scripts/bluetooth.sh",
+    "return-type": "json",
+    "tooltip": true,
     "on-click": "kitty --title bluetuith bluetuith"
   },
   "custom/network": {

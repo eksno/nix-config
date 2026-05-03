@@ -50,10 +50,18 @@ window#waybar {
   padding-right: 10px;
 }
 
-#bluetooth {
+#custom-bluetooth {
   color: @sapphire;
   padding-left: 10px;
   padding-right: 10px;
+}
+
+#custom-bluetooth.off {
+  color: @overlay0;
+}
+
+#custom-bluetooth.warning {
+  color: @yellow;
 }
 
 #custom-network {
