@@ -81,6 +81,7 @@
   },
   "network": {
     "interface": "wlo1",
+    "interval": 1,
     "format": "{ifname}",
     "format-wifi": "<span color='#94e2d5'> </span>{essid:.3} {signaldBm}dBm",
     "format-ethernet": "{ipaddr}/{cidr} ",
