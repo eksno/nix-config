@@ -81,11 +81,9 @@
   "custom/network": {
     "exec": "~/.config/waybar/scripts/network.sh wlo1",
     "return-type": "json",
-    "format": "{icon} {text}",
-    "format-icons": {
-      "connected": "<span color='#94e2d5'></span>",
-      "disconnected": "<span color='#94e2d5'>󰖪</span>"
-    },
+    "format": "{text}",
+    "format-connected": "<span color='#94e2d5'></span> {text}",
+    "format-disconnected": "<span color='#94e2d5'>󰖪</span> {text}",
     "tooltip": true,
     "on-click": "kitty --title nmtui nmtui"
   },
