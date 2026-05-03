@@ -1,6 +1,9 @@
 # Main fish configuration file
 # Author: Jonas Lindberg
 
+# Disable default welcome message
+set -g fish_greeting
+
 # Path configuration
 fish_add_path ~/.local/bin
 fish_add_path ~/.cargo/bin
