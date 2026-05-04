@@ -4,6 +4,25 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-05-04 — xr-linux-driver-permissions-and-shm
+
+**Symptom:** Newly-packaged `xr-linux-driver` (Rayneo Air 3s Pro / 1bbb:af50) systemd user service kept exit-code 1 / segfaulting in a tight auto-restart loop. Manual `sudo bash smoketest.sh` from `.scratch/xrtest/` worked, but `systemctl --user start xr-driver` did not — in three distinct ways across iteration cycles.
+**Affected:** host `lewis`, user `jorge`. `system/users/jorge/dev/xr-driver/{package.nix,default.nix}`, `system/users/jorge/dev/default.nix`. Anyone packaging this driver under systemd-logind will hit at least the udev gotchas.
+**Root cause:** Three independent issues stacked, each masked by the auto-restart loop and similar-looking segfault traces.
+1. **Stale `/dev/shm/xr_driver_state`**: an earlier sudo smoke test created `/dev/shm/xr_driver_state` owned by root mode 0644. `/dev/shm` has the sticky bit, so the user service couldn't unlink or `fopen("w")` the file. `state.c::write_state` calls `fprintf(fp,…)` without checking `fp != NULL`, so `fprintf(NULL,…)` segfaulted *between* "Using hardware id" and "Starting up XR driver" with a backtrace that pointed at `_IO_fprintf` — easy to misread as a fortify/libc issue.
+2. **Rayneo udev rule is USB-only**: upstream's `70-rayneo-xr.rules` is one line, `SUBSYSTEM=="usb", … TAG+="uaccess"`. systemd-logind doesn't propagate uaccess from a USB parent to a `hidraw` child. `libhidapi` opens `/dev/hidrawN`, so the daemon fails with "RayNeo driver, failed to establish a connection". The Viture rule in the same repo *does* match all four subsystems (usb, hidraw, hiddev, ttyACM); Rayneo just got missed.
+3. **uinput rule grants no access**: upstream's `70-uinput-xr.rules` is `KERNEL=="uinput", OPTIONS+="static_node=uinput"` — sets the static node but leaves it 0600 root:root. `libevdev_uinput_create_from_device` returns `EACCES`, which the proprietary `libRayNeoXRMiniSDK.so` doesn't expect and segfaults inside `XRWorkQueue::Enqueue` shortly after.
+**Investigation:**
+1. First crash looked like a fortify-source false positive (backtrace via `__fprintf_chk`). Disabling `_FORTIFY_SOURCE` via `hardeningDisable = ["fortify" "fortify3"]` was a dead end — the fortify call was a symptom, the real fault was a NULL `FILE*`.
+2. Built the package with `-DCMAKE_BUILD_TYPE=RelWithDebInfo` + `dontStrip = true`, ran `addr2line -e .xrDriver-wrapped 0x1a891` on the in-log offset → `state.c::write_state`. Reading the source showed the `fopen` of `/dev/shm/xr_driver_state` was unchecked, then `ls -la /dev/shm/xr_driver_state` revealed root ownership from the prior sudo smoke test. `sudo rm` cleared it.
+3. Next failure: "RayNeo driver, failed to establish a connection". `udevadm info /dev/hidraw3` showed `TAGS=:seat:` (no uaccess) and the file mode was `crw-------`. Compared `70-rayneo-xr.rules` to `70-viture-xr.rules`; the latter has explicit `SUBSYSTEM=="hidraw"` lines, the former doesn't. **Note:** hidraw indices shuffle on hot-replug — use `udevadm info /dev/hidrawN | grep ID_VENDOR_ID` to find the right node, don't trust a number from earlier in the session.
+4. Final failure: `libevdev.libevdev_uinput_create_from_device: Permission denied` followed by SDK segfault. `getfacl /dev/uinput` showed no ACL; the udev rule didn't tag uaccess. `lsd`/`eza` does *not* show the `+`/`@` ACL marker in `ls -la` output — use `getfacl` to confirm ACLs.
+**Fix:**
+- `system/users/jorge/dev/xr-driver/package.nix` postPatch: append `SUBSYSTEM=="hidraw", KERNEL=="hidraw[0-9]*", ATTRS{idVendor}=="1bbb", MODE="0660", TAG+="uaccess"` to `udev/70-rayneo-xr.rules`; rewrite `udev/70-uinput-xr.rules` to `KERNEL=="uinput", MODE="0660", TAG+="uaccess", OPTIONS+="static_node=uinput"`.
+- Manual one-time cleanup: `sudo rm /dev/shm/xr_driver_state`. Not a recurring issue under the user service since the daemon now owns the file from creation.
+- After activation, `sudo udevadm trigger --action=add` against the relevant subsystems (hidraw + misc) to apply rules to already-plugged devices — rules only fire on `add` events, not retroactively.
+**Commit:** `0c60006` (hidraw rule), `4c54b1d` (uinput rule). The `/dev/shm` cleanup is a one-shot that doesn't need a commit.
+
 ## 2026-04-27 — hypr-screenshot-color-management-tint
 
 **Symptom:** `wayshot` PNGs taken on `lewis` (`Super+v` region capture and bare `wayshot -o eDP-1 ...`) looked tinted / washed-out / "filtered" when viewed in Chrome, Claude desktop, etc., but the screen itself looked normal. No night-light or red-shift utility involved.
