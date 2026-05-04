@@ -4,6 +4,18 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-05-05 — nixpkgs-wireshark-source-hash-mismatch
+
+**Symptom:** `./update.sh` failed mid-build with `error: hash mismatch in fixed-output derivation '/nix/store/7sj663dx4vl5n972s0825n6c3xxsvk7d-source.drv'` (specified `sha256-U30OJ8m+L/EVLN7NrqWNl77IMaO2cnw2N5uWzLVJE30=`, got `sha256-Zvrwxjp4LK2J3QnxmPxKKrU01YHQvPyp54UWzeGNCjA=`) under `wireshark-cli-4.6.5`, blocking `wifite2-2.7.0` and the whole system closure.
+**Affected:** host `lewis` (and any host with `wifite2` in its package list, e.g. eksno on verse). Triggered by `flake.lock` bump from nixpkgs `4bd9165` (2026-04-14) → `15f4ee4` (2026-04-30).
+**Root cause:** Upstream wireshark replaced the 4.6.5 source tarball without changing the version, while the `15f4ee4` nixpkgs commit still pins the old sha256. Pure-upstream issue, no local code involved.
+**Investigation:**
+1. Sandbox-built `nixosConfigurations.lewis.config.system.build.toplevel` against the pre-bump lock and it succeeded — confirmed our changes weren't at fault.
+2. `update.sh` always runs `nix flake update` before rebuild (line 50), so re-running it would just re-pull the broken pin.
+3. Considered (a) overriding wireshark to the updated hash, (b) dropping `wifite2`, (c) reverting the lock. Picked (c) — defers the upgrade until upstream fixes the hash, no other changes needed.
+**Fix:** `git checkout 14d87b3 -- flake.lock` to restore the prior nixpkgs pin (`4bd9165`), then `sudo nixos-rebuild switch --flake ./#lewis --impure` directly (bypassing `update.sh`'s lock-update step).
+**Commit:** to be filled in by the next commit on this branch.
+
 ## 2026-05-04 — xr-linux-driver-permissions-and-shm
 
 **Symptom:** Newly-packaged `xr-linux-driver` (Rayneo Air 3s Pro / 1bbb:af50) systemd user service kept exit-code 1 / segfaulting in a tight auto-restart loop. Manual `sudo bash smoketest.sh` from `.scratch/xrtest/` worked, but `systemctl --user start xr-driver` did not — in three distinct ways across iteration cycles.
