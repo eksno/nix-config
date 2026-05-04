@@ -70,6 +70,15 @@ stdenv.mkDerivation rec {
       --replace-quiet "git submodule update --init --recursive" "true"
     rm -rf modules/xrealInterfaceLibrary/interface_lib/modules/xreal_one_driver
 
+    # Upstream Rayneo udev rule only matches `SUBSYSTEM=="usb"`, which means
+    # systemd-logind never grants the seat-active user access to the device's
+    # /dev/hidrawN node — and libhidapi opens hidraw, not raw USB. Append a
+    # hidraw match (mirrors what upstream's viture rule already does).
+    cat >> udev/70-rayneo-xr.rules <<'EOF'
+
+    SUBSYSTEM=="hidraw", KERNEL=="hidraw[0-9]*", ATTRS{idVendor}=="1bbb", MODE="0660", TAG+="uaccess"
+    EOF
+
     # hid_ids.c references `imu_protocol_xreal_one` even though we removed
     # the XREAL One driver dir above. Provide a stub with non-NULL function
     # pointers that just return error — `plugins.start()` enumerates all
@@ -110,6 +119,16 @@ stdenv.mkDerivation rec {
     # Don't bake the build directory into RPATH — autoPatchelfHook sets the
     # install-time RPATH from buildInputs + $out/lib.
     "-DCMAKE_SKIP_BUILD_RPATH=ON"
+  ];
+
+  # nixpkgs defaults to `_FORTIFY_SOURCE=3` which trips on a borderline
+  # fprintf in upstream's early init (via __fprintf_chk). The upstream CI
+  # builds with looser fortify and never sees this — disable it here so
+  # we match upstream behavior. Driver crashes between "Using hardware id"
+  # and "Starting up XR driver" with FORTIFY enabled.
+  hardeningDisable = [
+    "fortify"
+    "fortify3"
   ];
 
   # CMakeLists ships no install() rules (upstream installs via shell scripts
