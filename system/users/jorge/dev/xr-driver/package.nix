@@ -71,12 +71,28 @@ stdenv.mkDerivation rec {
     rm -rf modules/xrealInterfaceLibrary/interface_lib/modules/xreal_one_driver
 
     # hid_ids.c references `imu_protocol_xreal_one` even though we removed
-    # the XREAL One driver dir above. Define the symbol with NULL function
-    # pointers so the link succeeds — XREAL One devices then fail loudly
-    # at open time, which is fine since this build targets Rayneo.
+    # the XREAL One driver dir above. Provide a stub with non-NULL function
+    # pointers that just return error — `plugins.start()` enumerates all
+    # registered protocols, so NULL-init'd struct members crash the driver
+    # before it ever gets to its main loop.
     cat > modules/xrealInterfaceLibrary/interface_lib/src/imu_protocol_xo_stub.c <<'EOF'
     #include "imu_protocol.h"
-    const imu_protocol imu_protocol_xreal_one = {0};
+    static bool xo_open(struct device_imu_t* d, const struct imu_hid_info* i) { (void)d; (void)i; return false; }
+    static void xo_close(struct device_imu_t* d) { (void)d; }
+    static bool xo_start_stream(struct device_imu_t* d) { (void)d; return false; }
+    static bool xo_stop_stream(struct device_imu_t* d) { (void)d; return false; }
+    static bool xo_get_static_id(struct device_imu_t* d, uint32_t* o) { (void)d; (void)o; return false; }
+    static bool xo_load_cal(struct device_imu_t* d, uint32_t* l, char** o) { (void)d; (void)l; (void)o; return false; }
+    static int  xo_next_sample(struct device_imu_t* d, struct imu_sample* o, int t) { (void)d; (void)o; (void)t; return -1; }
+    const imu_protocol imu_protocol_xreal_one = {
+        .open = xo_open,
+        .close = xo_close,
+        .start_stream = xo_start_stream,
+        .stop_stream = xo_stop_stream,
+        .get_static_id = xo_get_static_id,
+        .load_calibration_json = xo_load_cal,
+        .next_sample = xo_next_sample,
+    };
     EOF
     substituteInPlace modules/xrealInterfaceLibrary/interface_lib/CMakeLists.txt \
       --replace-fail \
