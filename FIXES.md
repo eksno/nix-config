@@ -14,7 +14,7 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 2. `update.sh` always runs `nix flake update` before rebuild (line 50), so re-running it would just re-pull the broken pin.
 3. Considered (a) overriding wireshark to the updated hash, (b) dropping `wifite2`, (c) reverting the lock. Picked (c) — defers the upgrade until upstream fixes the hash, no other changes needed.
 **Fix:** `git checkout 14d87b3 -- flake.lock` to restore the prior nixpkgs pin (`4bd9165`), then `sudo nixos-rebuild switch --flake ./#lewis --impure` directly (bypassing `update.sh`'s lock-update step).
-**Commit:** to be filled in by the next commit on this branch.
+**Commit:** `7f7cd9c`
 
 ## 2026-05-04 — xr-linux-driver-permissions-and-shm
 
