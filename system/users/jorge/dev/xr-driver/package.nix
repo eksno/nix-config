@@ -79,6 +79,14 @@ stdenv.mkDerivation rec {
     SUBSYSTEM=="hidraw", KERNEL=="hidraw[0-9]*", ATTRS{idVendor}=="1bbb", MODE="0660", TAG+="uaccess"
     EOF
 
+    # Upstream uinput rule only sets static_node; perms stay 0600 root:root,
+    # so xrDriver fails with "libevdev_uinput_create_from_device: Permission
+    # denied" when it tries to register the virtual mouse. Replace with a
+    # rule that also grants the seat-active user access via uaccess.
+    cat > udev/70-uinput-xr.rules <<'EOF'
+    KERNEL=="uinput", MODE="0660", TAG+="uaccess", OPTIONS+="static_node=uinput"
+    EOF
+
     # hid_ids.c references `imu_protocol_xreal_one` even though we removed
     # the XREAL One driver dir above. Provide a stub with non-NULL function
     # pointers that just return error — `plugins.start()` enumerates all
