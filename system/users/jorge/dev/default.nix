@@ -4,6 +4,6 @@
   imports = [
     ./nixpacks.nix
     ./python.nix
-    ./xr-driver
+    ../../../lib/xr/driver
   ];
 }
