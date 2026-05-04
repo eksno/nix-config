@@ -108,10 +108,17 @@ stdenv.mkDerivation rec {
     # cmake builds inside ./build, so source files are one level up.
     install -Dm755 xrDriver "$out/bin/xrDriver"
 
-    # Vendor blobs the driver dlopens at runtime. Includes a viture/ subdir
-    # with bundled OpenCV libs the VITURE SDK depends on; mirror the layout
-    # so dlopen lookups resolve relative to LD_LIBRARY_PATH.
     install -d "$out/lib"
+
+    # Libs cmake just built (vendored hidapi from the xrealInterfaceLibrary
+    # submodule). xrDriver's DT_NEEDED references libhidapi-hidraw.so.0 —
+    # without these in $out/lib it crashes with "cannot open shared object".
+    cp -P modules/xrealInterfaceLibrary/interface_lib/modules/hidapi/src/linux/libhidapi-hidraw.so* "$out/lib/"
+    cp -P modules/xrealInterfaceLibrary/interface_lib/modules/hidapi/src/libusb/libhidapi-libusb.so* "$out/lib/"
+
+    # Pre-built vendor blobs the driver dlopens at runtime. Includes a
+    # viture/ subdir with bundled OpenCV libs the VITURE SDK depends on;
+    # mirror the layout so dlopen lookups resolve relative to LD_LIBRARY_PATH.
     cp -rP ../lib/x86_64/* "$out/lib/"
 
     install -d "$out/lib/udev/rules.d"
