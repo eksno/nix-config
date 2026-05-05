@@ -136,6 +136,32 @@ Newest entries go at the **top** of the file. Entry format:
 - Keep entries terse but complete — a future Claude (or Jorge) should be able to reproduce the diagnosis from the entry alone
 - It's fine to update an entry's commit sha in a follow-up commit if needed
 
+## MANDATORY: File-based memory protocol
+
+**`memory/MEMORY.md` is the always-loaded index of durable project facts. Read it at session start; treat its hooks as canonical pointers. When an index hook matches the current task, `Read memory/<file>.md` BEFORE acting.** Topic files survive context compaction and capture: hardware quirks, upstream constraints, dead-end attempts, anti-loop rules, debug command cheatsheets.
+
+When you observe a captureable event (correction, durable fact, dead end worth not repeating, useful pointer):
+
+1. Write a topic file under `memory/<kebab-case-slug>.md` with frontmatter (`type: project | feedback | reference | user`, `title`, `created`).
+2. Add a one-line entry to `memory/MEMORY.md` under the right heading: `- [Title](file.md) — when this matters`.
+3. Mention the capture briefly to the user so they can correct framing.
+
+Do NOT read all topic files defensively — that defeats the index. Update or remove entries that go stale; the matching `MEMORY.md` line goes in the same edit. Distinguish from neighbors: `CLAUDE.md` = project rules; `memory/` = durable facts; `xr/` workbench = active subsystem state; `FIXES.md` = past incident log; global `~/.claude/.../memory/` = personal cross-project. Settled facts graduate from workbench → `memory/`.
+
+## MANDATORY: Stop-the-loop rule
+
+**If a debugging effort has tried 3+ approaches against the same root-cause hypothesis without progress, halt.** Don't try a 4th variation.
+
+Required halt action: write down the hypothesis, the 3 things tried, and what evidence would distinguish "wrong hypothesis" from "right hypothesis but wrong fix." Append to `memory/<area>-loop-history.md` (creating it if needed). Ask before continuing — surface alternative hypotheses even if they feel unlikely. A "fresh approach" within the same hypothesis (verbose flag, kill+restart, different value for same knob) still counts as the same loop. Things that DO break the loop: reproduce the failure without the suspected component; read the upstream source; find someone else's bug report with the same error.
+
+See `memory/process-stop-the-loop.md` for the full rule and `memory/xr-loop-history.md` for concrete past incidents.
+
+## MANDATORY: Verify before recommending from memory or training data
+
+**Before recommending any specific file, function, flag, command, or package by name, verify it exists right now.** Memory and training data give you "X existed when written," not "X exists now." Use `ls`, `grep`, `--help`, or a quick `nix repl` check — these run in parallel with whatever else you're already doing and take a few hundred ms.
+
+Don't make the user say "that file doesn't exist" — make sure it does before saying it does. See `memory/process-verify-before-recommend.md` for when to skip the check (pure architectural reasoning vs. specific paths/symbols).
+
 ## Adding a new host
 
 1. Create `system/hosts/{hostname}/` with `default.nix` and `hardware-configuration.nix`
