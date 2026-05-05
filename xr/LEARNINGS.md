@@ -547,7 +547,7 @@ the upstream rule with `services.udev.extraRules` setting
 access independent of logind state. Don't broaden to `MODE="0666"` —
 unnecessary attack surface for what's just a USB hot-plug bug.
 
-## VkDisplaySurfaceKHR fails on wlroots-leased connector (Mesa+Intel Arc)
+## VkDisplaySurfaceKHR fails on wlroots-leased connector (Mesa anv + Intel Arc)
 
 End state of Phase 3 attempt 2026-05-06: monado successfully takes
 a wp-drm-lease-v1 lease on DP-2 (confirmed by `_lease_connector_done`
@@ -563,24 +563,77 @@ DRM state in `drm_info` confirms no scanout was set up:
 - `"CRTC_ID"` = 0 (no CRTC bound)
 - non-desktop=1 (correctly inherited from EDID)
 
-The OpenXR session still walks IDLE→READY→SYNCHRONIZED→VISIBLE→
-FOCUSED on the wayvr side and IPD detects (63mm), so the protocol
-plumbing is fine — but no pixels reach the connector. Glasses
-display black even after replug.
+Wayvr's OpenXR session still walks IDLE→READY→SYNCHRONIZED→VISIBLE→
+FOCUSED with IPD = 63mm, so the protocol plumbing is fine — but no
+pixels ever reach the connector. Glasses display black even after
+replug.
 
-This is a Mesa / Intel Arc / monado interop problem, not a
-config-fixable issue in our launcher. The likely path to a fix:
+### Verified: monado IS using `VK_EXT_acquire_drm_display`
 
-1. Check whether monado is actually using `VK_EXT_acquire_drm_display`
-   on the leased FD or just opening a fresh DRM device via
-   `VK_KHR_display`. If the latter, Vulkan never sees the lease.
-2. Check Mesa support for `VK_EXT_acquire_drm_display` on
-   `vulkan-intel`/anv driver.
-3. Search monado upstream issues for "VK_ERROR_SURFACE_LOST_KHR"
-   on direct-mode-wayland with Intel hardware.
+`comp_window_direct_wayland.c` in monado-rayneo (MR !2737 head SHA
+4b8d4a8) builds with `#error "Wayland direct requires the Vulkan
+extension VK_EXT_acquire_drm_display"` and the runtime path goes:
+1. `_lease_fd` callback receives leased FD from wp_drm_lease_v1
+2. `vkGetDrmDisplayEXT(physical_device, drm_fd, connector_id, &vk_display)`
+3. `vkAcquireDrmDisplayEXT(physical_device, leased_fd, vk_display)`
+4. `comp_window_direct_create_surface(base, vk_display, w, h)` →
+   `vkGetPhysicalDeviceDisplayPlanePropertiesKHR` → `vkCreateDisplayPlaneSurfaceKHR`
+   → `vkCreateSwapchainKHR`
+5. First `vkQueuePresentKHR` → `VK_ERROR_SURFACE_LOST_KHR`
 
-Until this is fixed, Phase 3's *architectural* goal (lease works,
-EDID override works) is complete but the *visual* result is still
-black glasses. Phase 2 (Wayland-windowed, half-rainbow) was at
-least visible. Tradeoff: we have a clean architecture now and a
-narrowly-scoped Vulkan bug to chase.
+So the bug is downstream of `VK_EXT_acquire_drm_display`. monado
+gives Mesa the leased display correctly; Mesa accepts the surface
+and swapchain creation; first present fails.
+
+### Confirmed: Mesa anv direct-display path is broken on Intel Arc
+
+`vulkaninfo` warns:
+```
+ICD for selected physical device does not export vkGetPhysicalDeviceDisplayPlanePropertiesKHR!
+ICD for selected physical device does not export vkGetPhysicalDeviceDisplayPropertiesKHR!
+```
+
+`vkcube --wsi display` (vulkan-tools) confirms it from the other
+direction — fails immediately with "Cannot find any display!" on
+both Intel Arc (`--gpu_number 0`) and llvmpipe (`--gpu_number 1`),
+even with xr-driver stopped and the EDID override making DP-2 a
+leasable non-desktop output.
+
+Net: Mesa's anv driver advertises `VK_KHR_display`,
+`VK_EXT_direct_mode_display`, `VK_EXT_acquire_drm_display` as
+**instance** extensions (loader-level), but the `VK_KHR_display`
+**device** functions (`vkGetPhysicalDeviceDisplayPlanePropertiesKHR`,
+`vkGetPhysicalDeviceDisplayPropertiesKHR`) aren't actually
+implemented in the Intel ICD. The acquire path works because
+`VK_EXT_acquire_drm_display` is instance-level; the swapchain path
+falls over because the device-level display plane code path is
+unimplemented.
+
+This is a Mesa gap, not something we can config-fix.
+
+### Forward options (none cheap)
+
+1. **Patch Mesa anv** to wire up display plane support on top of
+   the existing KMS modesetting code. Probably ~hundreds of LOC.
+   Out of scope for breezy-hyprland.
+2. **Stay in Wayland-windowed mode** (Phase 2 path) but solve the
+   SBS visual: needs the rayneo HID "enter 3D mode" command +
+   either a 3840x1080 custom DRM mode on DP-2 (unlikely without
+   additional EDID work) or the glasses interpreting a 1920x1080
+   surface as half-and-half (which they don't natively).
+3. **Different OpenXR runtime** that doesn't require display
+   plane API — e.g., something that draws into a regular Wayland
+   surface via XR composition layers and relies on the host
+   compositor for output. Stoja, WayVR's nested-Smithay mode,
+   etc. Most still depend on monado though.
+4. **Use a different GPU.** A laptop with NVIDIA + the proprietary
+   driver supports VK_KHR_display direct mode out of the box for
+   VR/AR. Not a fix for `lewis` (Intel-only).
+
+For now: Phase 3 architectural work is committed (EDID override,
+USB ACL fix, launcher hygiene); visual rendering blocked on the
+Mesa gap. The committed config is a strict superset of what
+worked at Phase 2 — running breezy-hyprland with the override
+active gets the lease but black glasses; reverting the
+glasses-edid import returns to Phase 2 behavior (Wayland-windowed,
+half-rainbow but visible).

@@ -11,7 +11,7 @@ new known-broken thing).
 
 | Host | User | Status |
 |---|---|---|
-| `lewis` | `jorge` | xr-driver + breezy-gnome + breezy-session + breezy-recenter + **monado-rayneo + breezy-hyprland + glasses-edid (EDID override + USB ACL fix)** deployed. GNOME-Breezy soak abandoned (productivity-tier paywall). Active path is `plans/03-hyprland-breezy-2026-05-06.md` — Phases 1+2 shipped, **Phase 3 architecturally done 2026-05-06 (lease succeeds, EDID override verified, OpenXR FOCUSED with real device), but visual blocker remains: VkDisplaySurfaceKHR fails with VK_ERROR_SURFACE_LOST_KHR on the leased connector → DPMS stays Off, glasses black**. Mesa+Intel Arc + drm-lease + VK_KHR_display interop bug. |
+| `lewis` | `jorge` | xr-driver + breezy-gnome + breezy-session + breezy-recenter + **monado-rayneo + breezy-hyprland + glasses-edid (EDID override + USB ACL fix)** deployed. GNOME-Breezy soak abandoned (productivity-tier paywall). Active path is `plans/03-hyprland-breezy-2026-05-06.md` — Phases 1+2 shipped, **Phase 3 architecturally done 2026-05-06 (lease succeeds, EDID override verified, OpenXR FOCUSED with real device), but visually blocked by Mesa anv gap on Intel Arc**: `VK_KHR_display` device functions (`vkGetPhysicalDeviceDisplayPlanePropertiesKHR`) aren't implemented; `vkcube --wsi display` and monado direct-display swapchain both fail. Phase 3.5 needs either a Mesa patch, a different runtime, or a Wayland-windowed-with-SBS approach. |
 | `verse` | `eksno` | Same module set wired (xr/driver, xr/breezy-gnome, xr/breezy-session, xr/monado-rayneo, xr/breezy-hyprland). Build verified; not yet exercised on real hardware. |
 
 ## What's deployed
