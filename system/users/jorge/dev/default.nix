@@ -6,6 +6,5 @@
     ./python.nix
     ../../../lib/xr/driver
     ../../../lib/xr/breezy-gnome
-    ../../../lib/xr/breezy-sideview
   ];
 }
