@@ -11,7 +11,7 @@ new known-broken thing).
 
 | Host | User | Status |
 |---|---|---|
-| `lewis` | `jorge` | xr-driver + breezy-gnome + breezy-session + breezy-recenter + **monado-rayneo + breezy-hyprland** deployed. GNOME-Breezy soak abandoned (productivity-tier paywall). Active path is `plans/03-hyprland-breezy-2026-05-06.md` — Phases 1+2 shipped (monado patched, launcher orchestrates monado+wayvr to OpenXR FOCUSED), Phase 3 replanned 2026-05-06 around EDID non-desktop override (the original `hyprctl keyword monitor disable` approach was proven wrong by direct test — wlroots only leases EDID-non-desktop outputs). |
+| `lewis` | `jorge` | xr-driver + breezy-gnome + breezy-session + breezy-recenter + **monado-rayneo + breezy-hyprland + glasses-edid** deployed. GNOME-Breezy soak abandoned (productivity-tier paywall). Active path is `plans/03-hyprland-breezy-2026-05-06.md` — Phases 1+2 shipped, **Phase 3 (EDID non-desktop override) shipped 2026-05-06 — awaits reboot to verify wlroots advertises DP-2 for DRM lease**. |
 | `verse` | `eksno` | Same module set wired (xr/driver, xr/breezy-gnome, xr/breezy-session, xr/monado-rayneo, xr/breezy-hyprland). Build verified; not yet exercised on real hardware. |
 
 ## What's deployed
@@ -117,6 +117,32 @@ new known-broken thing).
 - **Verified**: `monado-cli probe` shows
   `head: RayNeo Air 4 Pro (5e0050125135323833390000), view count: 2`
   after stopping xr-driver to release HID locks.
+
+### `glasses-edid` (deployed — awaits reboot to verify)
+
+- **Module**: `system/lib/xr/glasses-edid/default.nix`. Imports a
+  patched copy of the Rayneo EDID (Microsoft HMD VSDB inserted into
+  the CTA-861 extension; OUI 0x5C 0x12 0xCA + version 0x02 + zero
+  payload) via `hardware.firmware`, and wires
+  `boot.kernelParams = [ "drm.edid_firmware=DP-2:edid/rayneo-air4pro-glasses.bin" ]`.
+- **Source artifacts** in `xr/edid/`:
+  - `glasses-original.bin` — captured from `/sys/class/drm/card1-DP-2/edid`
+  - `patch_glasses_edid.py` — inserts the Microsoft HMD VSDB,
+    bumps DTD start offset, recomputes the CTA-861 checksum
+  - `glasses-nondesktop.bin` — patched output, verified with
+    `edid-decode` (Microsoft VSDB recognized; DTDs preserved;
+    checksum valid)
+- **Build verification**: `kernel-params` in the new generation
+  starts with `drm.edid_firmware=DP-2:edid/rayneo-air4pro-glasses.bin`;
+  the firmware blob lands at
+  `firmware/edid/rayneo-air4pro-glasses.bin.zst` (NixOS
+  zstd-compresses; kernel auto-decompresses). Decompressed bytes
+  match the patched EDID byte-for-byte.
+- **Awaits reboot to verify**: post-reboot,
+  `cat /sys/class/drm/card1-DP-2/non_desktop` should print `1`,
+  and Hyprland should drop DP-2 from the active monitor list. See
+  `plans/03-hyprland-breezy-2026-05-06.md` "Post-reboot
+  verification checklist".
 
 ### `breezy-hyprland` (working through OpenXR FOCUSED — visual rendering needs Phase 3)
 

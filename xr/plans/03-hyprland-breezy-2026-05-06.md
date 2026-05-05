@@ -1,12 +1,11 @@
 # Hyprland-breezy via Monado + WayVR (open-source replacement)
 
 Started: 2026-05-05
-Status: Phase 1 + Phase 2 plumbing shipped. Phase 3 (DRM direct lease)
-        replanned 2026-05-06: original `hyprctl keyword monitor disable`
-        approach proven wrong (wlroots only leases non-desktop outputs);
-        new path is EDID override to force the non-desktop bit. Launcher
-        reverted to Phase 2 baseline (Wayland-windowed, FOCUSED but
-        renders wrong) until EDID work lands.
+Status: Phase 1 + Phase 2 plumbing shipped. Phase 3 (DRM direct lease via
+        EDID non-desktop override) implemented 2026-05-06; awaits a
+        reboot to verify the patched EDID is loaded by the kernel and
+        wlroots advertises the connector for lease. Launcher already in
+        the right state (no monitor toggle, just hygiene fixes).
 
 ## Why this plan
 
@@ -100,48 +99,91 @@ no matter how we manipulate them in Hyprland.
 The launcher reverted the disable — Phase 2 state (Wayland-windowed,
 reaches FOCUSED but renders wrong) is preserved as the working baseline.
 
-### Real Phase 3: EDID override to force non-desktop
+### Real Phase 3: EDID override to force non-desktop (IMPLEMENTED, awaiting post-reboot verification)
 
-The clean architectural fix is to make the glasses look like a
-non-desktop output to wlroots from boot. Linux supports loading
-override EDIDs via the firmware loader.
+The clean architectural fix: make the glasses look like a non-desktop
+output to wlroots from boot. Implemented via the kernel's
+`drm.edid_firmware=` mechanism — a patched EDID is placed at
+`/lib/firmware/edid/rayneo-air4pro-glasses.bin` and the kernel uses
+it instead of probing the connector.
 
-**Sketch (not yet implemented):**
+**What shipped (commit TBD):**
 
-1. **Capture the current EDID:**
+- `xr/edid/glasses-original.bin` — captured original EDID from
+  `/sys/class/drm/card1-DP-2/edid`. 256 bytes, base EDID 1.3 + one
+  CTA-861 extension, no non-desktop signaling.
+- `xr/edid/patch_glasses_edid.py` — Python tool that inserts a
+  Microsoft HMD Vendor-Specific Data Block into the CTA-861
+  extension. The Linux DRM subsystem
+  (`cea_db_is_microsoft_vsdb` in `drivers/gpu/drm/drm_edid.c`)
+  recognizes the OUI 0x5C 0x12 0xCA + 21-byte payload and sets
+  `connector.non_desktop = true` on parse. Tool also bumps the DTD
+  start offset, shifts DTDs forward, and recomputes the CTA-861
+  checksum.
+- `xr/edid/glasses-nondesktop.bin` — patched output. Verified with
+  `edid-decode`: DTDs preserved, checksum valid, "Vendor-Specific
+  Data Block (Microsoft), OUI CA-12-5C, Version: 2" parsed
+  correctly.
+- `system/lib/xr/glasses-edid/default.nix` — NixOS module installing
+  the patched EDID via `hardware.firmware` and adding
+  `boot.kernelParams = [ "drm.edid_firmware=DP-2:edid/rayneo-air4pro-glasses.bin" ]`.
+- `system/hosts/lewis/default.nix` — imports `glasses-edid`.
+
+NixOS builds clean; kernel cmdline confirmed to include the
+`drm.edid_firmware=` token; the patched EDID is deployed at
+`/run/current-system/firmware/edid/rayneo-air4pro-glasses.bin.zst`
+(NixOS zstd-compresses firmware blobs; kernel auto-decompresses).
+
+### Post-reboot verification checklist
+
+After `./update.sh` + reboot (the new EDID is loaded by the kernel
+at boot; no live re-probe will flip the bit):
+
+1. **EDID was substituted:**
    ```
-   cat /sys/class/drm/card1-DP-2/edid > /tmp/glasses-orig.bin
+   diff <(cat /sys/class/drm/card1-DP-2/edid) \
+        /home/jorge/nix-config/xr/edid/glasses-nondesktop.bin
    ```
-   (or whatever connector path has the SmartGlasses EDID at next
-   plug-in; the connector is known to be DP-2 on lewis.)
+   Should be silent (identical).
 
-2. **Flip the non-desktop bit.** This lives in the DisplayID
-   extension block (DisplayID block tag 0x0A "Display Parameters" has
-   a feature support bit, or the more recent DisplayID Type II header
-   has a "non-desktop" flag). Easiest approach: write a small
-   Python/Rust utility that parses the EDID, adds/modifies the
-   DisplayID extension to set the non-desktop bit, recomputes the
-   checksum, writes the result.
-
-3. **Install as firmware.** NixOS has `hardware.firmware =
-   [ <derivation-with-edid> ]` or a simpler `boot.kernelParams =
-   [ "drm.edid_firmware=DP-2:edid/glasses.bin" ]`, with the file
-   placed at `/lib/firmware/edid/glasses.bin` via a derivation.
-
-4. **Verify.** After reboot:
+2. **Non-desktop bit is set:**
    ```
-   cat /sys/class/drm/card1-DP-2/non_desktop  # should print 1
+   cat /sys/class/drm/card1-DP-2/non_desktop
    ```
-   and `hyprctl monitors all` should NOT list DP-2 in the active
-   compositor outputs (Hyprland skips non-desktop). Monado's lease
-   device should then advertise it; `monado-cli probe` and the full
-   pipeline should work without the disable workaround.
+   Should print `1`.
 
-**Tradeoff:** while the override is in place, the glasses will not
-appear as a normal Hyprland monitor — they're VR-only. For Jorge's
-XR-first workflow, this is acceptable; the rare "use as regular
-external monitor" case can revert by removing the kernel param and
-rebooting.
+3. **Hyprland skips the connector:**
+   ```
+   hyprctl monitors          # should NOT list DP-2 / SmartGlasses
+   hyprctl monitors all      # may still list it as a known but
+                             # non-managed connector
+   ```
+
+4. **wlroots advertises the connector for lease.** Hard to test
+   directly without running monado, but the next step does.
+
+5. **Run `breezy-hyprland`.** monado log
+   (`/run/user/1000/monado-service.log`) should now show
+   `Selected DRM lease device: /dev/dri/card1` followed by a
+   real connector being leased — NOT the previous
+   `Found no connectors available for direct mode`.
+
+6. **Visual:** glasses should now show stable VR rendering
+   (passthrough background + WayVR overlays) instead of the
+   half-rainbow Phase 2 symptoms.
+
+### Tradeoff and rollback
+
+While the override is active, the glasses **do not appear as a normal
+Hyprland monitor** — they're VR-only. For Jorge's XR-first workflow
+this is the goal; the rare "use as regular external monitor" case
+can revert by removing the import line in `system/hosts/lewis/default.nix`
+and rebuilding+rebooting (the kernel param goes away on the next
+generation).
+
+If the post-reboot verification fails (e.g. kernel rejects the EDID
+blob, glasses fail to enumerate), boot the previous generation from
+the systemd-boot menu and remove the import.
 
 ### Alternate paths (only if EDID override blocked)
 

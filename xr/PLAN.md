@@ -2,17 +2,15 @@
 
 **[`plans/03-hyprland-breezy-2026-05-06.md`](./plans/03-hyprland-breezy-2026-05-06.md)** — Open-source Hyprland breezy via Monado + WayVR.
 
-Phase 1 (Monado patched with MR !2737) and Phase 2 (WayVR + launcher)
-shipped. **Phase 3 — DRM direct lease — is the current blocker, now
-replanned around an EDID override.** The original `hyprctl keyword
-monitor disable` approach was tested 2026-05-06 and proven wrong:
-wlroots only advertises connectors with the EDID `non_desktop` bit
-set on the lease device, and Hyprland inherits that. Disabling the
-monitor doesn't make it leasable — it strictly breaks monado worse
-than leaving it alone. The new path is a kernel-cmdline EDID
-override (`drm.edid_firmware=DP-2:edid/glasses.bin`) with the
-non-desktop bit flipped. See the plan file for the implementation
-sketch.
+Phase 1 (Monado patched with MR !2737), Phase 2 (WayVR + launcher),
+and Phase 3 (EDID non-desktop override) all shipped. **Phase 3 awaits
+a reboot to verify** — the Microsoft HMD VSDB has been inserted into
+the glasses' EDID, deployed via `drm.edid_firmware=`, and the build
+landed it correctly in the new generation's kernel cmdline. Post
+reboot, wlroots should treat the SmartGlasses connector as
+non-desktop and advertise it for lease via `wp-drm-lease-v1`,
+enabling monado to take the lease and render correctly. Verification
+checklist is at the end of `plans/03-hyprland-breezy-2026-05-06.md`.
 
 ## Why this is the active path
 
