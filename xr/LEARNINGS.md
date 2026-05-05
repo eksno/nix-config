@@ -311,3 +311,143 @@ This regularly catches files that should be gitignored (e.g.
 `.claude/scheduled_tasks.lock`). When this happens, untrack and
 gitignore them — don't manually unstage in a future commit, because
 `git add .` just resurrects them.
+
+---
+
+## Architecture — open-source Hyprland breezy via Monado + WayVR
+
+The 2026-05-05 GNOME-Breezy session pipeline got all the way to the
+breezy_desktop GNOME extension loading, then hit the upstream
+`is_productivity_granted()` SHM gate (see "Productivity-tier license
+gate" in STATE.md). With Jorge's "no GNOME, no paying" constraint,
+the open-source replacement is:
+
+  Monado (patched with MR !2737 for Rayneo) → WayVR via OpenXR
+
+`monado-rayneo` overrides nixpkgs `monado` with the head SHA of
+gitlab.freedesktop.org/monado/monado/-/merge_requests/2737. Stock
+Monado does NOT enumerate the Rayneo Air 4 Pro — its `xreal_air`
+builder only matches XREAL VID 0x3318. MR !2737 adds a dedicated
+`rayneo` driver for USB `1bbb:af50`, tested on Air 4 Pro hardware,
+pipeline green, AI-generated but functional. Reference SHA:
+`4b8d4a81328e8240a180aad6f70337ac691d9cbf` (2026-05-05).
+
+When wrapping it: filter nixpkgs' `monado-cylinder-aspectRatio.patch`
+because the MR is post-25.1 and already includes the upstream commit
+that patch backports. Without the filter, `nixos-rebuild` fails with
+"Reversed (or previously applied) patch detected. Skipping patch."
+
+WayVR (formerly WlxOverlay-S) is `wayvr-org/wayvr` — the rename is
+recent enough that older docs / Claude knowledge may still reference
+`galister/wlx-overlay-s` or `galister/wayvr`. The latter is a
+different/old/dead project; do not use it. WayVR 26.2.1 is in
+nixpkgs as `pkgs.wayvr`. **No fork required** — the optional
+nested-Smithay-compositor mode it had has been made truly optional
+upstream, so we get a working OpenXR overlay client for free.
+
+## monado-service launcher: stdin must be a pollable, persistent pipe
+
+`monado-service` registers stdin in its epoll mainloop (parent-process
+death detection at `src/xrt/ipc/server/ipc_server_process.c:360`).
+This places three constraints on launchers:
+
+1. **TTY stdin fails.** epoll_ctl(stdin) returns -1; `init_all` then
+   bails with `XRT_ERROR_IPC_MAINLOOP_FAILED_TO_INIT`. Running
+   `monado-service` directly from a fish/bash terminal hits this
+   every time — even though you'd expect the controlling TTY to be
+   pollable.
+
+2. **`/dev/null` also fails.** Char devices don't implement `poll()`;
+   epoll rejects them with the same error path.
+
+3. **Pipes work — but must stay open.** `true | monado-service` succeeds
+   at init (the pipe IS pollable) but exits cleanly the moment `true`
+   returns and EOF reaches monado — interpreted as "parent died, time
+   to shut down." Result: clean `Server exiting: '0'` right after
+   Vulkan init, no diagnostic output beyond the swapchain log lines.
+
+The working pattern is `sleep infinity | monado-service` — pollable
+AND never EOFs. systemd hands monado a pipe that stays open for the
+unit's lifetime, which is why systemd-launched runs don't hit this.
+Our launcher in `system/lib/xr/breezy-hyprland/launcher.nix` uses the
+sleep-infinity pattern; the EXIT trap reaps both monado AND the sleep
+on cleanup.
+
+## XR_RUNTIME_JSON must be set in the launcher's own env
+
+`environment.variables.XR_RUNTIME_JSON =
+"${monadoRayneo}/share/openxr/1/openxr_monado.json"` is correct as a
+system-level setting, but it only takes effect on the next login
+(re-source of `/etc/profile`). For a tool that's meant to work
+immediately after `nixos-rebuild switch`, the launcher must
+`export XR_RUNTIME_JSON=...` in its own process, with the path baked
+in at nix-eval time so /nix/var rebuilds invalidate it correctly.
+Otherwise the OpenXR loader emits "failed to determine active runtime
+file path for this environment" → `XR_ERROR_RUNTIME_UNAVAILABLE`.
+
+## Hyprland holds the glasses connector → Monado falls back to windowed mode
+
+When Monado tries direct DRM mode (`comp_window_direct_wayland_init`),
+it logs `Available DRM lease device: /dev/dri/card1` then
+`Found no connectors available for direct mode` because Hyprland
+already drives the SmartGlasses connector via wlroots.
+
+In windowed mode, Monado opens a 3840x1080 Wayland surface (stereo
+SBS pack) somewhere on the user's compositor. Side-effects observed:
+  - Hyprland's no-response watchdog flags the window ("Application
+    Not Responding: Monado - openxr") because monado doesn't pump its
+    Wayland event loop fast enough during render
+  - Glasses display the SBS frame's left half stretched across one eye
+    and undefined buffer (rainbow vertical lines) on the other
+  - SIGKILLing monado mid-frame leaves DRM state half-released —
+    Hyprland can drop monitors from its list until the user replugs
+
+The architecturally-correct answer is to release the glasses connector
+from Hyprland before launching Monado. Pattern (Phase 3 work):
+
+  1. `hyprctl keyword monitor "desc:SmartGlasses,disable"` — drops
+     the output from wlroots, freeing the DRM connector
+  2. Start `monado-service` — now able to take the lease for direct
+     mode
+  3. On exit (trap), re-enable:
+     `hyprctl keyword monitor "desc:SmartGlasses,preferred,auto,1"`
+
+## OpenXR session reaches FOCUSED ≠ user sees the right thing
+
+WayVR walking the OpenXR session through IDLE → READY → SYNCHRONIZED
+→ VISIBLE → FOCUSED with non-zero IPD reports just means the OpenXR
+plumbing succeeded — pose data flowing, view configuration negotiated.
+It does NOT mean the user is seeing rendered VR content correctly.
+Independent verification needed: actual visual confirmation by Jorge
+wearing the glasses.
+
+In the 2026-05-05 test the session reached FOCUSED but Jorge saw
+half-rendered + rainbow bars — symptoms of the windowed-mode problem
+above, not an OpenXR session issue. The log progression "looks fine"
+even when the rendered output is wrong.
+
+## WayVR's GUI is built around 6DoF + dual controllers
+
+WayVR is designed for SteamVR-class setups: room-scale 6DoF +
+Vive/Index/Oculus controllers. For 3DoF AR glasses with no
+controllers, the relevant config is **Handsfree mode**: dashboard /
+settings / controls (or the keyboard's hamburger menu temporarily,
+per github.com/wayvr-org/wayvr/issues/437).
+
+WayVR doesn't natively understand "I am running on AR glasses, not in
+a VR room." Defaults assume a virtual world to populate; pass-through
+must be enabled (it is by default in OpenXR mode), screens must be
+explicitly placed via the dashboard.
+
+Loaded interaction profiles (vive, index, touch, microsoft, hp, etc.)
+emit WARN lines in the wayvr log even on a controller-less setup —
+those are not errors, just unused profile loads. Filter them out
+when grepping for real errors.
+
+## Glasses cable USB unplug during render → Rayneo USB read errors
+
+`ERROR [rayneo_phase_running] USB read error in streaming mode` in
+the monado-service log indicates the Rayneo USB stream got
+interrupted — typically from unplugging the glasses cable mid-run.
+Not a driver bug. After replug, monado-service needs a restart to
+re-open the device.

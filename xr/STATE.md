@@ -1,6 +1,6 @@
 # XR system state
 
-Last updated: 2026-05-05
+Last updated: 2026-05-06
 
 What is currently deployed on `lewis` (and wired for `verse`), what is
 verified working, and what is broken or deferred. Update this whenever
@@ -11,8 +11,8 @@ new known-broken thing).
 
 | Host | User | Status |
 |---|---|---|
-| `lewis` | `jorge` | xr-driver + breezy-gnome + breezy-session + breezy-recenter deployed. GNOME-on-Wayland session selectable from SDDM after Hyprland logout; breezy-gnome auto-enabled with 2-screen preset; world-lock soak in progress (Step 7 of `plans/02-gnome-breezy-session-2026-05-05.md`). |
-| `verse` | `eksno` | Same module set wired (xr/driver, xr/breezy-gnome, xr/breezy-session). Build verified; not yet exercised on real hardware. |
+| `lewis` | `jorge` | xr-driver + breezy-gnome + breezy-session + breezy-recenter + **monado-rayneo + breezy-hyprland** deployed. GNOME-Breezy soak abandoned (productivity-tier paywall). Active path is `plans/03-hyprland-breezy-2026-05-06.md` — Phases 1+2 shipped (monado patched, launcher orchestrates monado+wayvr to OpenXR FOCUSED), Phase 3 (DRM direct lease) is the current blocker. |
+| `verse` | `eksno` | Same module set wired (xr/driver, xr/breezy-gnome, xr/breezy-session, xr/monado-rayneo, xr/breezy-hyprland). Build verified; not yet exercised on real hardware. |
 
 ## What's deployed
 
@@ -102,6 +102,48 @@ new known-broken thing).
   Kept for now — cheap, harmless if it never fires; revisit in soak if
   it surfaces a reason to drop.
 
+### `monado-rayneo` (working — patched OpenXR runtime)
+
+- **Package**: `system/lib/xr/monado-rayneo/{package.nix,default.nix}`.
+  Overrides nixpkgs `monado` with the head SHA of MR !2737
+  (gitlab.freedesktop.org/monado/monado/-/merge_requests/2737), which
+  adds a dedicated `rayneo` driver for USB `1bbb:af50`. Stock Monado's
+  `xreal_air` builder only matches XREAL VID 0x3318 and does NOT
+  enumerate the Rayneo.
+- **Patch filter**: drops nixpkgs' `monado-cylinder-aspectRatio.patch`
+  (the MR is post-25.1 and already includes the upstream commit it
+  backports — applying it again fails with
+  "Reversed (or previously applied)").
+- **Verified**: `monado-cli probe` shows
+  `head: RayNeo Air 4 Pro (5e0050125135323833390000), view count: 2`
+  after stopping xr-driver to release HID locks.
+
+### `breezy-hyprland` (working through OpenXR FOCUSED — visual rendering needs Phase 3)
+
+- **Module**: `system/lib/xr/breezy-hyprland/default.nix`.
+  Adds `pkgs.wayvr` (26.2.1, the renamed WlxOverlay-S) and the
+  launcher to systemPackages. Sets `environment.variables.XR_RUNTIME_JSON`
+  pointing at the patched monado's `share/openxr/1/openxr_monado.json`.
+- **Launcher**: `system/lib/xr/breezy-hyprland/launcher.nix`.
+  `writeShellApplication` named `breezy-hyprland`. Stops xr-driver to
+  release HID locks, clears stale `monado.pid`, starts monado-service
+  in background with `sleep infinity |` keeping its stdin pipe alive
+  (see LEARNINGS.md for the full epoll-on-stdin / pipe-EOF / env-var
+  story), waits for the OpenXR socket, then `exec wayvr --openxr --show`.
+  EXIT trap kills monado, reaps the sleep, restarts xr-driver.
+- **Verified through OpenXR FOCUSED**: WayVR connects to Monado, finds
+  the Rayneo as the head device, walks IDLE → READY → SYNCHRONIZED →
+  VISIBLE → FOCUSED with IPD = 63mm, GPU screen capture inits, UI text
+  atlas drawn.
+- **NOT yet correct visually**: Monado falls back to Wayland-windowed
+  mode (`Found no connectors available for direct mode`) because
+  Hyprland holds the SmartGlasses DRM connector. The 3840x1080 SBS
+  Wayland surface lands wrongly; user sees half-rendered + rainbow
+  bars; Hyprland watchdog flags it ("Application Not Responding"
+  popup). **Phase 3 fix** (in `plans/03-...`): launcher will
+  `hyprctl keyword monitor "desc:SmartGlasses,disable"` before
+  monado-service start, restore in cleanup trap.
+
 ### Update flow improvements (working)
 
 - `update.sh` now appends `hyprctl reload` after a successful rebuild on
@@ -114,9 +156,10 @@ new known-broken thing).
 
 | Thing | Reason | Where to look next |
 |---|---|---|
-| World-locked surfaces in the GNOME-Breezy session | Upstream productivity-tier license required (see below). Driver runs and connects, extension loads — but the SHM pose stream is gated. | Either purchase a tier from https://breezy-desktop.com/ (license refreshes automatically, `tiers` field in `~/.local/state/xr_driver/<hwid>_license.json` populates), or fall back to `output_mode=mouse` (Path 4 — glasses-as-cursor). |
-| Hot-switch between Hyprland and GNOME-Breezy without logout | No clean way without major re-architecture | Soak first. Revisit only if the logout boundary breaks UX badly enough. |
-| 3-screen preset | Upstream gschema has no virtual-display-count key | Upstream feature request, or tolerate 2-screen. |
+| World-locked surfaces in the GNOME-Breezy session | Upstream productivity-tier license required (see below). Driver runs and connects, extension loads — but the SHM pose stream is gated. | Open-source path is now `breezy-hyprland` via Monado+WayVR (see `plans/03-...`); GNOME-Breezy stays as a fallback if anyone ever buys a tier. |
+| Visual rendering on the glasses via `breezy-hyprland` | Monado in Wayland-windowed mode because Hyprland holds the DRM connector. SBS-packed surface lands wrongly. | Phase 3 of `plans/03-hyprland-breezy-2026-05-06.md` — launcher will toggle `hyprctl keyword monitor "desc:SmartGlasses,disable"` to release the connector, then re-enable on exit. |
+| Hot-switch between Hyprland and GNOME-Breezy without logout | No clean way without major re-architecture | Defer indefinitely; the open-source Hyprland path makes the GNOME session less critical. |
+| 3-screen preset (GNOME-Breezy only) | Upstream gschema has no virtual-display-count key | Upstream feature request, or tolerate 2-screen. Not relevant to the new Monado+WayVR path. |
 | `wifite2` | Commented out in jorge + eksno program lists; nixpkgs-unstable wireshark hash mismatch | Re-enable when upstream fixes wireshark-cli source hash |
 
 ### Productivity-tier license gate
