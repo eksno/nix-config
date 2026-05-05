@@ -92,18 +92,19 @@ writeShellApplication {
     # discovers the extension under share/gnome-shell/extensions/.
     export XDG_DATA_DIRS="${breezyGnome}/share''${XDG_DATA_DIRS:+:''${XDG_DATA_DIRS}}"
 
-    # --- Isolated dconf profile ---
-    # `user-db:breezy-sideview` resolves to ~/.config/dconf/breezy-sideview,
-    # so the host user's primary `~/.config/dconf/user` stays untouched.
-    profile="''${runtime_dir}/dconf-profile"
-    printf 'user-db:breezy-sideview\n' > "''${profile}"
-    export DCONF_PROFILE="''${profile}"
-
     # `dconf write` bypasses the gsettings schema-lookup machinery, which
     # gets fragile when the host (Hyprland, no GNOME) doesn't have the
     # gnome-shell / breezy gschemas in any standard XDG_DATA_DIRS path.
     # The nested shell still loads the schemas itself for type validation
     # at read time, so values written here remain semantically correct.
+    #
+    # Note: writes go to the host user's default dconf db. We tried an
+    # isolated DCONF_PROFILE pointing at a path-style profile, but dconf
+    # then computes an empty dbname for the dconf-service object_path and
+    # aborts (`g_dbus_connection_call_sync_internal: assertion
+    # 'object_path != NULL'`). Acceptable on a Hyprland-only host —
+    # `org.gnome.shell.enabled-extensions` is unused outside a real GNOME
+    # session. Revisit for hosts that boot both Hyprland and GNOME.
     dconf write /org/gnome/shell/enabled-extensions "['breezydesktop@xronlinux.com']"
     case "''${preset}" in
       2-screen)
