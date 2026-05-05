@@ -14,7 +14,7 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 2. Searched `git log --all --grep=mirror` and FIXES.md — found prior commits `b41b21d`, `9056a37`, `1788ef5` from 2026-03 that solved the same problem by **flipping the direction**.
 3. Confirmed flip is the only fix: external is the lower-res panel, so making it the source means the framebuffer is rendered at its native res — sharp and correct AR on the external. Laptop accepts the 16:9 framebuffer stretched into its 16:10 panel as the unavoidable trade.
 **Fix:** Made `HDMI-A-1, 1920x1080@119.98, 0x0, 1` the source and set `eDP-1, ..., mirror, HDMI-A-1`. Existing glasses rule already mirrors HDMI-A-1, so the chain stays coherent.
-**Commit:** _pending_
+**Commit:** `e241ad1`
 
 ## 2026-05-05 — nixpkgs-wireshark-source-hash-mismatch-recurring
 
