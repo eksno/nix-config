@@ -88,6 +88,77 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
    **Fix:** Rewrote the capture tail in `screenshot-region.sh` to stage through tempfiles instead of a pipeline, with `set -uo pipefail` (dropped `-e`) and explicit `die` / `notify-send` on every nonzero rc or empty output. Also made silent-abort paths (slurp cancel, zero-size region) exit `0` without a notification, and every real failure (output-unknown, scale-missing, wayshot/magick/wl-copy errors) now raises a notify-send so the user sees it next time instead of silently falling back to whatever was on the clipboard before.
 **Commit:** `98d031a`
 
+## 2026-05-03 — waybar-network-signal-stuck-on-ewma
+
+**Symptom:** Waybar's wifi `{signaldBm}` placeholder displayed a value (e.g. `-52 dBm`) that never moved, even with `interval: 1` and a hard waybar restart. `iw dev wlo1 link` reported a different, slightly fluctuating value (`-58` ↔ `-60`) at the same moments.
+**Affected:** verse/eksno, `dotfiles/default/waybar/config` (network module), `dotfiles/default/waybar/scripts/network.sh` (new).
+**Root cause:** Waybar's built-in network module reads `NL80211_STA_INFO_SIGNAL_AVG` (or beacon-signal-avg), not `NL80211_STA_INFO_SIGNAL`. That AVG is an EWMA computed by the kernel/driver over the lifetime of the connection. After ~70 minutes of association each new sample contributes a vanishing fraction, so the value freezes for all practical purposes — the bar looked broken but was reporting exactly what the kernel handed it.
+**Investigation:**
+1. Suspected SIGUSR2 wasn't re-arming the interval timer. Hard-restarted waybar; no change. Ruled out reload semantics.
+2. Sampled `iw dev wlo1 link` once per second — value held at `-58` for 14s, drifted to `-57` once. Concluded WiFi RSSI on a stationary laptop genuinely is mostly flat. Premature "this is fine" answer to user.
+3. User pushed back: waybar showed `-52` while `iw` showed `-58`. That's a 6 dBm gap, not just smoothing — different *source*.
+4. `iw dev wlo1 station dump` exposes both `signal:` (instant, with min/max bracket) and `signal avg:` plus `beacon signal avg:`. The AVG values matched waybar's reading; instant matched `iw link`. Confirmed waybar reads the AVG field.
+**Fix:** Added `dotfiles/default/waybar/scripts/network.sh` — continuous-JSON custom module that shells out to `iw dev <iface> link` every 1s and emits `{signal} dBm` from the instantaneous field. Replaced the built-in `network` module with `custom/network` in waybar config. Tooltip now shows SSID, signal, freq, and TX bitrate (more useful than the old empty tooltip anyway).
+**Commit:** `6f40c3d`
+
+## 2026-05-02 — hyprland-layerrule-syntax-changed-0.54
+
+**Symptom:** Adding `layerrule = noanim, tofi` to disable tofi's fade-in animation produced `Config error … invalid field noanim: missing a value` on `hyprctl reload`. Same shape for `blur, tofi` and every other rule keyword tested — it wasn't the effect name, it was the syntax itself.
+**Affected:** verse/eksno (Hyprland 0.54.3), `dotfiles/default/hypr/shared/utility/layerrules.conf`.
+**Root cause:** Hyprland 0.54 rewrote how `layerrule` is parsed. `handleLayerrule` in `src/config/ConfigManager.cpp:3024` now splits each comma-separated entry on the first **space** into a `key value` pair, with `match:<prop>` distinguishing matchers from effects. The old single-rule `layerrule = RULE, NAMESPACE` form was removed without a back-compat shim — supplying just `noanim` (no space, no value) trips the very first guard and returns the misleading "missing a value" error. Independently, the effect identifiers were renamed to snake_case (`no_anim`, `blur_popups`, `ignore_alpha`, `dim_around` — see `src/desktop/rule/layerRule/LayerRuleEffectContainer.cpp`).
+**Investigation:**
+1. `hyprctl configerrors` was empty initially, but `hyprctl reload config-only` re-parses and prints fresh errors. The empty output earlier was misleading because errors are only re-emitted on reload.
+2. Tried four variants via `hyprctl keyword layerrule …` — comma vs no-comma, `namespace:tofi`, regex `^(tofi)$` — all returned the same "invalid field NOANIM: missing a value." Switched to other rules (`blur, tofi`, `ignorezero, tofi`) — same error. That ruled out tofi/namespace and pointed at the keyword parser itself.
+3. Considered the new special-category block form (`layerrule NAME { match:namespace = …; no_anim = 1 }`) since `addSpecialCategory("layerrule", {.key = "name"})` is registered. Wrote it that way; got `config option <layerrule tofi-instant:match:namespace> does not exist` on every sub-key. Looks like `addSpecialConfigValue` for the match/effect keys runs in `reloadRuleConfigs()` but the parser still doesn't expose them through the block form in 0.54.3 — at least not in a way that worked here. Abandoned the block route.
+4. Read `handleLayerrule` directly. The parser splits each comma-entry on the first space; `match:` prefix means matcher, otherwise it's an effect; the rest of the string after the space is the value. That's the active code path, not the block form.
+**Fix:** Rewrote `layerrules.conf` as `layerrule = match:namespace ^(tofi)$, no_anim 1`. `hyprctl reload config-only` followed by `hyprctl configerrors` now returns empty, and tofi's layer surface skips the global `animation = fade, 1, 10, default` (1000 ms) — the perceived "tofi takes a second to open" lag is gone.
+**Commit:** `1707a3a`
+
+**Follow-up (362279e):** Syntax was correct but tofi still faded in/out. Tofi's layer-shell namespace is hardcoded as `"launcher"` in `src/main.c` (`zwlr_layer_shell_v1_get_layer_surface(..., "launcher")`), not `"tofi"` — so `match:namespace ^(tofi)$` never matched. Changed the regex to `^(launcher)$`. Lesson for future layer rules: the `app_id`/process name is *not* the layer namespace — always check the upstream source for the literal string passed when creating the layer surface, or `hyprctl layers` while the surface is alive.
+
+## 2026-04-25 — builtin-audio-disappeared-wireplumber-profile-off
+
+**Symptom:** Built-in laptop speakers and mic vanished from the audio menu. Only the USB Hollyland wireless microphone and (when paired) Bluetooth headset showed up. PipeWire fallback "Dummy Output" was the only sink. Hardware was untouched.
+**Affected:** verse/eksno (ASUS Zenbook UX3405MA Meteor Lake), runtime WirePlumber state in `~/.local/state/wireplumber/{default-profile,default-routes,default-nodes}`. No nix-config files changed.
+**Root cause:** WirePlumber had the `alsa_card.pci-0000_00_1f.3-platform-skl_hda_dsp_generic` card sitting on profile `off` and refused to switch. The only `HiFi` profile the card currently enumerates is named `HiFi (HDMI1, HDMI2, HDMI3, Headphones, Mic1, Mic2)` and was reporting `available=no`, because UCM gates that profile on Headphones-jack-detect and nothing was plugged in. The saved `default-routes` referenced a *different* profile name with `…Speaker)` instead of `…Headphones)` — proof the SOF/UCM topology profile naming changed under a recent unstable bump (kernel 7.0.1, NixOS 26.05 unstable). The previously-elected profile name no longer existed, the replacement was unavailable, so WP picked `off`.
+**Investigation:**
+1. `fastfetch` confirmed verse/eksno, kernel 7.0.1. `wpctl status` showed device 44 (Meteor Lake-P HD Audio Controller) listed under Devices but exposing zero Sinks, only "Dummy Output" — so PipeWire saw the card but had no endpoints for it. Active source was the Hollyland USB mic only.
+2. Ruled out kernel/firmware: `journalctl -k -b 0 | grep -iE "sof|hda"` showed `sof-audio-pci-intel-mtl` booting firmware 2.14.1.1, ALC294 codec attaching, both CS35L41 smart amps binding with calibrated DSP firmware, topology `intel/sof-ipc4-tplg/sof-hda-generic-2ch.tplg` loading, card0 `sofhdadsp` created with Mic/Headphone/HDMI inputs. ALSA layer was healthy. `cat /proc/asound/cards` confirmed card0 present.
+3. `pw-dump` for device 44 → `params.Profile` = `off`, `EnumProfile` listed exactly one HiFi profile and it was `available=no`. That answered "why no sinks": no profile, no nodes.
+4. `cat ~/.local/state/wireplumber/default-profile` named the HiFi profile correctly, but `default-routes` had history under a *different* profile name (`…Speaker)` vs `…Headphones)`) — meaning the topology had recently changed names underneath stable user state.
+5. Considered: clearing all WP state files. Rejected as first step: too blunt and would also nuke per-app stream-properties, BT pairings' route prefs, etc. Tried the surgical path first.
+**Fix:** `wpctl set-profile 44 1` forced the only HiFi profile active despite `available=no`. That immediately materialized 4 sinks (HDMI×3 + Headphones) and 2 internal mic sources. `systemctl --user restart wireplumber` then re-elected profiles cleanly — and on this pass the card actually came up with the *other* profile, `HiFi (…Speaker)`, exposing a true Speaker sink (priority-elected as default). Bumped volume from the saved 0.0 with `wpctl set-volume <id> 0.6` and unmuted. No code changes; no rebuild needed; survives reboot because the corrected profile/route is now persisted in `default-{profile,routes,nodes}`.
+**Commit:** `639f4dd` (FIXES.md entry only — runtime state fix, no nix-config change)
+
+## 2026-04-25 — tmux-restore-mosh-script-not-symlinked
+
+**Symptom:** `~/.config/tmux/scripts/restore-mosh.sh` not found; tmux-resurrect couldn't restore mosh-client panes after the dotfiles activation-script migration.
+**Affected:** verse/eksno, `system/lib/dotfiles.nix:73`, references from `dotfiles/default/tmux/tmux.conf:70` (`@resurrect-processes`).
+**Root cause:** The 2026-04-19 migration from `symlink.sh` to `system/lib/dotfiles.nix` switched tmux from a directory symlink to file-level symlinks (because TPM writes into `plugins/`). The new block only linked `tmux.conf` and `tmux-nerd-font-window-name.yml`, dropping the `scripts/` subdirectory. `restore-mosh.sh` lived in the repo but was never deployed to `~/.config/tmux/`, so resurrect's exec path resolved to nothing.
+**Investigation:**
+1. `ls ~/.config/tmux/` → only `tmux.conf` + yml symlinks + `plugins/`. No `scripts/`. Repo path `dotfiles/default/tmux/scripts/restore-mosh.sh` exists and is executable, so the file isn't lost — just unlinked.
+2. Read `system/lib/dotfiles.nix` tmux block → confirmed the activation script only `ln -sf`s the two known files. No glob, no scripts dir.
+3. Considered switching tmux back to a full directory symlink. Rejected: TPM still needs to write into `plugins/`, which is the whole reason file-level symlinks were chosen. Cleanest fix is one extra `ln -sfn` for `scripts/` since it's a read-only dir of executables.
+**Fix:** Added `ln -sfn "$_src/scripts" "$cfg/tmux/scripts"` to the tmux block in `system/lib/dotfiles.nix`. After `./update.sh`, `~/.config/tmux/scripts → nix-config/dotfiles/default/tmux/scripts` and resurrect can find `restore-mosh.sh`.
+**Commit:** `<pending>`
+
+## 2026-04-25 — norwegian-binds-ydotool-unicode-dropped
+
+**Symptom:** After the 2026-04-19 swap from `wtype` to `ydotool type`, the `ALT+a/o/e` binds for å/ø/æ stopped working *everywhere* — not just Electron. The binds fired (Hyprland logged the exec, `ydotool type -- å` exited 0), but no character appeared in any focused window.
+**Affected:** verse/eksno, `dotfiles/default/hypr/users/eksno/default/norwegian.conf`, `dotfiles/default/hypr/users/eksno/default/norwegian-type.sh` (new), `system/users/eksno/programs/default.nix`.
+**Root cause:** `ydotool type` writes raw keycodes through `/dev/uinput`; the kernel then maps them through the active xkb layout. On a US layout, å/ø/æ have no native keycode. ydotool 1.0.4 falls back to GTK-style Ctrl+Shift+U `<hex>` Enter unicode entry, which only works when an input-method daemon (IBus / fcitx) is running. No IM is configured on this box, so the unicode-entry sequence is consumed as raw key chords with no effect — silently dropping the character in every app, not just Electron. The 2026-04-19 entry flagged this exact "open risk not yet verified" but the fix shipped anyway.
+**Investigation:**
+1. Verified the plumbing: `ydotoold.service` active, socket `/run/ydotoold/socket` (mode 0660, group `ydotool`), eksno in the `ydotool` group, `YDOTOOL_SOCKET` present in Hyprland's `/proc/$pid/environ`. So the daemon path is fine — the issue is what ydotool emits, not whether it reaches the kernel.
+2. `ydotool type -- å` from a shell exited 0 but nothing showed up when focused on a kitty window. Combined with the 2026-04-19 note, that points at unicode handling in ydotool itself, not at permissions or layout fallback.
+3. Considered installing fcitx5 + the unicode-IM module to make ydotool's Ctrl+Shift+U fallback succeed. Rejected: huge surface area (full IM stack, autostart, env wiring) for typing six characters.
+4. Settled on a class-aware split: keep `wtype` for native Wayland surfaces (terminals, Zen, GTK, Qt) where it was always working, and use `wl-copy <char>` + `ydotool key Ctrl+V` only for Electron/Chromium clients. wtype writes via `virtual_keyboard_unstable_v1` which understands unicode strings directly, so it handles å/ø/æ fine wherever the protocol is honored. Old clipboard contents are restored ~200 ms after paste so the user's clipboard isn't permanently clobbered.
+**Fix:** New script `dotfiles/default/hypr/users/eksno/default/norwegian-type.sh` branches on `hyprctl activewindow` class. `norwegian.conf` rewritten to call the script. Re-added `wtype` to `system/users/eksno/programs/default.nix` (it was dropped in the 2026-04-19 fix). `ydotool` stays for the Ctrl+V keystroke; Electron path uses both. Requires rebuild + Hyprland reload to pick up wtype and the new bind targets.
+**Commit:** `32a8207`
+
+**Follow-up (4a153e7):** Initial Electron path only worked when ALT was tap-released before the bind fired. Holding ALT while pressing a/o/e turned the synthesized paste into Ctrl+**Alt**+V, which Discord ignores. Script now injects release events for both Alts (56, 100) and both Shifts (42, 54) before sending Ctrl+V (29:1 47:1 47:0 29:0). The kernel/uinput state then matches what the paste keystroke needs even while the user keeps the modifier physically held. wtype path is unaffected — no synthesized chord, no modifier collision.
+
+**Known limitation (4a153e7, unresolved):** The injected modifier-release isn't always enough — if ALT is held when the bind fires in an Electron app, Discord still occasionally treats the synthesized chord as Ctrl+Alt+V and drops it. Best theory: Hyprland keeps ALT in its xkb modifier mask for the duration of the bind dispatch and forwards that mask to the focused client alongside the injected key events, so Discord sees ALT-flagged Ctrl+V even though uinput says ALT is up. Tap-and-release ALT before pressing a/o/e is the practical workaround. Possible deeper fixes if this becomes annoying: (a) `sleep 0.05` between the modifier-release ydotool call and the Ctrl+V call to let Hyprland's modifier mask catch up; (b) move the bind to `bindr` (fires on key release) so the user's ALT is naturally lifting; (c) abandon the paste path entirely in favor of fcitx5/IBus for unicode entry. None deemed worth it for six binds.
+
 ## 2026-04-19 — norwegian-binds-wtype-electron-chromium
 
 **Symptom:** `ALT+a/o/e` Hyprland binds (å/ø/æ via `wtype`) worked in Zen (Firefox) and native Wayland apps but silently did nothing in Discord, Beeper, Chrome — i.e. any Electron/Chromium client. Zen was the outlier, not the Electron apps.

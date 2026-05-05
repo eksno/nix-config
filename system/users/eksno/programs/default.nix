@@ -144,6 +144,8 @@
     tofi # minimalist app launcher
     grim # screenshot utility
     slurp # region selection
+    wtype # virtual_keyboard_unstable_v1 typer; used for non-Electron norwegian binds
+    xclicker # GUI auto-clicker (X11/XWayland; native Wayland windows aren't clickable)
     age # file encryption, used by secure-askpass for sudo password storage
     awww # wallpaper engine (formerly swww)
     mpvpaper # wallpaper video engine / possibly can remove this

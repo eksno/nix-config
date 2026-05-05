@@ -394,7 +394,7 @@ let
       fi
     }
 
-    # Apply all settings for a specific stretch level (0-10).
+    # Apply all settings for a specific stretch level (0-9).
     # Self-contained: sets ALL levers to absolute values for that level.
     # Does NOT set brightness — caller handles that (calibrate vs stretch differ).
     # P-core hotplug: offline P-cores to eliminate leakage current (~1-3W savings)
@@ -420,7 +420,7 @@ let
 
     apply_round() {
       local round=$1
-      local pct=$((round * 10))
+      local pct=$((round * 100 / 9))
 
       # Bring all cores online first so freq/governor writes hit every core
       online_all_cores
@@ -659,22 +659,22 @@ let
 
       apply_round "$level"
 
-      echo -e "''${CYAN}Applied L$level ($((level * 10))%)''${RESET}"
+      echo -e "''${CYAN}Applied L$level ($((level * 100 / 9))%)''${RESET}"
 
       if [ "$level" -ge 9 ]; then
         recommend_externals
       fi
     }
 
-    # ── Calibrate: benchmark all 11 levels under full CPU load ──
+    # ── Calibrate: benchmark all 10 levels under full CPU load ──
     run_calibrate() {
       if [ "$(bat_status)" != "Discharging" ]; then
         echo -e "''${YELLOW}Unplug charger before calibrating — AC power skews measurements.''${RESET}"
         return 1
       fi
 
-      echo -e "''${BOLD}Calibrating power levels under full CPU load (~4 min)...''${RESET}"
-      echo -e "  ''${DIM}11 levels x 20s each. Do not interrupt.''${RESET}"
+      echo -e "''${BOLD}Calibrating power levels under full CPU load (~3 min)...''${RESET}"
+      echo -e "  ''${DIM}10 levels x 20s each. Do not interrupt.''${RESET}"
       echo ""
 
       save_state
@@ -688,8 +688,8 @@ let
 
       local cal_results=""
 
-      for round in $(seq 0 10); do
-        local pct=$((round * 10))
+      for round in $(seq 0 9); do
+        local pct=$((round * 100 / 9))
 
         apply_round "$round"
 
@@ -726,7 +726,7 @@ let
       adjusted=$(echo "$cal_results" | ${pkgs.gawk}/bin/awk -F: '/^[0-9]/ {
         # Cumulative idle-only discrete levers per round (~0.2W each):
         # R1:+EPP  R2:+gov,ASPM  R3:+EPP,profile  R4:+SLPC  R5:+ASPM  R7:+EPP
-        split("0,1,3,5,6,7,7,8,8,8,8", lc, ",")
+        split("0,1,3,5,6,7,7,8,8,8", lc, ",")
         raw = $2 - lc[$1 + 1] * 0.2
         if (!started) { adj = raw; started = 1 }
         else {
@@ -768,7 +768,7 @@ let
         echo ""
         echo "    power-mode calibrate"
         echo ""
-        echo -e "  This benchmarks power draw at each level under load (~4 min)."
+        echo -e "  This benchmarks power draw at each level under load (~3 min)."
         return 1
       fi
 
@@ -802,7 +802,7 @@ let
         echo -e "  ''${DIM}No level meets budget under load — applying maximum (R9)''${RESET}"
         apply_round 9
       else
-        echo -e "  Applying level $best_round ($((best_round * 10))%) — calibrated: ''${best_watts}W under load"
+        echo -e "  Applying level $best_round ($((best_round * 100 / 9))%) — calibrated: ''${best_watts}W under load"
         apply_round "$best_round"
       fi
 
@@ -851,15 +851,15 @@ let
       echo "    power-mode status"
       echo ""
       echo -e "  ''${BOLD}Levels (0-9):''${RESET}"
-      echo "    0  performance   Full speed, turbo on, 28W"
-      echo "    2  balanced      Moderate savings, turbo on, 20W"
-      echo "    4  powersave     Turbo off, 10W"
-      echo "    8                P-cores offline, EPP max savings"
-      echo "    9                Maximum usable power saving"
-      echo "    1-9              Any level for fine-grained control"
+      echo "    0    Full speed, turbo on, 28W"
+      echo "    2    Moderate savings, turbo on, 20W"
+      echo "    4    Turbo off, 10W"
+      echo "    8    P-cores offline, EPP max savings"
+      echo "    9    Maximum power saving"
+      echo "    1-9  Any level for fine-grained control"
       echo ""
       echo -e "  ''${BOLD}Stretch mode:''${RESET}"
-      echo "    calibrate         Benchmark all levels under load (~4 min, run once)"
+      echo "    calibrate         Benchmark all levels under load (~3 min, run once)"
       echo "    stretch <hours>   Apply optimal level to last <hours>"
       echo ""
       echo -e "  ''${BOLD}Battery health:''${RESET}"
@@ -869,7 +869,7 @@ let
       echo -e "  ''${BOLD}Examples:''${RESET}"
       echo "    power-mode calibrate"
       echo "    power-mode stretch 10"
-      echo "    power-mode powersave"
+      echo "    power-mode 4"
       echo "    power-mode charge-limit 80"
       echo "    power-mode status"
       echo ""
@@ -883,11 +883,7 @@ let
     fi
 
     case "''${1:-}" in
-      performance) apply_level 0;  show_status settle ;;
-      balanced)    apply_level 2;  show_status settle ;;
-      powersave)   apply_level 4;  show_status settle ;;
-      emergency)   apply_level 10; show_status settle ;;
-      [0-9]|10)    apply_level "$1"; show_status settle ;;
+      [0-9])       apply_level "$1"; show_status settle ;;
       calibrate) run_calibrate ;;
       stretch)
         if [ -z "''${2:-}" ]; then

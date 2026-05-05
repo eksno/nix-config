@@ -8,3 +8,7 @@ padding-top = 30%
 result-spacing = 25
 num-results = 5
 background-color = #000A
+
+# Performance — see https://github.com/philj56/tofi#performance
+hint-font = false
+late-keyboard-init = true

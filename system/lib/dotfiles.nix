@@ -72,6 +72,7 @@ in
         ${resolve "tmux"}
         ln -sf "$_src/tmux.conf" "$cfg/tmux/tmux.conf"
         ln -sf "$_src/tmux-nerd-font-window-name.yml" "$cfg/tmux/tmux-nerd-font-window-name.yml"
+        ln -sfn "$_src/scripts" "$cfg/tmux/scripts"
         # Bootstrap TPM if missing
         if [ ! -d "$cfg/tmux/plugins/tpm" ]; then
           ${pkgs.git}/bin/git clone --depth 1 \

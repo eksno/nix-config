@@ -1,16 +1,15 @@
 {
   "layer": "top",
   "modules-left": [
+    "clock",
     "hyprland/workspaces"
   ],
-  "modules-center": [
-    "clock"
-  ],
+  "modules-center": [],
   "modules-right": [
     "backlight",
     "pulseaudio",
-    "bluetooth",
-    "network",
+    "custom/bluetooth",
+    "custom/network",
     "custom/battery"
   ],
   "hyprland/workspaces": {
@@ -23,7 +22,7 @@
     }
   },
   "clock": {
-    "format": "<span color='#89b4fa'> </span>{:%Y-%m-%d %H:%M:%S (%Z)}",
+    "format": "{:%Y-%m-%d %H:%M:%S (%Z)}",
     "interval": 1
   },
   "backlight": {
@@ -66,20 +65,16 @@
     "on-scroll-up": "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-",
     "on-scroll-down": "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+"
   },
-  "bluetooth": {
-    "format": "<span color='#74c7ec'></span> {status}",
-    "format-disabled": "",
-    "format-connected": "<span color='#74c7ec'></span> {num_connections}",
-    "tooltip-format": "{device_enumerate}",
-    "tooltip-format-enumerate-connected": "{device_alias}   {device_address}"
+  "custom/bluetooth": {
+    "exec": "~/.config/waybar/scripts/bluetooth.sh",
+    "return-type": "json",
+    "tooltip": true,
+    "on-click": "kitty --title bluetuith bluetuith"
   },
-  "network": {
-    "interface": "wlo1",
-    "format": "{ifname}",
-    "format-wifi": "<span color='#94e2d5'> </span>{essid}",
-    "format-ethernet": "{ipaddr}/{cidr} ",
-    "format-disconnected": "<span color='#94e2d5'>󰖪 </span>No Network",
-    "tooltip": false,
+  "custom/network": {
+    "exec": "~/.config/waybar/scripts/network.sh wlo1",
+    "return-type": "json",
+    "tooltip": true,
     "on-click": "kitty --title nmtui nmtui"
   },
   "custom/battery": {
