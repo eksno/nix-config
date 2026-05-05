@@ -11,7 +11,7 @@ new known-broken thing).
 
 | Host | User | Status |
 |---|---|---|
-| `lewis` | `jorge` | xr-driver + breezy-gnome + breezy-session + breezy-recenter + **monado-rayneo + breezy-hyprland + glasses-edid** deployed. GNOME-Breezy soak abandoned (productivity-tier paywall). Active path is `plans/03-hyprland-breezy-2026-05-06.md` — Phases 1+2 shipped, **Phase 3 (EDID non-desktop override) shipped 2026-05-06 — awaits reboot to verify wlroots advertises DP-2 for DRM lease**. |
+| `lewis` | `jorge` | xr-driver + breezy-gnome + breezy-session + breezy-recenter + **monado-rayneo + breezy-hyprland + glasses-edid (EDID override + USB ACL fix)** deployed. GNOME-Breezy soak abandoned (productivity-tier paywall). Active path is `plans/03-hyprland-breezy-2026-05-06.md` — Phases 1+2 shipped, **Phase 3 architecturally done 2026-05-06 (lease succeeds, EDID override verified, OpenXR FOCUSED with real device), but visual blocker remains: VkDisplaySurfaceKHR fails with VK_ERROR_SURFACE_LOST_KHR on the leased connector → DPMS stays Off, glasses black**. Mesa+Intel Arc + drm-lease + VK_KHR_display interop bug. |
 | `verse` | `eksno` | Same module set wired (xr/driver, xr/breezy-gnome, xr/breezy-session, xr/monado-rayneo, xr/breezy-hyprland). Build verified; not yet exercised on real hardware. |
 
 ## What's deployed
@@ -118,13 +118,21 @@ new known-broken thing).
   `head: RayNeo Air 4 Pro (5e0050125135323833390000), view count: 2`
   after stopping xr-driver to release HID locks.
 
-### `glasses-edid` (deployed — awaits reboot to verify)
+### `glasses-edid` (deployed; verified post-reboot 2026-05-06)
 
-- **Module**: `system/lib/xr/glasses-edid/default.nix`. Imports a
-  patched copy of the Rayneo EDID (Microsoft HMD VSDB inserted into
-  the CTA-861 extension; OUI 0x5C 0x12 0xCA + version 0x02 + zero
-  payload) via `hardware.firmware`, and wires
-  `boot.kernelParams = [ "drm.edid_firmware=DP-2:edid/rayneo-air4pro-glasses.bin" ]`.
+- **Module**: `system/lib/xr/glasses-edid/default.nix`. Two host-level
+  fixes:
+  1. **EDID non-desktop override** via `hardware.firmware` +
+     `boot.kernelParams = [ "drm.edid_firmware=DP-2:edid/rayneo-air4pro-glasses.bin" ]`.
+     Patched EDID inserts a Microsoft HMD VSDB into the CTA-861
+     extension; kernel parses it and sets
+     `connector.non_desktop = true`.
+  2. **USB ACL fix** via `services.udev.extraRules` setting
+     `MODE="0660", GROUP="users"` for vendor 1bbb / product af50.
+     Works around the upstream `uaccess`-tag rule's boot-time
+     race (logind not yet running when device enumerates → ACL
+     never applied → user gets EACCES on `open()` until they
+     hot-plug). See LEARNINGS.md "USB device ACL boot-race".
 - **Source artifacts** in `xr/edid/`:
   - `glasses-original.bin` — captured from `/sys/class/drm/card1-DP-2/edid`
   - `patch_glasses_edid.py` — inserts the Microsoft HMD VSDB,
@@ -132,17 +140,15 @@ new known-broken thing).
   - `glasses-nondesktop.bin` — patched output, verified with
     `edid-decode` (Microsoft VSDB recognized; DTDs preserved;
     checksum valid)
-- **Build verification**: `kernel-params` in the new generation
-  starts with `drm.edid_firmware=DP-2:edid/rayneo-air4pro-glasses.bin`;
-  the firmware blob lands at
-  `firmware/edid/rayneo-air4pro-glasses.bin.zst` (NixOS
-  zstd-compresses; kernel auto-decompresses). Decompressed bytes
-  match the patched EDID byte-for-byte.
-- **Awaits reboot to verify**: post-reboot,
-  `cat /sys/class/drm/card1-DP-2/non_desktop` should print `1`,
-  and Hyprland should drop DP-2 from the active monitor list. See
-  `plans/03-hyprland-breezy-2026-05-06.md` "Post-reboot
-  verification checklist".
+- **Verified live** (2026-05-06 after reboot):
+  - `nix run nixpkgs#drm_info` → DP-2 "non-desktop" property = 1
+  - `hyprctl monitors` → DP-2 absent (success); `monitors all` lists
+    it with `0x0@60` (no active mode) — correct for non-desktop
+  - monado log → `_lease_connector_done [/dev/dri/card1] connector
+    DP-2 (Technical Concepts Ltd SmartGlasses 0x00000011 (DP-2))
+    id: 528` — lease accepted via wp-drm-lease-v1
+  - rayneo USB driver opens device after USB ACL fix is live (and
+    before via replug); head pose flowing, IPD = 63mm
 
 ### `breezy-hyprland` (working through OpenXR FOCUSED — visual rendering needs Phase 3)
 

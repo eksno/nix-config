@@ -491,3 +491,96 @@ the monado-service log indicates the Rayneo USB stream got
 interrupted — typically from unplugging the glasses cable mid-run.
 Not a driver bug. After replug, monado-service needs a restart to
 re-open the device.
+
+## EDID override + non-desktop = wlroots advertises lease as expected
+
+The Microsoft HMD VSDB approach in `xr/edid/patch_glasses_edid.py`
+works end-to-end: at boot, kernel loads the override EDID, parses
+the Microsoft VSDB (OUI 0x5C 0x12 0xCA), sets
+`connector.non_desktop = true`. wlroots then advertises the
+connector via `wp-drm-lease-v1`. Verified on lewis 2026-05-06:
+
+- `nix run nixpkgs#drm_info` shows DP-2's "non-desktop" property = 1
+  (was 0 pre-override).
+- `/sys/class/drm/card1-DP-2/non_desktop` does NOT exist on kernel
+  7.0.3 — the property is queryable via DRM ioctl (drm_info uses
+  this) but isn't exposed as a sysfs file. Don't trust the absence
+  of the sysfs file as a signal of failure.
+- `hyprctl monitors` (without `all`) excludes DP-2; `hyprctl
+  monitors all` lists it but with no active mode (`0x0@60`) and no
+  `mirrorOf:` line. That's the success signal — Hyprland is
+  enumerating it as a known-but-not-managed output.
+- monado log on launch:
+  `INFO [_lease_connector_done] [/dev/dri/card1] connector DP-2
+  (Technical Concepts Ltd SmartGlasses 0x00000011 (DP-2)) id: 528`
+  — lease accepted via the protocol.
+
+Rollback (e.g., wanting to use the glasses as a regular external
+monitor) is removing the `glasses-edid` import in
+`system/hosts/lewis/default.nix` and rebuilding+rebooting.
+
+## USB device ACL boot-race: `uaccess` only fires when logind is up
+
+The xr-linux-driver udev rules use `TAG+="uaccess"` to grant
+per-session ACLs to whoever owns the active seat. systemd-logind
+processes the tag and sets `user:<jorge>:rw-` on the device node.
+**This only works if logind is running when the udev event fires.**
+
+For devices enumerated at boot (USB hubs, peripherals plugged in
+during POST), the kernel/udev event happens BEFORE logind starts
+its session-tracking. Result: device shows `TAGS=:uaccess:seat:`
+in udevadm but `CURRENT_TAGS=:seat:` (no uaccess), and `getfacl`
+shows no per-user ACL — only the static `MODE="0660"` root:root.
+Non-root user gets EACCES on `open()`.
+
+How to detect: `cat /dev/bus/usb/<bus>/<dev>` as user → "Permission
+denied"; `udevadm info /dev/bus/usb/<bus>/<dev>` shows uaccess in
+TAGS but missing from CURRENT_TAGS.
+
+Quick workaround: physically unplug + replug the device. The fresh
+ACTION=="add" event fires with logind already running, so the
+ACL applies.
+
+Permanent fix (`system/lib/xr/glasses-edid/default.nix`): override
+the upstream rule with `services.udev.extraRules` setting
+`MODE="0660", GROUP="users"`. Any user in `users` group gets stable
+access independent of logind state. Don't broaden to `MODE="0666"` —
+unnecessary attack surface for what's just a USB hot-plug bug.
+
+## VkDisplaySurfaceKHR fails on wlroots-leased connector (Mesa+Intel Arc)
+
+End state of Phase 3 attempt 2026-05-06: monado successfully takes
+a wp-drm-lease-v1 lease on DP-2 (confirmed by `_lease_connector_done`
+log line), then immediately on the first frame:
+
+```
+ERROR [renderer_present_swapchain_image] vk_swapchain_present: VK_ERROR_SURFACE_LOST_KHR
+ERROR [renderer_acquire_swapchain_image] comp_target_acquire: VK_ERROR_SURFACE_LOST_KHR
+```
+
+DRM state in `drm_info` confirms no scanout was set up:
+- `"DPMS"` = Off
+- `"CRTC_ID"` = 0 (no CRTC bound)
+- non-desktop=1 (correctly inherited from EDID)
+
+The OpenXR session still walks IDLE→READY→SYNCHRONIZED→VISIBLE→
+FOCUSED on the wayvr side and IPD detects (63mm), so the protocol
+plumbing is fine — but no pixels reach the connector. Glasses
+display black even after replug.
+
+This is a Mesa / Intel Arc / monado interop problem, not a
+config-fixable issue in our launcher. The likely path to a fix:
+
+1. Check whether monado is actually using `VK_EXT_acquire_drm_display`
+   on the leased FD or just opening a fresh DRM device via
+   `VK_KHR_display`. If the latter, Vulkan never sees the lease.
+2. Check Mesa support for `VK_EXT_acquire_drm_display` on
+   `vulkan-intel`/anv driver.
+3. Search monado upstream issues for "VK_ERROR_SURFACE_LOST_KHR"
+   on direct-mode-wayland with Intel hardware.
+
+Until this is fixed, Phase 3's *architectural* goal (lease works,
+EDID override works) is complete but the *visual* result is still
+black glasses. Phase 2 (Wayland-windowed, half-rainbow) was at
+least visible. Tradeoff: we have a clean architecture now and a
+narrowly-scoped Vulkan bug to chase.
