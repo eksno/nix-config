@@ -80,6 +80,41 @@ parking sideview). Do not try `gnome-shell --nested` on Hyprland again.
 
 ## XR driver — IPC contracts
 
+### Breezy_desktop SHM writer is paywalled by upstream
+
+The breezy_desktop plugin (`src/plugins/breezy_desktop.c`,
+`handle_config_line_func`) gates `bd_config->enabled` on
+`is_productivity_granted()` in addition to `external_mode=breezy_desktop`.
+`is_productivity_granted()` checks for `"productivity"` or
+`"productivity_pro"` in `state()->granted_features`, which is populated
+from the device license JSON's `tiers` field. The license is signed
+against `license_public_key.pem` baked into the driver binary.
+
+**Free-tier license (`"tiers":{}`) → SHM file is never created** even
+though the driver runs cleanly, connects to the glasses, calibrates,
+and produces `/dev/shm/xr_driver_state`. The breezy GNOME extension
+silently shows nothing (no top-bar icon) because `IPC_FILE_PATH`
+(`/dev/shm/breezy_desktop_imu`) doesn't exist to poll.
+
+Symptoms when this is the actual blocker:
+- `gnome-extensions list --enabled` includes `breezydesktop@xronlinux.com`
+- `xr_driver_state` shows `calibration_state=CALIBRATED`
+- `ls /dev/shm/` shows `xr_driver_state` and `xr_driver_control` but
+  NOT `breezy_desktop_imu`
+- `~/.local/state/xr_driver/<hwid>_license.json` has `"tiers":{}`
+- No log line in `~/.local/state/xr_driver/driver.log` mentions breezy
+  (because the plugin's open call short-circuits before any
+  `breezy_desktop:` prefixed log)
+
+Resolution paths:
+1. Buy a productivity tier from https://breezy-desktop.com/ — the
+   license auto-refreshes; restart xr-driver after purchase to pick
+   up the new tier.
+2. Fall back to glasses-as-cursor: set `output_mode=mouse` in
+   `dotfiles/default/xr_driver/config.ini`. Free, no world-lock.
+3. Fork the driver and strip the gate. Possible but maintenance-heavy
+   and likely against upstream license terms.
+
 ### `output_mode=external_only` alone does NOT enable SHM pose writes
 
 The breezy_desktop plugin (XRLinuxDriver `src/plugins/breezy_desktop.c:73`)

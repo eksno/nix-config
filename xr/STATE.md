@@ -40,10 +40,12 @@ new known-broken thing).
   - `systemctl --user is-active xr-driver` → active
   - Glasses connected: `udevadm info /dev/hidraw2` shows the device, mode
     `crw-rw----+` (uaccess) for the seat-active user
-  - With glasses + correct config: `/dev/shm/breezy_desktop_imu` exists,
-    byte 0 = `05` (DATA_LAYOUT_VERSION)
   - `/dev/shm/xr_driver_state` shows `connected_device_brand=RayNeo`,
     `calibration_state=CALIBRATED`, etc.
+  - **`/dev/shm/breezy_desktop_imu` requires a productivity-tier
+    license** — see "Productivity-tier license gate" below. Without it,
+    the breezy_desktop plugin's SHM writer never initializes and the
+    file is never created, regardless of `external_mode=breezy_desktop`.
 
 ### `breezy-gnome` (working as a build artifact + consumed by GNOME-on-Wayland session)
 
@@ -112,9 +114,43 @@ new known-broken thing).
 
 | Thing | Reason | Where to look next |
 |---|---|---|
+| World-locked surfaces in the GNOME-Breezy session | Upstream productivity-tier license required (see below). Driver runs and connects, extension loads — but the SHM pose stream is gated. | Either purchase a tier from https://breezy-desktop.com/ (license refreshes automatically, `tiers` field in `~/.local/state/xr_driver/<hwid>_license.json` populates), or fall back to `output_mode=mouse` (Path 4 — glasses-as-cursor). |
 | Hot-switch between Hyprland and GNOME-Breezy without logout | No clean way without major re-architecture | Soak first. Revisit only if the logout boundary breaks UX badly enough. |
 | 3-screen preset | Upstream gschema has no virtual-display-count key | Upstream feature request, or tolerate 2-screen. |
 | `wifite2` | Commented out in jorge + eksno program lists; nixpkgs-unstable wireshark hash mismatch | Re-enable when upstream fixes wireshark-cli source hash |
+
+### Productivity-tier license gate
+
+The breezy_desktop plugin in `XRLinuxDriver` v2.9.4
+(`src/plugins/breezy_desktop.c`) gates its SHM-writer initialization on:
+
+```c
+temp_config->enabled = list_string_contains("breezy_desktop", value)
+                    && is_productivity_granted();
+```
+
+`is_productivity_granted()` returns true only if `granted_features` from
+the device license JSON contains either `"productivity"` or
+`"productivity_pro"`. The license is stored at
+`~/.local/state/xr_driver/<8-char-hwid-prefix>_license.json` and is
+**signed** with `license_public_key.pem` baked into the driver binary —
+not bypassable by editing the JSON.
+
+When the license has `"tiers":{}` (free tier), the SHM file
+`/dev/shm/breezy_desktop_imu` is never created, the GNOME extension has
+nothing to read, no top-bar icon appears, and there is no world-lock —
+even though the driver itself runs cleanly, connects to the glasses,
+and produces `/dev/shm/xr_driver_state` correctly.
+
+This is **not a bug in our packaging or session module** — it's an
+upstream paywall. The architecture is correct end-to-end; only the
+pose-stream payload is gated. Diagnose by:
+
+```fish
+cat ~/.local/state/xr_driver/*_license.json
+# Look for: "tiers":{...}   ← non-empty means a tier is granted
+# Or:        "tiers":{}      ← free tier; world-lock will not work
+```
 
 ## Memory pointers
 

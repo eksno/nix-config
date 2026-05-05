@@ -16,7 +16,7 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 4. Manual `sudo rm /dev/shm/xr_driver_state && systemctl --user restart xr-driver` got the driver alive — but next reboot would re-trigger the same race.
 5. Considered: per-user xr-driver disabled, runtime path under `$XDG_RUNTIME_DIR` (would break the contract with the breezy extension that hardcodes `/dev/shm/...`), or refusing to start for sddm. systemd `ConditionUser=!sddm` is the cleanest — only the greeter user is excluded; jorge, eksno, etc. start normally.
 **Fix:** Added `unitConfig.ConditionUser = "!sddm";` to `system/lib/xr/driver/default.nix`.
-**Commit:** _(this commit)_
+**Commit:** `9161463`
 
 ## 2026-05-05 — gnome-breezy-session-pivot-from-nested-shell
 
