@@ -2,3 +2,6 @@
 
 # Claude scratch directory for artifacts, test outputs, debugging
 .scratch/
+
+# Ad-hoc tmp directory
+tmp/

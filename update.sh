@@ -62,6 +62,13 @@ if $do_nix; then
     nix flake update
 
     df -h /boot
+
+    # Reload Hyprland so any new keybinds / windowrules in dotfiles take
+    # effect without dropping the user back onto a stock-default layout.
+    # Skipped on hosts without Hyprland (ace, chrono).
+    if command -v hyprctl >/dev/null 2>&1 && [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
+        hyprctl reload
+    fi
 fi
 
 # ---- Proactively configure secure-askpass if missing ----
