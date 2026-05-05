@@ -1,4 +1,5 @@
 .claude/worktrees/
+.claude/scheduled_tasks.lock
 
 # Claude scratch directory for artifacts, test outputs, debugging
 .scratch/
