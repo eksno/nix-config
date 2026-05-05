@@ -86,6 +86,14 @@ writeShellApplication {
 
     echo "$$" > "''${pid_file}"
 
+    # --- Plumb schemas + extensions onto XDG_DATA_DIRS ---
+    # On a Hyprland host the host user's XDG_DATA_DIRS doesn't include the
+    # gnome-shell schemas, so `gsettings set org.gnome.shell ...` would die
+    # with "No schemas installed". Prepend gnome-shell's share/ for the
+    # schema and breezyGnome's share/ for the extension lookup. Doing this
+    # before the gsettings calls is what makes them work.
+    export XDG_DATA_DIRS="${gnome-shell}/share:${breezyGnome}/share''${XDG_DATA_DIRS:+:''${XDG_DATA_DIRS}}"
+
     # --- Isolated dconf profile ---
     # `user-db:breezy-sideview` resolves to ~/.config/dconf/breezy-sideview,
     # so the host user's primary `~/.config/dconf/user` stays untouched.
@@ -102,11 +110,6 @@ writeShellApplication {
         gsettings set com.xronlinux.BreezyDesktop widescreen-mode false
         ;;
     esac
-
-    # --- Launch nested gnome-shell ---
-    # Adding the breezy-gnome share/ to XDG_DATA_DIRS lets the nested shell
-    # discover the extension under share/gnome-shell/extensions/.
-    export XDG_DATA_DIRS="${breezyGnome}/share''${XDG_DATA_DIRS:+:''${XDG_DATA_DIRS}}"
 
     # Match Air 4 Pro native glasses res. mutter doesn't expose multi-monitor
     # specs in nested mode, so a single 1920x1080 surface is what gnome-shell
