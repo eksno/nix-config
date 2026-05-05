@@ -9,6 +9,8 @@ in
 
   # Closing the lid while docked + glasses active should not suspend the
   # session — sideview is the whole point of running headless on the
-  # external display path.
-  services.logind.lidSwitchExternalPower = "ignore";
+  # external display path. The legacy `services.logind.lidSwitchExternalPower`
+  # option was renamed to settings.Login.HandleLidSwitchExternalPower in
+  # nixpkgs unstable.
+  services.logind.settings.Login.HandleLidSwitchExternalPower = "ignore";
 }

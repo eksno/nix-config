@@ -4,6 +4,18 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-05-05 — nixpkgs-wireshark-source-hash-mismatch-recurring
+
+**Symptom:** Same `wireshark-cli-4.6.5` hash mismatch (`got: sha256-Zvrwxjp4LK2J3QnxmPxKKrU01YHQvPyp54UWzeGNCjA=`) re-appeared after the next `./update.sh` run despite the 2026-05-05 lock revert.
+**Affected:** `system/users/jorge/programs/default.nix:51`, `system/users/eksno/programs/default.nix:41`. Anything in either user's closure rebuilding against nixpkgs unstable.
+**Root cause:** `update.sh` runs `nix flake update` unconditionally (line 50), so reverting `flake.lock` is a one-shot workaround that gets undone on the next rebuild. Upstream nixpkgs hasn't shipped a fix yet.
+**Investigation:**
+1. Confirmed the failing dep chain: `wifite2 → wireshark-cli → fetched source`. Nothing else in the closure pulled `wireshark-cli`.
+2. Considered: (a) overriding the hash via overlay, (b) reverting lock + skipping `nix flake update`, (c) dropping `wifite2`. (a) is the most general but makes the closure depend on knowing the post-fix hash before upstream ships it; (b) regresses every other package; (c) is reversible with one comment.
+3. Verified `wifite2` is a wifi-auditing tool (Python wrapper around aircrack-ng/reaver) — removing it does NOT affect day-to-day NetworkManager wifi.
+**Fix:** Comment out `wifite2` in both `jorge/programs/default.nix` and `eksno/programs/default.nix` until nixpkgs ships a working `wireshark-cli` revision. Each line carries a pointer back to this entry so future-Jorge knows why it's commented.
+**Commit:** _(filled in below)_
+
 ## 2026-05-05 — nixpkgs-wireshark-source-hash-mismatch
 
 **Symptom:** `./update.sh` failed mid-build with `error: hash mismatch in fixed-output derivation '/nix/store/7sj663dx4vl5n972s0825n6c3xxsvk7d-source.drv'` (specified `sha256-U30OJ8m+L/EVLN7NrqWNl77IMaO2cnw2N5uWzLVJE30=`, got `sha256-Zvrwxjp4LK2J3QnxmPxKKrU01YHQvPyp54UWzeGNCjA=`) under `wireshark-cli-4.6.5`, blocking `wifite2-2.7.0` and the whole system closure.

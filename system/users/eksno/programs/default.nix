@@ -38,7 +38,10 @@
     curl
     libsecret
 
-    wifite2
+    # wifite2 — disabled while wireshark-cli source hash is broken upstream
+    # in nixpkgs unstable. Uncomment once nixpkgs ships a working revision.
+    # See FIXES.md "wireshark-cli source hash mismatch (recurring)".
+    # wifite2
     hashcat
     aircrack-ng
 
