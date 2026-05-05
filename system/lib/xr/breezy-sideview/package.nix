@@ -115,12 +115,13 @@ writeShellApplication {
         ;;
     esac
 
-    # Match Air 4 Pro native glasses res. mutter doesn't expose multi-monitor
-    # specs in nested mode, so a single 1920x1080 surface is what gnome-shell
-    # will drive — breezy-gnome itself wraps it into virtual-display layout.
-    export MUTTER_DEBUG_DUMMY_MODE_SPECS="1920x1080@60"
-
-    gnome-shell --nested --wayland &
+    # GNOME 49 dropped `--nested`; nested mode is auto-detected when
+    # gnome-shell is launched inside an existing Wayland session and no
+    # `--display-server`/`--headless` flag is passed. `--virtual-monitor`
+    # replaces the older MUTTER_DEBUG_DUMMY_MODE_SPECS env var. We pin
+    # 1920x1080@60 to match Air 4 Pro native res — breezy-gnome wraps the
+    # single surface into world-locked virtual displays itself.
+    gnome-shell --wayland --virtual-monitor 1920x1080@60 &
     shell_pid="$!"
     wait "''${shell_pid}"
   '';
