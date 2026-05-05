@@ -1,9 +1,12 @@
 # Hyprland-breezy via Monado + WayVR (open-source replacement)
 
 Started: 2026-05-05
-Status: Phase 1 + Phase 2 plumbing shipped; Phase 3 (DRM direct lease) is the
-        current blocker between "OpenXR session reaches FOCUSED" and "user
-        sees correct VR rendering on the glasses."
+Status: Phase 1 + Phase 2 plumbing shipped. Phase 3 (DRM direct lease)
+        replanned 2026-05-06: original `hyprctl keyword monitor disable`
+        approach proven wrong (wlroots only leases non-desktop outputs);
+        new path is EDID override to force the non-desktop bit. Launcher
+        reverted to Phase 2 baseline (Wayland-windowed, FOCUSED but
+        renders wrong) until EDID work lands.
 
 ## Why this plan
 
@@ -66,51 +69,103 @@ undefined buffer (rainbow vertical lines) on the other eye. This is
 why Jorge sees "half working, half rainbow bars" with a
 "Monado - openxr not responding" Hyprland watchdog popup.
 
-## Phase 3 — DRM direct lease (BLOCKING, next session resumes here)
+## Phase 3 — DRM direct lease (BLOCKING, replanned 2026-05-06)
 
-The architecturally-correct fix: release the glasses DRM connector
-from Hyprland before launching monado-service, so monado can take a
-direct DRM lease and render straight to the connector with no
-Wayland mirror window in the loop.
+### What we tried first (and why it doesn't work)
 
-### Concrete plan for the launcher
+The original plan was: `hyprctl keyword monitor "desc:..., disable"`
+before monado, restore in the cleanup trap. **Tested 2026-05-06 —
+this is strictly worse than doing nothing.**
 
-Add two `hyprctl keyword monitor` calls to `breezy-hyprland`:
+What actually happens:
 
-1. **Before starting monado:**
+- `desc:Technical Concepts Ltd SmartGlasses` is the right desc string.
+- `, disable` does drop the monitor (`disabled: true` in
+  `hyprctl monitors all`), and the cleanup trap restoring with
+  `, 1920x1080@120, auto, 1, mirror, HDMI-A-1` (matching the user's
+  baseline at `dotfiles/.../jorge/default/monitor.conf:10`) works
+  cleanly — monitor list comes back exactly as before.
+- BUT monado still logs `Found no connectors available for direct
+  mode`. Then it tries Wayland-windowed mode, fails to bind a
+  surface (no SmartGlasses output to bind to anymore), and exits
+  cleanly with `Server exiting: '0'` ~2s after Vulkan init.
+- WayVR then can't connect to the dead socket and bails.
+
+Root cause (see LEARNINGS.md "wlroots only advertises non-desktop
+outputs via wp-drm-lease-v1"): wlroots only exposes connectors with
+the EDID/DRM `non_desktop` property set on the lease device. Rayneo
+glasses identify as a normal monitor, so they're never advertised
+no matter how we manipulate them in Hyprland.
+
+The launcher reverted the disable — Phase 2 state (Wayland-windowed,
+reaches FOCUSED but renders wrong) is preserved as the working baseline.
+
+### Real Phase 3: EDID override to force non-desktop
+
+The clean architectural fix is to make the glasses look like a
+non-desktop output to wlroots from boot. Linux supports loading
+override EDIDs via the firmware loader.
+
+**Sketch (not yet implemented):**
+
+1. **Capture the current EDID:**
    ```
-   hyprctl keyword monitor "desc:SmartGlasses,disable"
+   cat /sys/class/drm/card1-DP-2/edid > /tmp/glasses-orig.bin
    ```
-   Drops the output from wlroots, freeing the DRM connector.
+   (or whatever connector path has the SmartGlasses EDID at next
+   plug-in; the connector is known to be DP-2 on lewis.)
 
-2. **In the EXIT trap (after monado is killed):**
+2. **Flip the non-desktop bit.** This lives in the DisplayID
+   extension block (DisplayID block tag 0x0A "Display Parameters" has
+   a feature support bit, or the more recent DisplayID Type II header
+   has a "non-desktop" flag). Easiest approach: write a small
+   Python/Rust utility that parses the EDID, adds/modifies the
+   DisplayID extension to set the non-desktop bit, recomputes the
+   checksum, writes the result.
+
+3. **Install as firmware.** NixOS has `hardware.firmware =
+   [ <derivation-with-edid> ]` or a simpler `boot.kernelParams =
+   [ "drm.edid_firmware=DP-2:edid/glasses.bin" ]`, with the file
+   placed at `/lib/firmware/edid/glasses.bin` via a derivation.
+
+4. **Verify.** After reboot:
    ```
-   hyprctl keyword monitor "desc:SmartGlasses,preferred,auto,1"
+   cat /sys/class/drm/card1-DP-2/non_desktop  # should print 1
    ```
-   Re-enables the output so the user gets their glasses back as a
-   normal Hyprland monitor when Monado quits.
+   and `hyprctl monitors all` should NOT list DP-2 in the active
+   compositor outputs (Hyprland skips non-desktop). Monado's lease
+   device should then advertise it; `monado-cli probe` and the full
+   pipeline should work without the disable workaround.
 
-The exact `desc:` string needs to be confirmed from
-`hyprctl monitors all` while glasses are plugged in — the value is
-some prefix of "Technical Concepts Ltd SmartGlasses" or similar.
+**Tradeoff:** while the override is in place, the glasses will not
+appear as a normal Hyprland monitor — they're VR-only. For Jorge's
+XR-first workflow, this is acceptable; the rare "use as regular
+external monitor" case can revert by removing the kernel param and
+rebooting.
 
-### Open questions for next session
+### Alternate paths (only if EDID override blocked)
 
-- **Does Monado's MR !2737 actually take the lease successfully?** The
-  earlier monado log already showed `Available DRM lease device:
-  /dev/dri/card1` — so the lease infrastructure works, the only
-  blocker was no available connectors. Once Hyprland releases, this
-  should "just work" — but verify.
-- **Does WayVR render both eyes correctly in direct mode?** It should;
-  Monado handles the stereo SBS packing internally and the glasses
-  receive a proper SBS signal on the connector. But empirical
-  verification needed.
-- **What does "Handsfree mode" actually look like?** WayVR's default UI
-  expects 6DoF + controllers. Need to enable Handsfree via the
-  dashboard so head-pointer cursor works for our 3DoF setup.
-- **How does the user dismiss/configure WayVR panels with no
-  keyboard/mouse?** The "Show" hotkey on the desktop side is one path;
-  WayVR also has a virtual keyboard overlay.
+- **Patch wlroots/Hyprland** to also lease manually-disabled
+  outputs. Closer to a "VR mode toggle" UX, but invasive and
+  upstream-rejected without strong rationale.
+- **Tune Wayland-windowed mode** so the SBS-packed surface lands
+  correctly on the glasses output. Requires putting the glasses in
+  their custom 3840x1080 SBS mode via HID (rayneo driver already
+  knows how) and Hyprland fullscreening monado's window on that
+  output. Complex; the EDID path is simpler.
+
+### Open questions for whichever path
+
+- Does Monado's MR !2737 take the lease successfully once it's
+  offered? Earlier logs showed `Available DRM lease device:
+  /dev/dri/card1` so the lease device side works.
+- Does WayVR render both eyes correctly in direct mode? Monado
+  should handle SBS packing internally and the glasses' built-in
+  3D mode toggle should fire when monado switches the output.
+- WayVR's Handsfree mode (3DoF + no controllers) needs enabling
+  through the dashboard — UX path TBD.
+- Without keyboard/mouse in VR, how do we configure WayVR panels?
+  Show hotkey on the desktop side; virtual keyboard overlay in VR.
 
 ## Phase 4 — Polish (after Phase 3 lands)
 

@@ -3,11 +3,16 @@
 **[`plans/03-hyprland-breezy-2026-05-06.md`](./plans/03-hyprland-breezy-2026-05-06.md)** — Open-source Hyprland breezy via Monado + WayVR.
 
 Phase 1 (Monado patched with MR !2737) and Phase 2 (WayVR + launcher)
-shipped. **Phase 3 — DRM direct lease via Hyprland monitor toggle —
-is the current blocker.** OpenXR session already reaches FOCUSED end
-to end; the visual rendering on the glasses is wrong because Monado
-is in Wayland-windowed mode (Hyprland holds the DRM connector). See
-the plan file for resumption details.
+shipped. **Phase 3 — DRM direct lease — is the current blocker, now
+replanned around an EDID override.** The original `hyprctl keyword
+monitor disable` approach was tested 2026-05-06 and proven wrong:
+wlroots only advertises connectors with the EDID `non_desktop` bit
+set on the lease device, and Hyprland inherits that. Disabling the
+monitor doesn't make it leasable — it strictly breaks monado worse
+than leaving it alone. The new path is a kernel-cmdline EDID
+override (`drm.edid_firmware=DP-2:edid/glasses.bin`) with the
+non-desktop bit flipped. See the plan file for the implementation
+sketch.
 
 ## Why this is the active path
 
@@ -26,10 +31,12 @@ SDDM-selectable as a fallback if anyone ever buys a productivity tier.
   and `external_mode=breezy_desktop` are set, AND a productivity tier
   is granted (the latter is upstream-paywalled — can't bypass without
   forking the driver).
-- **Hyprland is `lewis`'s primary compositor.** Anything that needs
-  exclusive seat or DRM connector control must coordinate with Hyprland
-  (release the connector before, restore after). See LEARNINGS.md for
-  the `hyprctl keyword monitor desc:SmartGlasses,disable` pattern.
+- **Hyprland is `lewis`'s primary compositor.** wlroots only advertises
+  outputs with the EDID `non_desktop` bit set on `wp-drm-lease-v1`.
+  Toggling the monitor in Hyprland (`disable`/`preferred`) does NOT
+  make the connector leasable. See LEARNINGS.md "wlroots only
+  advertises non-desktop outputs via wp-drm-lease-v1" for why and
+  what works instead (EDID override).
 - **Glasses cable quality matters.** A power-only USB-C cable
   enumerates the device as HID-only with no DP alt-mode. Any plan that
   needs the glasses as a *display* must validate with the right cable

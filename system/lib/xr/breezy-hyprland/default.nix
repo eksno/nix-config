@@ -19,7 +19,7 @@ let
   monadoRayneo = pkgs.callPackage ../monado-rayneo/package.nix { };
   breezyHyprland = pkgs.callPackage ./launcher.nix {
     inherit monadoRayneo;
-    inherit (pkgs) wayvr;
+    inherit (pkgs) wayvr hyprland;
   };
 in
 {

@@ -1,6 +1,7 @@
 {
   writeShellApplication,
   systemd,
+  hyprland,
   monadoRayneo,
   wayvr,
 }:
@@ -9,12 +10,22 @@
 # locks Monado needs), start monado-service in the background, wait for
 # the OpenXR socket to appear, then run WayVR in the foreground.
 #
-# On exit (Ctrl-C, glasses unplugged, wayvr crash), kill monado and
-# bring xr-driver back so the system returns to its baseline.
+# On exit (Ctrl-C, glasses unplugged, wayvr crash), SIGINT monado and
+# wait for it to release the lease, restore the Hyprland monitor as a
+# safety net, and bring xr-driver back.
+#
+# NOTE on direct DRM mode (Phase 3 status, 2026-05-06):
+#   We previously thought `hyprctl keyword monitor desc:..., disable`
+#   would release the connector for monado to take a direct DRM lease.
+#   It doesn't — wlroots only advertises NON-DESKTOP outputs via
+#   wp-drm-lease-v1, and the Rayneo EDID doesn't set that bit.
+#   See xr/LEARNINGS.md "wlroots only leases non-desktop outputs" and
+#   xr/plans/03-... Phase 3 for the EDID-override path that's needed.
 writeShellApplication {
   name = "breezy-hyprland";
   runtimeInputs = [
     systemd
+    hyprland
     monadoRayneo
     wayvr
   ];
@@ -28,10 +39,30 @@ writeShellApplication {
     # /nix/var rebuilds invalidate it correctly.
     export XR_RUNTIME_JSON="${monadoRayneo}/share/openxr/1/openxr_monado.json"
 
+    # Glasses' EDID-derived Hyprland identity. Used as a safety net in the
+    # cleanup trap — if anything ever ends up disabling the output, this
+    # restores it to the user's baseline (mirror of HDMI-A-1, matching
+    # dotfiles/.../jorge/default/monitor.conf:10). The mirror clause is a
+    # no-op when HDMI-A-1 is absent.
+    GLASSES_BASELINE="desc:Technical Concepts Ltd SmartGlasses, 1920x1080@120, auto, 1, mirror, HDMI-A-1"
+
     cleanup() {
-      [[ -n ''${MONADO_PID:-} ]] && kill "$MONADO_PID" 2>/dev/null || true
+      if [[ -n ''${MONADO_PID:-} ]]; then
+        # SIGINT, not SIGTERM/SIGKILL: monado needs to release its DRM
+        # resources and IPC socket cleanly. Abrupt teardown leaves the
+        # connector half-leased and trashes Hyprland's monitor list
+        # (saved as feedback memory after a 2026-05-05 incident).
+        kill -INT "$MONADO_PID" 2>/dev/null || true
+        for _ in $(seq 1 100); do
+          kill -0 "$MONADO_PID" 2>/dev/null || break
+          sleep 0.1
+        done
+        # Escalate only if SIGINT was ignored for 10s.
+        kill "$MONADO_PID" 2>/dev/null || true
+      fi
       # Reap the `sleep infinity` that's keeping monado's stdin open.
       pkill -P $$ -x sleep 2>/dev/null || true
+      hyprctl keyword monitor "$GLASSES_BASELINE" >/dev/null 2>&1 || true
       systemctl --user start xr-driver 2>/dev/null || true
     }
     trap cleanup EXIT INT TERM
@@ -80,6 +111,8 @@ writeShellApplication {
     fi
 
     echo "[breezy-hyprland] launching wayvr"
-    exec wayvr --openxr --show
+    # Do NOT exec — that replaces the shell process and kills the EXIT
+    # trap, leaving us no way to clean up monado/xr-driver on exit.
+    wayvr --openxr --show
   '';
 }

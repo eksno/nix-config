@@ -11,7 +11,7 @@ new known-broken thing).
 
 | Host | User | Status |
 |---|---|---|
-| `lewis` | `jorge` | xr-driver + breezy-gnome + breezy-session + breezy-recenter + **monado-rayneo + breezy-hyprland** deployed. GNOME-Breezy soak abandoned (productivity-tier paywall). Active path is `plans/03-hyprland-breezy-2026-05-06.md` — Phases 1+2 shipped (monado patched, launcher orchestrates monado+wayvr to OpenXR FOCUSED), Phase 3 (DRM direct lease) is the current blocker. |
+| `lewis` | `jorge` | xr-driver + breezy-gnome + breezy-session + breezy-recenter + **monado-rayneo + breezy-hyprland** deployed. GNOME-Breezy soak abandoned (productivity-tier paywall). Active path is `plans/03-hyprland-breezy-2026-05-06.md` — Phases 1+2 shipped (monado patched, launcher orchestrates monado+wayvr to OpenXR FOCUSED), Phase 3 replanned 2026-05-06 around EDID non-desktop override (the original `hyprctl keyword monitor disable` approach was proven wrong by direct test — wlroots only leases EDID-non-desktop outputs). |
 | `verse` | `eksno` | Same module set wired (xr/driver, xr/breezy-gnome, xr/breezy-session, xr/monado-rayneo, xr/breezy-hyprland). Build verified; not yet exercised on real hardware. |
 
 ## What's deployed
@@ -137,12 +137,22 @@ new known-broken thing).
   atlas drawn.
 - **NOT yet correct visually**: Monado falls back to Wayland-windowed
   mode (`Found no connectors available for direct mode`) because
-  Hyprland holds the SmartGlasses DRM connector. The 3840x1080 SBS
-  Wayland surface lands wrongly; user sees half-rendered + rainbow
-  bars; Hyprland watchdog flags it ("Application Not Responding"
-  popup). **Phase 3 fix** (in `plans/03-...`): launcher will
-  `hyprctl keyword monitor "desc:SmartGlasses,disable"` before
-  monado-service start, restore in cleanup trap.
+  wlroots/Hyprland only advertises EDID-non-desktop outputs via
+  `wp-drm-lease-v1`, and the Rayneo glasses identify as a regular
+  monitor. The 3840x1080 SBS Wayland surface lands wrongly; user sees
+  half-rendered + rainbow bars; Hyprland watchdog flags it
+  ("Application Not Responding" popup). **Phase 3 fix** (replanned
+  2026-05-06 in `plans/03-...`): EDID override via
+  `boot.kernelParams = [ "drm.edid_firmware=DP-2:edid/glasses.bin" ]`
+  to force the non-desktop bit, so wlroots auto-exposes the connector
+  for lease and monado picks it up. (The original
+  `hyprctl keyword monitor disable` plan was tested and proven worse
+  than no toggle at all — see LEARNINGS.md.)
+- **Launcher hygiene improvements (2026-05-06)**: cleanup trap now
+  uses SIGINT (not default SIGTERM) on monado and waits up to 10s
+  for graceful exit; `wayvr` no longer launched with `exec` (which
+  killed the trap); cleanup trap restores the SmartGlasses monitor
+  to its baseline mirror config as a safety net.
 
 ### Update flow improvements (working)
 
@@ -157,7 +167,7 @@ new known-broken thing).
 | Thing | Reason | Where to look next |
 |---|---|---|
 | World-locked surfaces in the GNOME-Breezy session | Upstream productivity-tier license required (see below). Driver runs and connects, extension loads — but the SHM pose stream is gated. | Open-source path is now `breezy-hyprland` via Monado+WayVR (see `plans/03-...`); GNOME-Breezy stays as a fallback if anyone ever buys a tier. |
-| Visual rendering on the glasses via `breezy-hyprland` | Monado in Wayland-windowed mode because Hyprland holds the DRM connector. SBS-packed surface lands wrongly. | Phase 3 of `plans/03-hyprland-breezy-2026-05-06.md` — launcher will toggle `hyprctl keyword monitor "desc:SmartGlasses,disable"` to release the connector, then re-enable on exit. |
+| Visual rendering on the glasses via `breezy-hyprland` | Monado in Wayland-windowed mode because wlroots only advertises EDID-non-desktop outputs for DRM lease, and the Rayneo glasses identify as a regular monitor. SBS-packed surface lands wrongly. | Phase 3 of `plans/03-hyprland-breezy-2026-05-06.md` — kernel-cmdline EDID override to flip the non-desktop bit, so wlroots auto-exposes the connector for lease. |
 | Hot-switch between Hyprland and GNOME-Breezy without logout | No clean way without major re-architecture | Defer indefinitely; the open-source Hyprland path makes the GNOME session less critical. |
 | 3-screen preset (GNOME-Breezy only) | Upstream gschema has no virtual-display-count key | Upstream feature request, or tolerate 2-screen. Not relevant to the new Monado+WayVR path. |
 | `wifite2` | Commented out in jorge + eksno program lists; nixpkgs-unstable wireshark hash mismatch | Re-enable when upstream fixes wireshark-cli source hash |

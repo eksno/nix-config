@@ -402,15 +402,55 @@ SBS pack) somewhere on the user's compositor. Side-effects observed:
   - SIGKILLing monado mid-frame leaves DRM state half-released —
     Hyprland can drop monitors from its list until the user replugs
 
-The architecturally-correct answer is to release the glasses connector
-from Hyprland before launching Monado. Pattern (Phase 3 work):
+## wlroots only advertises non-desktop outputs via wp-drm-lease-v1
 
-  1. `hyprctl keyword monitor "desc:SmartGlasses,disable"` — drops
-     the output from wlroots, freeing the DRM connector
-  2. Start `monado-service` — now able to take the lease for direct
-     mode
-  3. On exit (trap), re-enable:
-     `hyprctl keyword monitor "desc:SmartGlasses,preferred,auto,1"`
+**`hyprctl keyword monitor "desc:..., disable"` does NOT make the
+connector available to Monado for DRM lease.** This was the original
+Phase 3 plan; tested 2026-05-06, confirmed wrong.
+
+Mechanism: `wp-drm-lease-v1` is the Wayland protocol monado uses to
+request a DRM lease from the compositor (verified in monado source
+at `src/xrt/compositor/main/comp_window_direct_wayland.c`). The
+protocol design only has the compositor advertise outputs that have
+the **DRM `non_desktop` connector property** set — typically VR
+headsets (Index, Vive, Beyond) whose EDID flags them as non-desktop
+displays. wlroots follows the protocol literally and only exposes
+non-desktop connectors. Hyprland inherits this from wlroots and
+hasn't extended it.
+
+The Rayneo Air 4 Pro's EDID **does not set the non-desktop bit** —
+it identifies as a regular 1920x1080 monitor. Result: no matter
+what we do with `hyprctl keyword monitor` (disable, preferred,
+mirror, anything), the SmartGlasses connector is never advertised
+on the lease device, and monado always falls back to direct-Wayland
+or Wayland-windowed mode.
+
+What's worse: with `disable`, monado fails the Wayland-windowed
+fallback too (no Wayland output to bind a surface to) and exits
+within ~2 seconds of init with `Server exiting: '0'`. The result
+is **strictly worse** than not toggling the monitor — without the
+disable, monado at least reaches FOCUSED and (incorrectly) renders
+to the compositor.
+
+The 2026-05-06 launcher therefore does NOT toggle the monitor.
+Real fix paths for direct DRM lease:
+
+  1. **EDID override (cleanest):** add `drm.edid_firmware=DP-2:edid/glasses.bin`
+     to the kernel cmdline, with a copy of the glasses' EDID modified
+     to set the non-desktop bit (DisplayID block / extension bit).
+     Hyprland would then auto-expose the connector for lease and
+     monado picks it up. Tradeoff: glasses are non-desktop *all the
+     time*, even when monado isn't running (they wouldn't appear as
+     a regular Hyprland monitor for mirror/extend use). For an
+     XR-first workflow this is fine.
+  2. **Patch wlroots/Hyprland** to expose all manually-disabled
+     outputs for lease. More invasive, follows the spirit of "VR
+     mode" toggle.
+  3. **Don't use direct DRM lease at all** — find a Wayland-windowed
+     mode flow where the SBS-packed surface lands correctly on the
+     glasses output. Likely requires the glasses to be in their
+     custom 3840x1080 SBS mode (HID toggle), and Hyprland to
+     fullscreen monado's window on that output. Complexity unclear.
 
 ## OpenXR session reaches FOCUSED ≠ user sees the right thing
 
