@@ -86,13 +86,19 @@ writeShellApplication {
 
     echo "$$" > "''${pid_file}"
 
-    # --- Plumb schemas + extensions onto XDG_DATA_DIRS ---
-    # On a Hyprland host the host user's XDG_DATA_DIRS doesn't include the
-    # gnome-shell schemas, so `gsettings set org.gnome.shell ...` would die
-    # with "No schemas installed". Prepend gnome-shell's share/ for the
-    # schema and breezyGnome's share/ for the extension lookup. Doing this
-    # before the gsettings calls is what makes them work.
-    export XDG_DATA_DIRS="${gnome-shell}/share:${breezyGnome}/share''${XDG_DATA_DIRS:+:''${XDG_DATA_DIRS}}"
+    # --- Plumb schemas for our gsettings calls ---
+    # nixpkgs installs gnome-shell schemas at
+    # share/gsettings-schemas/gnome-shell-<ver>/glib-2.0/schemas/ rather
+    # than share/glib-2.0/schemas/, so XDG_DATA_DIRS alone doesn't reach
+    # them. The breezy-gnome extension's schema is even further off-path
+    # (share/gnome-shell/extensions/.../schemas/). GSETTINGS_SCHEMA_DIR
+    # takes a colon list of compiled-schema dirs and is honored directly
+    # by gsettings/dconf.
+    export GSETTINGS_SCHEMA_DIR="${gnome-shell}/share/gsettings-schemas/gnome-shell-${gnome-shell.version}/glib-2.0/schemas:${breezyGnome}/share/gnome-shell/extensions/breezydesktop@xronlinux.com/schemas"
+
+    # XDG_DATA_DIRS still needs the breezy-gnome share/ so the nested shell
+    # discovers the extension under share/gnome-shell/extensions/.
+    export XDG_DATA_DIRS="${breezyGnome}/share''${XDG_DATA_DIRS:+:''${XDG_DATA_DIRS}}"
 
     # --- Isolated dconf profile ---
     # `user-db:breezy-sideview` resolves to ~/.config/dconf/breezy-sideview,
