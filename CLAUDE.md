@@ -148,14 +148,6 @@ When you observe a captureable event (correction, durable fact, dead end worth n
 
 Do NOT read all topic files defensively — that defeats the index. Update or remove entries that go stale; the matching `MEMORY.md` line goes in the same edit. Distinguish from neighbors: `CLAUDE.md` = project rules; `memory/` = durable facts; `xr/` workbench = active subsystem state; `FIXES.md` = past incident log; global `~/.claude/.../memory/` = personal cross-project. Settled facts graduate from workbench → `memory/`.
 
-## MANDATORY: Stop-the-loop rule
-
-**If a debugging effort has tried 3+ approaches against the same root-cause hypothesis without progress, halt.** Don't try a 4th variation.
-
-Required halt action: write down the hypothesis, the 3 things tried, and what evidence would distinguish "wrong hypothesis" from "right hypothesis but wrong fix." Append to `memory/<area>-loop-history.md` (creating it if needed). Ask before continuing — surface alternative hypotheses even if they feel unlikely. A "fresh approach" within the same hypothesis (verbose flag, kill+restart, different value for same knob) still counts as the same loop. Things that DO break the loop: reproduce the failure without the suspected component; read the upstream source; find someone else's bug report with the same error.
-
-See `memory/process-stop-the-loop.md` for the full rule and `memory/xr-loop-history.md` for concrete past incidents.
-
 ## MANDATORY: Verify before recommending from memory or training data
 
 **Before recommending any specific file, function, flag, command, or package by name, verify it exists right now.** Memory and training data give you "X existed when written," not "X exists now." Use `ls`, `grep`, `--help`, or a quick `nix repl` check — these run in parallel with whatever else you're already doing and take a few hundred ms.

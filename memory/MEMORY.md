@@ -30,10 +30,8 @@
 
 ## feedback
 
-- [Stop-the-loop rule](process-stop-the-loop.md) — after 3 failed attempts at the same root-cause hypothesis, halt and ask. Don't try a 4th variation.
 - [Verify before recommending from memory](process-verify-before-recommend.md) — memory says "X existed when written," not "X exists now." Grep/read first.
 - [Don't SIGKILL DRM-grabbing processes](xr-shutdown-discipline.md) — SIGINT + wait, never SIGKILL. Killing mid-frame trashes Hyprland's monitor list.
-- [XR loop history](xr-loop-history.md) — concrete incidents where I went in circles in xr/, with the lesson from each. Read before starting any xr/ debugging session.
 
 ## reference
 
