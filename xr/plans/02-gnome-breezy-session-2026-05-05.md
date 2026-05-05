@@ -1,6 +1,6 @@
 # Plan: GNOME-Breezy parallel session (lewis, then verse)
 
-_Archived 2026-05-05. Implementation landed in commits c9fbff6..(this one).
+_Archived 2026-05-05. Implementation landed in commits c9fbff6..95a00d8.
 Soak (Step 7) is ongoing — see STATE.md "host status" for current state._
 
 ## Context
@@ -42,7 +42,7 @@ daily-drives one week."
 | 3 — seed dconf | `acced9e` | `programs.dconf.profiles.user.databases` sets `enabled-extensions=['breezydesktop@xronlinux.com']` + four preset keys (display-distance, display-size, curved-display, widescreen-mode). All schema-verified against breezy-gnome v2.9.12. |
 | 4 — recenter CLI + GNOME custom-keybinding | `bc8b2eb` | New `system/lib/xr/breezy-recenter` (writeShellApplication). Hyprland Super+R → CLI; GNOME Super+R via dconf custom-keybinding. Old shell script deleted. |
 | 5 — wire into eksno (verse) | `d380d38` | Added xr/driver, xr/breezy-gnome, xr/breezy-session imports. Verse toplevel builds. |
-| 6 — drop gnome48 input + doc refresh | _(this commit)_ | Removed `nixpkgs-gnome48` flake input + relocked. STATE/LEARNINGS/PLAN/FIXES updated. |
+| 6 — drop gnome48 input + doc refresh | `95a00d8` | Removed `nixpkgs-gnome48` flake input + relocked. STATE/LEARNINGS/PLAN/FIXES updated. |
 
 Step 7 — soak (no code) — runs in real life, not in commits.
 
