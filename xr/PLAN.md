@@ -1,16 +1,24 @@
 # Active plan
 
-**[`plans/03-hyprland-breezy-2026-05-06.md`](./plans/03-hyprland-breezy-2026-05-06.md)** — Open-source Hyprland breezy via Monado + WayVR.
+**[`plans/04-phase-3-5-decision-2026-05-06.md`](./plans/04-phase-3-5-decision-2026-05-06.md)** — Decision document (not an implementation plan). Awaiting Jorge's choice between four forward options.
 
-Phase 1 (Monado patched with MR !2737), Phase 2 (WayVR + launcher),
-and Phase 3 (EDID non-desktop override) all shipped. **Phase 3 awaits
-a reboot to verify** — the Microsoft HMD VSDB has been inserted into
-the glasses' EDID, deployed via `drm.edid_firmware=`, and the build
-landed it correctly in the new generation's kernel cmdline. Post
-reboot, wlroots should treat the SmartGlasses connector as
-non-desktop and advertise it for lease via `wp-drm-lease-v1`,
-enabling monado to take the lease and render correctly. Verification
-checklist is at the end of `plans/03-hyprland-breezy-2026-05-06.md`.
+Phase 1 (Monado MR !2737), Phase 2 (WayVR + launcher), and Phase 3
+(EDID non-desktop override + USB ACL fix) all shipped and verified
+on `lewis`. **Phase 3 is architecturally complete**: monado takes
+the DRM lease via `wp-drm-lease-v1`, OpenXR session reaches FOCUSED
+with the real Rayneo head device, IPD = 63mm, pose data flowing.
+
+**Visual output is still black**, blocked by a Mesa `anv` driver gap
+on Intel Arc: `VK_KHR_display` is advertised at the instance level
+but the device-level functions (`vkGetPhysicalDeviceDisplayPlanePropertiesKHR`,
+etc.) are not implemented. Confirmed independently of monado via
+`vkcube --wsi display`. Full diagnosis + reproduction in
+[`../memory/xr-mesa-anv-display-gap.md`](../memory/xr-mesa-anv-display-gap.md).
+
+The original Phase 3 plan is archived at
+[`plans/03-hyprland-breezy-2026-05-06.md`](./plans/03-hyprland-breezy-2026-05-06.md);
+its post-reboot verification checklist all passed except the final
+visual step.
 
 ## Why this is the active path
 
