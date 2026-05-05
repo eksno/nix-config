@@ -14,7 +14,7 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 2. Considered: (a) overriding the hash via overlay, (b) reverting lock + skipping `nix flake update`, (c) dropping `wifite2`. (a) is the most general but makes the closure depend on knowing the post-fix hash before upstream ships it; (b) regresses every other package; (c) is reversible with one comment.
 3. Verified `wifite2` is a wifi-auditing tool (Python wrapper around aircrack-ng/reaver) — removing it does NOT affect day-to-day NetworkManager wifi.
 **Fix:** Comment out `wifite2` in both `jorge/programs/default.nix` and `eksno/programs/default.nix` until nixpkgs ships a working `wireshark-cli` revision. Each line carries a pointer back to this entry so future-Jorge knows why it's commented.
-**Commit:** _(filled in below)_
+**Commit:** `d7914d6`
 
 ## 2026-05-05 — nixpkgs-wireshark-source-hash-mismatch
 
