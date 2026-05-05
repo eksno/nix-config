@@ -4,6 +4,20 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-05-05 — xr-driver-crashloop-from-sddm-owned-shm-state
+
+**Symptom:** After logging into the new GNOME-on-Wayland session for the first time, `xr-driver` was stuck in `auto-restart` (exit 1, ~190 restart attempts). `/dev/shm/xr_driver_state` existed but was owned `sddm:sddm`, blocking jorge's driver from overwriting it. Driver log showed a segfault in `fprintf` between "Using hardware id" and "Starting up XR driver".
+**Affected:** host `lewis`, user `jorge`. `system/lib/xr/driver/default.nix`.
+**Root cause:** The xr-driver systemd unit is `systemd.user.services.xr-driver` with `wantedBy = [ "default.target" ]`, which means it auto-starts for **every** user that gets a systemd `--user` instance — including `sddm`, the user that runs the SDDM greeter. The greeter's brief lifetime is enough for xr-driver to write `/dev/shm/xr_driver_state` as `sddm:sddm`. After sddm exits, the file persists with sddm ownership, and the next user's xr-driver segfaults inside `fprintf` when it tries to overwrite it.
+**Investigation:**
+1. `systemctl --user status xr-driver` → "activating (auto-restart) ... exit code 1, restart counter 190+".
+2. `ls -la /dev/shm/xr_driver_state` showed owner `sddm`, not `jorge`.
+3. `~/.local/state/xr_driver/driver.log` had repeated "Segmentation fault occurred" with backtrace through `_IO_fprintf` — confirmed the EACCES was killing fprintf rather than logging cleanly.
+4. Manual `sudo rm /dev/shm/xr_driver_state && systemctl --user restart xr-driver` got the driver alive — but next reboot would re-trigger the same race.
+5. Considered: per-user xr-driver disabled, runtime path under `$XDG_RUNTIME_DIR` (would break the contract with the breezy extension that hardcodes `/dev/shm/...`), or refusing to start for sddm. systemd `ConditionUser=!sddm` is the cleanest — only the greeter user is excluded; jorge, eksno, etc. start normally.
+**Fix:** Added `unitConfig.ConditionUser = "!sddm";` to `system/lib/xr/driver/default.nix`.
+**Commit:** _(this commit)_
+
 ## 2026-05-05 — gnome-breezy-session-pivot-from-nested-shell
 
 **Symptom:** breezy-sideview wrapper couldn't run on Hyprland; nested gnome-shell architectural wall (see `xr/LEARNINGS.md`).

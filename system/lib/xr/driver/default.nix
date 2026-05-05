@@ -27,6 +27,16 @@ in
   systemd.user.services.xr-driver = {
     description = "XR user-space driver (Rayneo / XREAL / Viture / Rokid)";
     wantedBy = [ "default.target" ];
+
+    # Refuse to start for the sddm user. The login-screen greeter runs as
+    # `sddm` with its own systemd --user instance, which would otherwise
+    # auto-start xr-driver, write /dev/shm/xr_driver_state as sddm:sddm,
+    # and then exit when the greeter hands off — leaving the file
+    # un-overwritable by the actual logged-in user (driver crash-loops
+    # forever after). `!`-prefix negates the match, so only sddm is
+    # excluded; jorge, eksno, etc. start normally.
+    unitConfig.ConditionUser = "!sddm";
+
     serviceConfig = {
       Type = "simple";
       ExecStartPre = "${pkgs.coreutils}/bin/install -Dm644 ${../../../../dotfiles/default/xr_driver/config.ini} %h/.config/xr_driver/config.ini";
