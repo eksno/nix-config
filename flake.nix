@@ -5,13 +5,6 @@
     zen-browser.url = "github:0xc000022070/zen-browser-flake";
     phonetic.url = "github:startino/phonetic";
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-
-    # Pinned to nixos-25.05 (last release shipping GNOME 48). Used solely
-    # to source `gnome-shell` for the breezy-sideview wrapper — GNOME 49
-    # removed `--nested` from gnome-shell, breaking the nested-on-Hyprland
-    # flow. Re-evaluate this pin once upstream breezy-desktop ships a
-    # v49-compatible launch path.
-    nixpkgs-gnome48.url = "github:nixos/nixpkgs/nixos-25.05";
   };
 
   outputs =

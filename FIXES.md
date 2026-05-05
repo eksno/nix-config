@@ -4,6 +4,14 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-05-05 — gnome-breezy-session-pivot-from-nested-shell
+
+**Symptom:** breezy-sideview wrapper couldn't run on Hyprland; nested gnome-shell architectural wall (see `xr/LEARNINGS.md`).
+**Affected:** host `lewis`, user `jorge` (with `eksno`/verse wired in same change). Pivot involves: deleted `system/lib/xr/breezy-sideview/`; new `system/lib/xr/breezy-session/`, `system/lib/xr/breezy-recenter/`; flake input `nixpkgs-gnome48` removed; `dotfiles/default/hypr/users/jorge/default/breezy.conf`; `dotfiles/default/hypr/shared/scripts/breezy-recenter.sh` (deleted).
+**Root cause:** `gnome-shell --nested` is nested-on-X11 (routes through XWayland under Hyprland → Clutter init fails); v49 removed the flag entirely; `--display-server`/`--headless`/`--virtual-monitor` all lose the seat-control fight to Hyprland (`Failed to take control of the session: ... EBUSY`).
+**Investigation + fix:** See archived plan at `xr/plans/02-gnome-breezy-session-2026-05-05.md` for the per-step rationale, schema verification, dconf serialization gotchas, and stop-the-line conditions. Implementation landed in commits `c9fbff6` (strip dead wrapper), `41aabee` (add breezy-session module), `acced9e` (seed dconf), `bc8b2eb` (recenter CLI + GNOME custom-keybinding), `d380d38` (wire eksno/verse), and this commit (drop gnome48 input + doc refresh).
+**Commit:** _(this commit)_
+
 ## 2026-05-05 — hypr-mirror-direction-for-correct-aspect-on-external
 
 **Symptom:** External VG258 (1920x1080, 16:9) mirroring laptop eDP-1 (2880x1800, 16:10) showed low-resolution, aspect-distorted output on the external. Laptop looked fine.

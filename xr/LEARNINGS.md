@@ -6,6 +6,51 @@ this before debugging a similar issue.
 
 ---
 
+## Architecture — GNOME-on-Wayland as a parallel SDDM-selectable session
+
+After the nested-shell wall (next section), the working approach is:
+register GNOME-on-Wayland as an additional session SDDM lists alongside
+Hyprland. Hyprland keeps autologging in for daily use; pick "GNOME on
+Wayland" in the SDDM greeter when you want world-locked breezy surfaces.
+Logout boundary is the cost; everything else upstream supports already.
+
+Concrete moving parts:
+
+- `services.desktopManager.gnome.enable = true` puts
+  `gnome-session-49.2-sessions` (an `overrideAttrs` of `gnome-session`
+  that adds `share/wayland-sessions/gnome*.desktop`) into
+  `services.displayManager.sessionPackages`. SDDM's NixOS-generated
+  `SessionDir=/nix/store/<hash>-desktops/share/wayland-sessions` then
+  surfaces both `gnome.desktop` and `gnome-wayland.desktop`.
+- `desktopManager.gnome.enable` flips on `displayManager.gdm.enable`
+  transitively. `lib.mkForce false` is required to keep SDDM as the DM.
+  The non-mkForce form silently loses the priority fight.
+- The bare `gnome-session` derivation does NOT ship the wayland session
+  `.desktop` file — only the `-sessions` override does. If you ever
+  inspect the closure and don't see GNOME sessions, check
+  `services.displayManager.sessionPackages` for the `-sessions` package,
+  not the bare one.
+
+## dconf seeding for first-login defaults
+
+`programs.dconf.profiles.user.databases` adds a system-db entry to the
+`user` profile (NixOS prepends `user-db:user`, then appends each entry
+as `system-db:`). This makes `dconf-keyfile` the deployment shape for
+"GNOME login defaults" without `home-manager`.
+
+Gotchas:
+
+- `lib.gvariant.mkArray [ "x" ]` is required for typed string lists
+  (`as`). A bare `[ "x" ]` may serialize ambiguously. Doubles and bools
+  pass through unwrapped.
+- Nested-key paths (e.g. custom-keybindings entries) need the parent
+  key's array to list the trailing-slashed object path AND a separate
+  attrset entry at the deeper path. Both are required for
+  gnome-settings-daemon to pick up the binding.
+- `lockAll = true` would lock the seeded values from user override —
+  don't set unless you want to take away gnome-control-center
+  configurability.
+
 ## Architecture — nested gnome-shell on Hyprland is impossible
 
 **The premise of the original plan was wrong.** Mutter's `--nested` flag
