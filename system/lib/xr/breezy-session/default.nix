@@ -4,6 +4,13 @@ let
   breezyGnome = pkgs.callPackage ../breezy-gnome/package.nix { };
 in
 {
+  imports = [
+    # `breezy-recenter` is the Super+R CLI; pulled in here so any host
+    # running breezy-session also gets the recenter binary on $PATH for
+    # the GNOME custom-keybinding below to resolve.
+    ../breezy-recenter
+  ];
+
   # Register a real GNOME-on-Wayland session that SDDM can list alongside
   # Hyprland. The plan is: Hyprland keeps autologging in for daily use; when
   # Jorge dons the glasses he logs out and picks "GNOME on Wayland" in the
@@ -53,6 +60,21 @@ in
           display-size = 1.0;
           curved-display = false;
           widescreen-mode = false;
+        };
+
+        # GNOME custom keybinding: Super+R → breezy-recenter. Mirrors
+        # Hyprland's Super+R so the same shortcut works in either session.
+        # Custom-keybindings is a list of object paths; each path's keys
+        # (name/command/binding) live under the matching subpath.
+        "org/gnome/settings-daemon/plugins/media-keys" = {
+          custom-keybindings = lib.gvariant.mkArray [
+            "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/breezy-recenter/"
+          ];
+        };
+        "org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/breezy-recenter" = {
+          name = "Breezy recenter";
+          command = "breezy-recenter";
+          binding = "<Super>r";
         };
       };
     }
