@@ -115,15 +115,17 @@ writeShellApplication {
         ;;
     esac
 
-    # GNOME 49 dropped the explicit `--nested` flag. Nested mode is now
-    # selected by running `gnome-shell --wayland` inside an existing
-    # WAYLAND_DISPLAY without `--display-server`, `--headless`, or
-    # `--virtual-monitor`. The latter three force a full display server
-    # which then fails to take seat control under Hyprland (EBUSY).
+    # GNOME 48 still ships `--nested`; we pin gnome-shell to nixos-25.05
+    # in default.nix specifically to keep this launch path. v49 removed
+    # the flag and there's no replacement that works on a non-GNOME
+    # wayland host (display-server mode tries to take seat control and
+    # fights Hyprland for it).
     #
-    # In nested mode mutter sizes the window from xdg-output; the host
-    # Hyprland windowrule tiles it onto the glasses output afterwards.
-    gnome-shell --wayland &
+    # MUTTER_DEBUG_DUMMY_MODE_SPECS pins the nested surface size to the
+    # Air 4 Pro native resolution; breezy-gnome wraps the single surface
+    # into world-locked virtual displays.
+    export MUTTER_DEBUG_DUMMY_MODE_SPECS="1920x1080@60"
+    gnome-shell --nested --wayland &
     shell_pid="$!"
     wait "''${shell_pid}"
   '';
