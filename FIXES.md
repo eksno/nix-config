@@ -4,6 +4,18 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-05-05 — hypr-mirror-direction-for-correct-aspect-on-external
+
+**Symptom:** External VG258 (1920x1080, 16:9) mirroring laptop eDP-1 (2880x1800, 16:10) showed low-resolution, aspect-distorted output on the external. Laptop looked fine.
+**Affected:** host `lewis`, user `jorge`. `dotfiles/default/hypr/users/jorge/default/monitor.conf`.
+**Root cause:** Hyprland blit-scales the source's framebuffer into the mirror's physical resolution. With eDP-1 as source (logical 2304x1440, 16:10) and HDMI-A-1 as mirror (1920x1080, 16:9), the external got a downscaled + horizontally-squashed image. The mirror destination cannot crop or letterbox — only scale.
+**Investigation:**
+1. First attempt: kept eDP-1 as source, set HDMI-A-1 to mirror it at 119.98Hz. Refresh now matched but res/AR still wrong (this is the inherent blit-scale behavior; no Hyprland flag changes it).
+2. Searched `git log --all --grep=mirror` and FIXES.md — found prior commits `b41b21d`, `9056a37`, `1788ef5` from 2026-03 that solved the same problem by **flipping the direction**.
+3. Confirmed flip is the only fix: external is the lower-res panel, so making it the source means the framebuffer is rendered at its native res — sharp and correct AR on the external. Laptop accepts the 16:9 framebuffer stretched into its 16:10 panel as the unavoidable trade.
+**Fix:** Made `HDMI-A-1, 1920x1080@119.98, 0x0, 1` the source and set `eDP-1, ..., mirror, HDMI-A-1`. Existing glasses rule already mirrors HDMI-A-1, so the chain stays coherent.
+**Commit:** _pending_
+
 ## 2026-05-05 — nixpkgs-wireshark-source-hash-mismatch-recurring
 
 **Symptom:** Same `wireshark-cli-4.6.5` hash mismatch (`got: sha256-Zvrwxjp4LK2J3QnxmPxKKrU01YHQvPyp54UWzeGNCjA=`) re-appeared after the next `./update.sh` run despite the 2026-05-05 lock revert.
