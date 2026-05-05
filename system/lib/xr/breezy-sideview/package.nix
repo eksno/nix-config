@@ -1,6 +1,7 @@
 {
   writeShellApplication,
   glib,
+  dconf,
   gnome-shell,
   coreutils,
   procps,
@@ -24,6 +25,7 @@ writeShellApplication {
   name = "breezy-sideview";
   runtimeInputs = [
     glib
+    dconf
     gnome-shell
     coreutils
     procps
@@ -86,16 +88,6 @@ writeShellApplication {
 
     echo "$$" > "''${pid_file}"
 
-    # --- Plumb schemas for our gsettings calls ---
-    # nixpkgs installs gnome-shell schemas at
-    # share/gsettings-schemas/gnome-shell-<ver>/glib-2.0/schemas/ rather
-    # than share/glib-2.0/schemas/, so XDG_DATA_DIRS alone doesn't reach
-    # them. The breezy-gnome extension's schema is even further off-path
-    # (share/gnome-shell/extensions/.../schemas/). GSETTINGS_SCHEMA_DIR
-    # takes a colon list of compiled-schema dirs and is honored directly
-    # by gsettings/dconf.
-    export GSETTINGS_SCHEMA_DIR="${gnome-shell}/share/gsettings-schemas/gnome-shell-${gnome-shell.version}/glib-2.0/schemas:${breezyGnome}/share/gnome-shell/extensions/breezydesktop@xronlinux.com/schemas"
-
     # XDG_DATA_DIRS still needs the breezy-gnome share/ so the nested shell
     # discovers the extension under share/gnome-shell/extensions/.
     export XDG_DATA_DIRS="${breezyGnome}/share''${XDG_DATA_DIRS:+:''${XDG_DATA_DIRS}}"
@@ -107,13 +99,18 @@ writeShellApplication {
     printf 'user-db:breezy-sideview\n' > "''${profile}"
     export DCONF_PROFILE="''${profile}"
 
-    gsettings set org.gnome.shell enabled-extensions "['breezydesktop@xronlinux.com']"
+    # `dconf write` bypasses the gsettings schema-lookup machinery, which
+    # gets fragile when the host (Hyprland, no GNOME) doesn't have the
+    # gnome-shell / breezy gschemas in any standard XDG_DATA_DIRS path.
+    # The nested shell still loads the schemas itself for type validation
+    # at read time, so values written here remain semantically correct.
+    dconf write /org/gnome/shell/enabled-extensions "['breezydesktop@xronlinux.com']"
     case "''${preset}" in
       2-screen)
-        gsettings set com.xronlinux.BreezyDesktop display-distance 1.05
-        gsettings set com.xronlinux.BreezyDesktop display-size 1.0
-        gsettings set com.xronlinux.BreezyDesktop curved-display false
-        gsettings set com.xronlinux.BreezyDesktop widescreen-mode false
+        dconf write /com/xronlinux/BreezyDesktop/display-distance 1.05
+        dconf write /com/xronlinux/BreezyDesktop/display-size 1.0
+        dconf write /com/xronlinux/BreezyDesktop/curved-display false
+        dconf write /com/xronlinux/BreezyDesktop/widescreen-mode false
         ;;
     esac
 
