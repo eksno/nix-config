@@ -29,4 +29,32 @@ in
   # self-contained for the eksno wiring. The breezy-gnome module also adds
   # it; nixpkgs dedupes in environment.systemPackages.
   environment.systemPackages = [ breezyGnome ];
+
+  # Seed dconf system-wide so first GNOME login already has the breezy
+  # extension enabled with the 2-screen preset. Schema keys verified against
+  # com.xronlinux.BreezyDesktop in breezy-gnome v2.9.12 (display-distance,
+  # display-size, curved-display, widescreen-mode all present).
+  #
+  # The list is wrapped in `mkArray` so toDconfINI emits `['x']` (GVariant
+  # string list) rather than the bare nix list serialization. Doubles and
+  # bools serialize unambiguously without wrapping.
+  #
+  # Leaves user-db:user first in the profile chain (NixOS's default), so
+  # gnome-control-center / dconf-editor edits still override these defaults
+  # for the live user.
+  programs.dconf.profiles.user.databases = [
+    {
+      settings = {
+        "org/gnome/shell" = {
+          enabled-extensions = lib.gvariant.mkArray [ "breezydesktop@xronlinux.com" ];
+        };
+        "com/xronlinux/BreezyDesktop" = {
+          display-distance = 1.05;
+          display-size = 1.0;
+          curved-display = false;
+          widescreen-mode = false;
+        };
+      };
+    }
+  ];
 }
