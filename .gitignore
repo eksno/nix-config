@@ -6,3 +6,6 @@
 
 # Ad-hoc tmp directory
 tmp/
+
+# Chrome PWA icons — auto-generated/removed by Chrome as PWAs are installed/uninstalled
+dotfiles/default/icons/hicolor/*/apps/chrome-*-Profile_*.png
