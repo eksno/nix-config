@@ -6,3 +6,6 @@
 
 # Ad-hoc tmp directory
 tmp/
+
+# Research corpus (offline source mirrors, web scrapes) — large, regenerable
+.research/
