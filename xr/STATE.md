@@ -11,7 +11,7 @@ new known-broken thing).
 
 | Host | User | Status |
 |---|---|---|
-| `lewis` | `jorge` | xr-driver + breezy-gnome + breezy-session + breezy-recenter + **monado-rayneo + breezy-hyprland + glasses-edid (EDID override + 3840x1080 mode injection + USB ACL fix)** deployed. GNOME-Breezy soak abandoned. **Phase 3 in progress** — three layered issues being unwound: (1) launcher socket race FIXED commit `f74154b`; (2) EDID now injects 3840x1080@60 DTD so monado renders SBS at native (commit `7122089`, NEEDS REBOOT to take effect); (3) intermittent `VK_ERROR_SURFACE_LOST_KHR` on first present still sometimes recurs (one v3 run hit steady-state 65 frames clean; subsequent runs SURFACE_LOST — root cause not yet isolated, candidate is Mesa wsi_display page-flip event timing). With Hyprland in safe-mode (recovery from a Phase 3 crash) the wlroots lease may behave differently. Offline OSS source corpus at `.research/` (~1.8GB) supports further diagnosis. |
+| `lewis` | `jorge` | xr-driver + breezy-gnome + breezy-session + breezy-recenter + **monado-rayneo (patched: comp-renderer pairs COLOR_ATTACHMENT_BIT with STORAGE_BIT) + breezy-hyprland + glasses-edid (EDID override + 3840x1080 mode injection + USB ACL fix)** deployed. GNOME-Breezy soak abandoned. **Phase 3 progress:** (1) launcher socket race FIXED commit `f74154b`; (2) EDID injects 3840x1080@60 DTD so monado renders SBS at native (commit `7122089`); (3) **monado swapchain usage-flag patch APPLIED but NOT YET VERIFIED** — `system/lib/xr/monado-rayneo/patches/comp-renderer-scanout-compatible-tiling.patch` pairs `VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT` with `STORAGE_BIT` on the compute path. Hypothesis: STORAGE-only on Mesa anv was picking non-scanout tiling, blanking the panel. v4 with `XRT_COMPOSITOR_COMPUTE=0` (graphics path, already had COLOR_ATTACHMENT_BIT) reached FOCUSED with no SURFACE_LOST. Pending: run breezy-hyprland after rebuild to confirm patch fixes the compute path too. **Open known-issue:** intermittent Hyprland safe-mode after reboot with the 3840x1080 EDID — Aquamarine logs `drm: Cannot commit when a page-flip is awaiting`, suspected CDCLK contention. Offline OSS source corpus at `.research/` (~1.8 GB, gitignored) supports further diagnosis — see `memory/xr-research-corpus.md`. |
 | `verse` | `eksno` | Same module set wired (xr/driver, xr/breezy-gnome, xr/breezy-session, xr/monado-rayneo, xr/breezy-hyprland). Build verified; not yet exercised on real hardware. |
 
 ## What's deployed
@@ -114,6 +114,12 @@ new known-broken thing).
   (the MR is post-25.1 and already includes the upstream commit it
   backports — applying it again fails with
   "Reversed (or previously applied)").
+- **In-tree patch (NOT YET VERIFIED)**:
+  `system/lib/xr/monado-rayneo/patches/comp-renderer-scanout-compatible-tiling.patch`
+  pairs `VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT` with `STORAGE_BIT` in
+  `comp_renderer.c:543-549` so Mesa anv selects a scanout-compatible
+  tiling for the compute-path swapchain. Hypothesis tracked in
+  `memory/xr-mesa-anv-display-gap.md`.
 - **Verified**: `monado-cli probe` shows
   `head: RayNeo Air 4 Pro (5e0050125135323833390000), view count: 2`
   after stopping xr-driver to release HID locks.
