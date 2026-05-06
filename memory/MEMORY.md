@@ -23,6 +23,12 @@
 - [wayvr capture segfault — `upload_image` memcpy](xr-wayvr-gpu-capture-segfault.md) — root cause located via coredump: `WCommandBuffer::upload_image` `copy_from_slice` from a raw mmap'd slice with no `MAP_FAILED` check. Independent of DMA-BUF vs CPU capture method.
 - [Hyprland CDCLK budget cap on lewis](xr-hyprland-cdclk-cap.md) — wp_drm_lease_v1 + eDP-1@120 + HDMI-A-1@120 + DP-2@60 SBS exceeds Intel display engine budget → safe-mode loop. Cap one refresh rate.
 - [Hyprland lease-hotplug event-loop stall](xr-hyprland-lease-hotplug-stall.md) — second class of safe-mode crash distinct from CDCLK; watchdog SIGABRTs during aquamarine `SDRMConnector::connect` on DP-2 hot-plug while monado is leasing. Check log at crash time, not session start.
+- [Rayneo glasses are libusb, not hidraw](xr-rayneo-libusb-not-hidraw.md) — `1bbb:af50` opens via `/dev/bus/usb/...` with `USBDEVFS_DISCONNECT_CLAIM`. lewis hidraws are Intel ISH + touchpad. Don't conflate.
+- [monado RAYNEO_* logs default to INFO](xr-monado-debug-log-level.md) — "Switching to 3D mode..." is DEBUG-only. Set `XRT_LOG=debug` to see init flow. WARN-level failures stay visible.
+- [xr-driver vs monado-rayneo USB conflict](xr-usb-driver-coordination.md) — `systemctl --user stop xr-driver` races; auto-restart re-claims USB. Use `mask` for clean monado runs, `unmask` after.
+- [SIGKILL on monado strands the USB claim](xr-monado-sigkill-usb-stuck.md) — kernel keeps `USBDEVFS_DISCONNECT_CLAIM` for the dead PID; soft-reset via `/sys/bus/usb/drivers/usb/{unbind,bind}` recovers without replug.
+- [v2 runner truncate makes monado log sparse](xr-v2-runner-sparse-log.md) — orphan monado fd at high offset causes NUL-padded sparse file → ripgrep "binary file matches". Verify `pgrep monado-service` empty first.
+- [wayvr logs are UTC, system is UTC+7](xr-wayvr-utc-timestamps.md) — a `2026-05-06T19:13Z` wayvr line is `2026-05-07T02:13` local; not stale, just a different timezone label.
 
 ### nixos build + host model
 
