@@ -47,6 +47,42 @@ modifier negotiation path.
   SURFACE_LOST. (It then SEGV'd in wayvr — separate issue, but the
   swapchain present cycle was clean.) This localized the failure to
   the compute-path swapchain usage flags.
+- v3 re-run after the swapchain-usage patch landed (2026-05-06,
+  post-`3bf13da`): monado runs cleanly end-to-end — both wayvr OpenXR
+  clients connect, swapchain creates, frames present at ~30 fps with
+  "missed frame by 16ms" warnings, both clients eventually disconnect
+  normally. **No SURFACE_LOST.** Monado-side hypothesis verified;
+  user-facing "see something on the glasses" outcome remains gated on
+  the wayvr crash described below.
+
+## Pending hypothesis: wayvr GPU-capture (DMA-BUF) crash on Mesa anv
+
+After the monado fix landed, breezy-hyprland still leaves the panel
+black because `wayvr` segfaults right after FOCUSED. In the latest v3
+log (`.scratch/diagnose-surface-lost/breezy-stdout-v3.txt`), the last
+two log lines are:
+
+  - `entered state FOCUSED` (`wayvr/src/backend/openxr/mod.rs:169`)
+  - `Using GPU capture. ... switch 'Wayland capture method' to a CPU
+    option!` (`wayvr/src/overlays/screen/backend.rs:200`)
+
+…then `Segmentation fault (core dumped) wayvr --openxr --show`.
+Code at `backend.rs:200-217` shows the warning is emitted just before
+`MyFirstDmaExporter::new(...)` and `self.capture.init(...)` — i.e.
+the wlr_screencopy_v1 → DMA-BUF → Vulkan import path. Suspected:
+modifier mismatch when vulkano imports the DMA-BUF on anv.
+
+**Important: the prior agent attributed the segfault to wgui's
+"Grow Color atlas 256 → 512" log line at `text_atlas.rs:190`** (last
+line in v4) and shipped a workaround in commit `b02dffa` that bumps
+the initial atlas size from 256 → 2048 so growth never happens. The
+patch DID prevent the grow path (the post-patch v3 log shows NO
+`Grow Color atlas` line) but **wayvr still segfaults at the same wall-
+clock distance from FOCUSED**, on `lewis` (Mesa anv 26.0.6 +
+Hyprland 0.54.3 + wayvr 26.2.1). The atlas-grow log was *coincident*,
+not *causal*: it was the previous log line, not the previous function
+call. See `xr-wayvr-gpu-capture-segfault.md` for the full hypothesis
+and what to test next.
 - `comp_settings.c:37` defines `XRT_COMPOSITOR_COMPUTE` env var via
   `DEBUG_GET_ONCE_BOOL_OPTION`. `rayneo_hmd.c:923` sets
   `screens[0].w_pixels = panel_w * view_count` (1920*2=3840),
