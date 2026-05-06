@@ -1,14 +1,87 @@
 ---
 type: project
-title: Mesa anv + Intel Arc — direct-mode WSI scanout (current best hypothesis: monado swapchain usage flags)
+title: Mesa anv + Intel Arc — direct-mode WSI scanout (Round 3: kernel returns EBUSY on first atomic_commit; Mesa hides it as SURFACE_LOST)
 created: 2026-05-06
-updated: 2026-05-06
+updated: 2026-05-07
 ---
 
 **This file's history is a chain of misdiagnoses. Read what's CURRENT
 below before acting.**
 
+## Round 3 (2026-05-07): Root cause located — kernel `EBUSY` on first `DRM_IOCTL_MODE_ATOMIC`
+
+**The "first-present modeset failing for unknown reason" framing from
+Round 2 is now obsolete.** We know what fails and why Mesa hid it.
+
+The single failing ioctl, captured via the v2 strace runner at
+`.scratch/wayvr-trace/run-strace-v2.sh` on a clean post-reboot run
+(strace files at `.scratch/wayvr-trace/strace-monado-20260507-002455.log.<tid>`,
+thread `30914`):
+
+```
+00:25:04.008900  ioctl(17</dev/dri/card1>, DRM_IOCTL_MODE_CREATEPROPBLOB, ...)  = 0
+00:25:04.009076  ioctl(17</dev/dri/card1>, DRM_IOCTL_MODE_ATOMIC, ...)          = -1 EBUSY (Device or resource busy)
+00:25:04.010479  write(2, "ERROR [renderer_present_swapchain_image] vk_swapchain_present: VK_ERROR_SURFACE_LOST_KHR\n", ...)
+```
+
+Chain:
+1. Mesa wsi_display creates the property blob for the modeset (succeeds).
+2. Submits the atomic commit with `ALLOW_MODESET | PAGE_FLIP_EVENT |
+   NONBLOCK` (`mesa/src/vulkan/wsi/wsi_common_display.c:2855-2947`).
+3. Kernel returns `EBUSY`.
+4. Mesa hits the `if (ret != -EACCES)` branch at
+   `wsi_common_display.c:3129-3134` and returns `VK_ERROR_SURFACE_LOST_KHR`.
+   The original `errno` is **not propagated** — every non-`EACCES`
+   atomic_commit failure flattens to SURFACE_LOST.
+5. Monado logs the error but has no retry path for SURFACE_LOST in
+   `comp_renderer.c renderer_present_swapchain_image`.
+6. Subsequent monado threads (most painfully thread 71515 / equivalent
+   in this run) end up in `drm_syncobj_array_wait_timeout` waiting for
+   fences that will never signal → process deadlocks.
+
+We needed strace to see the kernel errno because Mesa's
+`wsi_display_debug` macro is compiled out — see
+`memory/xr-mesa-wsi-debug-disabled.md`.
+
+**Leading hypothesis (NOT confirmed) for WHY EBUSY:** CRTC contention
+with Hyprland. Mesa's `wsi_display_select_crtc` at
+`wsi_common_display.c:2260-2289` first tries the CRTC currently bound
+to the connector's encoder, then falls back to any CRTC with
+`buffer_id == 0`. Aquamarine's `SDRMConnector::connect` at
+`.research/src/aquamarine/src/backend/drm/DRM.cpp:1646` assigns CRTC
+267 to DP-2 internally even on the non_desktop early-return path
+(Hyprland's `Monitor.cpp:246` doesn't undo aquamarine's CRTC binding).
+When monado's lease commits to that same CRTC, the kernel may return
+EBUSY because of the existing binding from Hyprland's compositor side.
+Not yet verified by reading the failing atomic blob's CRTC ID; treat
+as the leading hypothesis pending confirmation.
+
+Canonical entry for the finding:
+`memory/xr-mesa-anv-ebusy-on-first-present.md`.
+
+### What to try next (ordered)
+
+1. **Confirm CRTC theory.** Read the failing atomic blob's `CRTC_ID`
+   from the strace dump (the prop array passed to `DRM_IOCTL_MODE_ATOMIC`
+   at the EBUSY call). If it's CRTC 267, contention with Hyprland's
+   stale aquamarine binding is confirmed.
+2. **Patch monado to retry on first-present failure.**
+   `comp_renderer.c renderer_present_swapchain_image` currently has
+   no retry on SURFACE_LOST (only OUT_OF_DATE retries near
+   `comp_renderer.c:747`). If EBUSY is transient (e.g. a page-flip in
+   flight clears), a simple retry should succeed.
+3. **Patch Mesa wsi_display to translate EBUSY → `VK_NOT_READY`**
+   rather than SURFACE_LOST — EBUSY isn't "surface lost", it's "try
+   again later". Lets monado retry via normal swapchain timing without
+   pretending the surface died.
+4. **Find a way to clear Hyprland's stale CRTC binding for non_desktop
+   connectors before launching monado** — e.g., a Hyprland patch to
+   skip CRTC assignment entirely for non_desktop, or a runtime way to
+   clear it before lease handover.
+
 ## Round 2 (2026-05-06 evening): SURFACE_LOST has REAPPEARED in a different form
+
+**(Superseded by Round 3 above — kept for log continuity.)**
 
 After the rolled-back gen booted (`549bd84`, the gen with both
 `3bf13da` swapchain-usage and `7122089` EDID-3840 patches active), a
