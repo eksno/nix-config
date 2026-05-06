@@ -36,3 +36,4 @@
 ## reference
 
 - [XR debug commands](xr-debug-commands.md) — drm_info paths, vulkaninfo greps, edid-decode, monado log location, hyprctl probes
+- [xr-driver control IPC](xr-driver-control-ipc.md) — `/dev/shm/xr_driver_control` keys (sbs_mode=enable/disable, recenter_screen=true), state file, validation gotchas
