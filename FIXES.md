@@ -4,6 +4,19 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-05-06 — tmux-catppuccin-flavor-switch-needs-reset
+
+**Symptom:** After switching `@catppuccin_flavor` from `"mocha"` to `"neptune"` (Startino flavor file symlinked into the plugin's `themes/` dir) and reloading via `tmux source-file ~/.config/tmux/tmux.conf`, the status bar kept rendering with mocha colors. `tmux show-options -g | grep @thm_bg` returned `#1e1e2e` (mocha) instead of `#171919` (neptune).
+**Affected:** any flavor switch on the `catppuccin/tmux` plugin. `dotfiles/default/tmux/tmux.conf`.
+**Root cause:** Startino's flavor file (and Catppuccin's own ones) sets `@thm_*` with `set -ogq` — the `-o` flag means "only set if not already set." Mocha's values from the previous load were still in tmux's option memory, so every `set -ogq @thm_bg "#171919"` was a silent no-op. A fresh tmux server would have worked; an in-place reload of the same server would not.
+**Investigation:**
+1. Confirmed the symlink was correct: `~/.config/tmux/plugins/tmux/themes/catppuccin_neptune_tmux.conf` → `~/themes/ports/tmux/dist/catppuccin_neptune_tmux.conf`, file readable, contained `set -ogq @thm_bg "#171919"`.
+2. Read `catppuccin_tmux.conf:1` — confirmed it sources the flavor file via `source -F "#{d:current_file}/themes/catppuccin_#{@catppuccin_flavor}_tmux.conf"`. So the right file *was* being sourced.
+3. `tmux show-options -g` showed `@catppuccin_flavor neptune` but `@thm_bg "#1e1e2e"` — proving the source ran but the writes had no effect.
+4. Read `catppuccin_options_tmux.conf` — found a `%if @catppuccin_reset == true` block that does `set -Ugq @thm_*` (unset) for the entire palette. Catppuccin's own flavor-switching docs (the comment block in that file showing dark/light theme hooks) set `@catppuccin_reset "true"` before re-running the plugin for exactly this reason.
+**Fix:** Add `set -g @catppuccin_reset "true"` immediately before the `run ~/.config/tmux/plugins/tmux/catppuccin.tmux` line in `tmux.conf`. Catppuccin's options conf clears the reset flag (`set -Ug @catppuccin_reset` at the bottom of the `%if` block) so it doesn't accumulate.
+**Commit:** `<pending>`
+
 ## 2026-05-05 — hypr-mirror-direction-for-correct-aspect-on-external
 
 **Symptom:** External VG258 (1920x1080, 16:9) mirroring laptop eDP-1 (2880x1800, 16:10) showed low-resolution, aspect-distorted output on the external. Laptop looked fine.
