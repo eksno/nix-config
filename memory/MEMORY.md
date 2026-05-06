@@ -12,7 +12,7 @@
 ### xr/ subsystem
 
 - [XR stack overview](xr-stack-overview.md) — entry point: packages, modules, data flow, what does what
-- [Mesa anv display-plane gap on Intel Arc](xr-mesa-anv-display-gap.md) — VK_KHR_display advertised but not implemented; blocks direct-mode VR. Verify before retrying any direct-render path on lewis.
+- [Mesa anv direct-mode SURFACE_LOST](xr-mesa-anv-display-gap.md) — surface+swapchain create succeed, first present fails. Misdiagnosed earlier as "missing VK_KHR_display device funcs" — that was wrong. Check before suggesting fixes.
 - [wlroots leasing rules](xr-wlroots-leasing-rules.md) — only EDID-non-desktop connectors get advertised via wp-drm-lease-v1. `hyprctl monitor disable` does NOT make a connector leasable.
 - [Rayneo hardware facts](xr-rayneo-hardware.md) — Air 4 Pro 1bbb:af50, DP-2 on lewis, cable-quality gotcha, USB ACL boot-race fix
 - [EDID override module](xr-edid-override.md) — how `glasses-edid/` flips non_desktop=1, how to regenerate the patched blob, per-host caveats
