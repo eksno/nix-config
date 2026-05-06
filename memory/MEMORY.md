@@ -21,6 +21,7 @@
 - [Mesa wsi_display tracing is disabled](xr-mesa-wsi-debug-disabled.md) — `MESA_VK_WSI_DEBUG=display` is a no-op; the macro is `#if 0`'d at `wsi_common_display.c:99-105`.
 - [wayvr capture segfault — `upload_image` memcpy](xr-wayvr-gpu-capture-segfault.md) — root cause located via coredump: `WCommandBuffer::upload_image` `copy_from_slice` from a raw mmap'd slice with no `MAP_FAILED` check. Independent of DMA-BUF vs CPU capture method.
 - [Hyprland CDCLK budget cap on lewis](xr-hyprland-cdclk-cap.md) — wp_drm_lease_v1 + eDP-1@120 + HDMI-A-1@120 + DP-2@60 SBS exceeds Intel display engine budget → safe-mode loop. Cap one refresh rate.
+- [Hyprland lease-hotplug event-loop stall](xr-hyprland-lease-hotplug-stall.md) — second class of safe-mode crash distinct from CDCLK; watchdog SIGABRTs during aquamarine `SDRMConnector::connect` on DP-2 hot-plug while monado is leasing. Check log at crash time, not session start.
 
 ### nixos build + host model
 
