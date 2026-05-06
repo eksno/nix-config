@@ -19,7 +19,8 @@
 - [Monado/launcher IPC quirks](xr-monado-ipc-quirks.md) — pollable stdin, persistent pipe, XR_RUNTIME_JSON propagation. Ignore at your peril.
 - [Offline OSS source corpus](xr-research-corpus.md) — `.research/` (~1.8 GB, gitignored): mesa, monado, kernel DRM, Hyprland, wlroots, etc. Grep here before re-fetching.
 - [Mesa wsi_display tracing is disabled](xr-mesa-wsi-debug-disabled.md) — `MESA_VK_WSI_DEBUG=display` is a no-op; the macro is `#if 0`'d at `wsi_common_display.c:99-105`.
-- [wayvr GPU/DMA-BUF capture segfault](xr-wayvr-gpu-capture-segfault.md) — wayvr crashes at `screen/backend.rs:200` after FOCUSED; atlas-grow patch ruled out, DMA-BUF import on anv suspected. Read before re-debugging.
+- [wayvr GPU/DMA-BUF capture segfault](xr-wayvr-gpu-capture-segfault.md) — wayvr crashes at `screen/backend.rs:200` after FOCUSED; atlas-grow + DMA-BUF both ruled out, crash now isolated to capture init. Read before re-debugging.
+- [Hyprland CDCLK budget cap on lewis](xr-hyprland-cdclk-cap.md) — wp_drm_lease_v1 + eDP-1@120 + HDMI-A-1@120 + DP-2@60 SBS exceeds Intel display engine budget → safe-mode loop. Cap one refresh rate.
 
 ### nixos build + host model
 
