@@ -76,6 +76,14 @@ writeShellApplication {
     # refuses to launch with "another instance is running."
     rm -f "''${XDG_RUNTIME_DIR}/monado.pid"
 
+    # Clear stale IPC socket from a previous run. Without this, the wait
+    # loop below sees the OLD socket file, breaks immediately, and launches
+    # wayvr before monado-service has finished init. Monado then removes
+    # the stale socket and creates its own — but wayvr already failed to
+    # connect with "Connection refused" and exits clean, taking monado
+    # down with it before any frame is presented. Verified 2026-05-06.
+    rm -f "''${XDG_RUNTIME_DIR}/monado_comp_ipc"
+
     echo "[breezy-hyprland] starting monado-service in background (log: $LOG)"
     # Stdin needs to be a pipe that stays open forever. The full constraint:
     #   - TTY:        epoll_ctl(stdin) returns -1 → init failure
