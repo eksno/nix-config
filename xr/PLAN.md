@@ -8,12 +8,18 @@ on `lewis`. **Phase 3 is architecturally complete**: monado takes
 the DRM lease via `wp-drm-lease-v1`, OpenXR session reaches FOCUSED
 with the real Rayneo head device, IPD = 63mm, pose data flowing.
 
-**Visual output is still black**, blocked by a Mesa `anv` driver gap
-on Intel Arc: `VK_KHR_display` is advertised at the instance level
-but the device-level functions (`vkGetPhysicalDeviceDisplayPlanePropertiesKHR`,
-etc.) are not implemented. Confirmed independently of monado via
-`vkcube --wsi display`. Full diagnosis + reproduction in
-[`../memory/xr-mesa-anv-display-gap.md`](../memory/xr-mesa-anv-display-gap.md).
+**Visual output is still black.** The original "Mesa anv display-plane
+gap" framing was wrong (see correction in
+[`../memory/xr-mesa-anv-display-gap.md`](../memory/xr-mesa-anv-display-gap.md)).
+First diagnosed root cause was monado swapchain usage flags
+(STORAGE-only on the compute path), patched in `3bf13da` and verified
+on the monado side. **Round 2 (2026-05-06 evening):** SURFACE_LOST has
+reappeared in a different form — first present fails despite the
+swapchain creating cleanly with the right usage flags and 3840x1080
+extent. Active phase is now diagnosing the new SURFACE_LOST plus the
+Hyprland event-loop stall on DP-2 hot-plug (see
+[`../memory/xr-hyprland-lease-hotplug-stall.md`](../memory/xr-hyprland-lease-hotplug-stall.md)),
+not the original "no display plane" claim.
 
 The original Phase 3 plan is archived at
 [`plans/03-hyprland-breezy-2026-05-06.md`](./plans/03-hyprland-breezy-2026-05-06.md);
