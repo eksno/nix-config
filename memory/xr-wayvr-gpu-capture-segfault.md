@@ -1,130 +1,161 @@
 ---
 type: project
-title: wayvr GPU/DMA-BUF capture segfault on Mesa anv (pending hypothesis)
+title: wayvr capture segfault — root cause located in upload_image memcpy
 created: 2026-05-06
+updated: 2026-05-06
 ---
 
 `wayvr --openxr --show` segfaults reproducibly on `lewis` (Mesa anv
 26.0.6 + Hyprland 0.54.3 + wayvr 26.2.1) right after the OpenXR
-session reaches FOCUSED. The crash sits between the "Using GPU
-capture" warning and the first capture frame, in the
-DMA-BUF-import-into-Vulkan path.
+session reaches FOCUSED. Both prior hypotheses (atlas-grow,
+DMA-BUF import) were red herrings. **Real crash location: the
+`copy_from_slice` memcpy inside `WCommandBuffer::upload_image`,
+called from `receive_callback` while uploading a captured frame
+into a Vulkan staging buffer.**
 
-## Crash signature
+## Crash signature (from coredump)
 
-Last log lines in `.scratch/diagnose-surface-lost/breezy-stdout-v3.txt`:
+`coredumpctl info <pid>` on PID 414959 / 314209 (both wayvr SIGSEGVs
+on 2026-05-06) gives:
 
 ```
-INFO  wayvr::backend::openxr: entered state FOCUSED
-WARN  wayvr::overlays::screen::backend: Using GPU capture. ...
-        switch 'Wayland capture method' to a CPU option!
-   at wayvr/src/overlays/screen/backend.rs:200
-breezy-hyprland: line 99: 267806 Segmentation fault (core dumped)
-                                  wayvr --openxr --show
+#0  __memcpy_avx_unaligned_erms                              (libc.so.6)
+#1  wgui::gfx::cmd::WCommandBuffer<CmdBufXfer>::upload_image (wayvr bin)
+#2  wayvr::overlays::screen::capture::upload_image           (wayvr bin)
+#3  wayvr::overlays::screen::capture::receive_callback       (wayvr bin)
+#4  MainThreadWlxCapture::receive                             (wayvr bin)
+#5  ScreenBackend::should_render                              (wayvr bin)
+#6  wayvr::backend::openxr::openxr_run                        (wayvr bin)
 ```
 
-Then `wayvr` is gone. Reproduces every time across both v3 (compute
-monado) and v4 (graphics monado) runs; the monado side is irrelevant
-to whether wayvr crashes.
+Independent of which capture method (`Dmabuf` vs `screencopy` CPU)
+was selected — the crash is downstream of the method choice, on the
+upload-into-Vulkan-staging step.
 
-## Suspected mechanism
+## Mechanism
 
-`backend.rs:197-217` is the DMA-BUF capture branch:
+`.research/src/wlx-overlay-s/wgui/src/gfx/cmd.rs:108-141`
+(`WCommandBuffer::upload_image`):
 
-1. `MyFirstDmaExporter::new(app.gfx.clone(),
-   app.gfx_extras.drm_formats.clone())` builds the exporter.
-2. `self.capture.init(dmabuf_formats, user_data, receive_callback)`
-   wires `wlr_screencopy_v1` to it and calls
-   `request_new_frame()`.
-3. wayvr captures eDP-1 + HDMI-A-1, gets DMA-BUFs back from the
-   compositor, then asks vulkano to import them.
+```rust
+let buffer: Subbuffer<[u8]> = Buffer::new_slice(..., data.len() as DeviceSize)?;
+buffer.write()?.copy_from_slice(data);   // <-- memcpy frame #1
+```
 
-Hypothesis: vulkano's DMA-BUF import path on Mesa anv hits a modifier
-mismatch (Hyprland may export a tiled modifier wayvr's import code
-doesn't handle, or the format/modifier negotiation is asymmetric for
-multi-output capture). The crash is in unsafe FFI / Vulkan land, so
-the panic prints nothing structured — just a raw segfault.
+The `data: &[u8]` slice is built one frame up in
+`.research/src/wlx-overlay-s/wayvr/src/overlays/screen/capture.rs`
+(`receive_callback`). Two paths construct it:
 
-## Workaround attempts
+- **MemFd (lines 524-567):**
+  ```rust
+  let len = frame.plane.stride as usize * frame.format.height as usize;
+  let map = unsafe { libc::mmap(ptr::null_mut(), len, PROT_READ, MAP_SHARED, fd, offset) } as *const u8;
+  let data = unsafe { slice::from_raw_parts(map, len) };
+  ```
+  **No `MAP_FAILED` check.** If `mmap` fails (bad fd, bad offset,
+  rejected length), `map == (void*)-1 == 0xFFFFFFFFFFFFFFFF`, the
+  slice points at unmapped memory, and the first byte read by
+  `copy_from_slice` segfaults. Matches our backtrace exactly.
 
-- **Atlas-grow patch (`b02dffa`, "wayvr-anv" overlay) — RULED OUT.**
-  The patch raises wgui's initial text atlas from 256 → 2048 to skip
-  the racy `text_atlas::grow()` path. It works (post-patch v3 log
-  shows NO `Grow Color atlas` line) but wayvr still segfaults at the
-  same place. Atlas-grow was just the previous log line in v4, not
-  the previous function call. The "wayvr-anv" override and the
-  patch can stay (cheap, harmless, and may still avoid a real future
-  race) but they do not unblock the capture crash.
+- **MemPtr (lines 568-587):**
+  ```rust
+  let data = unsafe { slice::from_raw_parts(frame.ptr as *const u8, frame.size) };
+  ```
+  Direct trust of `frame.ptr`/`frame.size` from the wlx-capture
+  crate. If those are garbage (zero ptr, oversized size, freed
+  region), same segfault.
 
-- **CPU-capture override (`capture_method: screencopy`) — RULED OUT.**
-  Round 2 finding (2026-05-06): dropped a `~/.config/wayvr/config.yaml`
-  with `capture_method: screencopy` (out-of-tree, NOT in dotfiles —
-  see `xr/STATE.md` TODO to codify). Confirmed picked up by wayvr:
-  log shows `Not using DMA-buf capture due to ScreenCopyCpu` followed
-  by `Software capture will take place on the main thread`. The
-  segfault then recurs **one log line later**, at the same wall-clock
-  distance from FOCUSED, with no DMA-BUF import in the call path.
-  So DMA-BUF import was *also* a coincident log line, not the cause.
-  The actual crash is in capture-init / post-capture-method-decision
-  region — possibly Vulkan queue-family setup, vulkano-anv interaction,
-  or something deeper in the screencopy CPU path. NOT in the DMA-BUF
-  import path.
+Either way the bug pattern is the same: an unchecked raw pointer
++ length pair handed to `copy_from_slice`.
+
+## Leading hypothesis
+
+When wayvr captures via screencopy CPU (forced via
+`~/.config/wayvr/config.yaml: capture_method: screencopy`), the
+wlr-screencopy-v1 protocol returns a wl_shm pool fd. wlx-capture
+either (a) returns an invalid fd because the protocol negotiation
+failed silently, (b) hands back the wrong stride/height pair so
+`stride * height` exceeds the real shm pool size and `mmap` rejects
+it, or (c) the lease handover to monado raced against shm pool
+allocation and the fd was closed before wayvr got it.
+
+Most likely: lease handover races shm pool allocation. Hyprland's
+output lease to monado happens around the same wall-clock window as
+wayvr's first screencopy frame request, and the screencopy buffer
+is tied to the leased output's wl_output proxy.
 
 ## What to try next
 
-DMA-BUF avoidance is exhausted. The crash sits in the
-post-method-decision / capture-init region regardless of GPU vs CPU
-capture choice. Remaining options:
+1. **Quick win: re-run with `RUST_LOG=trace` and capture stderr.**
+   wlx-capture / wayvr trace logs will print frame format, fd,
+   stride, offset, len before the upload. If `len` looks insane
+   (e.g. multi-MB) or fd looks like -1, mmap-failure hypothesis is
+   confirmed without a code change.
 
-1. **Capture a backtrace — top priority now.** `RUST_BACKTRACE=full`
-   only helps for panics, not native segfaults. Run wayvr under
-   `gdb --args` or collect the core dump (`coredumpctl info wayvr`)
-   to identify the actual crashing frame. Without this, every
-   "blame the last log line" attribution will keep being wrong
-   (see LEARNINGS.md "Coincident log line ≠ root cause, second time").
-2. **Bisect with debug builds.** Build wayvr / vulkano with debug
-   symbols (or `RUSTFLAGS=-g`) and step through the capture init
-   path post-method-selection. Look at queue-family selection,
-   any Vulkan device creation that happens after the capture method
-   is chosen, and the first frame request.
-3. **Single-output capture.** lewis has eDP-1 + HDMI-A-1 + the
-   leased DP-2; if multi-output is part of the trigger, limiting
-   wayvr to one screen may sidestep it. Cheap to try via wayvr config.
-4. **Try a different vulkano version or pin.** If the bug is in a
-   specific vulkano release's interaction with anv, bisecting
-   vulkano (or comparing to a slightly older wayvr that pinned a
-   different vulkano) may localize it.
+2. **`LD_PRELOAD` mmap shim.** Wrap `libc::mmap`, log args + return,
+   pass through. Zero rebuild, ~10 lines of C. Confirms whether
+   `mmap` succeeded or returned `MAP_FAILED` right before the crash.
+
+3. **Patch + rebuild wayvr.** Add `if map == libc::MAP_FAILED { ... }`
+   in `receive_callback` MemFd branch and a similar null/zero check
+   in MemPtr branch. Either logs a clear error and returns `None`
+   (clean failure), or — if the data is actually valid but the
+   format is wrong — surfaces the next problem cleanly. Cost: a
+   wayvr rebuild (vendor cache should hit since pname unchanged).
+
+4. **Disable HDMI-A-1 capture entirely.** lewis has 3 outputs;
+   limiting wayvr to one or zero captured screens may sidestep
+   the racing-init theory while we patch upstream.
+
+5. **Try wlx-overlay-s upstream (not wayvr fork).** Decouples
+   "is the capture path broken on this config" from "is wayvr
+   specifically broken." If upstream segfaults too, file the bug
+   against wlx-capture; if not, the wayvr fork added the bug.
+
+## Workarounds already ruled out
+
+- **Atlas-grow patch (`b02dffa`).** Removed log line, did not fix
+  segfault. "Coincident log line, not last function call."
+- **`capture_method: screencopy`.** Switched method but not the
+  upload path. Crash is downstream of the method choice.
+
+Both stay because they're cheap and harmless, but neither is the fix.
 
 ## Why
 
-Without this writeup, future agents seeing the segfault are likely
-to (a) re-blame the swapchain-usage path in monado (which is now
-fixed and verified), or (b) re-blame the atlas-grow code path
-(which was already worked around and is no longer in the post-patch
-log). The actual surface area is the wlr_screencopy_v1 → DMA-BUF →
-vulkano-import chain inside wayvr.
+Future agents debugging this should not (a) re-blame the monado
+swapchain (fixed), (b) re-blame atlas-grow (workaround in place,
+crash unchanged), or (c) re-blame DMA-BUF import (replaced by
+screencopy, crash unchanged). The real surface area is the
+`copy_from_slice` in `WCommandBuffer::upload_image` and the raw
+slice constructed in `receive_callback`.
 
 ## How to apply
 
 Before debugging the wayvr crash again:
 
 1. Re-read this file and `xr-mesa-anv-display-gap.md`.
-2. Confirm the latest run still segfaults at
-   `wayvr/src/overlays/screen/backend.rs:200` — if the log line
-   moves, the failure mode has shifted and this file is stale.
-3. Pick the cheapest unexplored option from "What to try next" —
-   probably (1) finding the CPU-capture override, since the
-   upstream warning explicitly suggests it.
-4. Do NOT waste cycles re-patching atlas-grow or the monado
-   swapchain — both are already addressed.
+2. If the next coredump backtrace differs from the one above
+   (different top frames, different libraries), this file is stale
+   — update it. If it matches, skip ahead to "What to try next".
+3. Cheapest unblocker is option 1 (RUST_LOG=trace) — it costs one
+   wayvr run, no rebuild.
+4. Do NOT waste cycles re-patching atlas-grow, the monado
+   swapchain, or DMA-BUF import. All three are addressed.
 
 ## References
 
-- `system/lib/xr/wayvr-anv/` — current wayvr override (atlas-grow
-  workaround + pname preserved so vendor-staging hits cache)
-- `.research/src/wlx-overlay-s/wayvr/src/overlays/screen/backend.rs`
-  — local source for grepping the capture path
-- `.scratch/diagnose-surface-lost/breezy-stdout-v3.txt` — latest
-  reproducer log
-- `memory/xr-mesa-anv-display-gap.md` — companion file; describes
-  why the monado side is now clean
+- `.research/src/wlx-overlay-s/wgui/src/gfx/cmd.rs:108` — crashing
+  function
+- `.research/src/wlx-overlay-s/wayvr/src/overlays/screen/capture.rs:470`
+  — `upload_image` wrapper
+- `.research/src/wlx-overlay-s/wayvr/src/overlays/screen/capture.rs:524`
+  — MemFd path with the unchecked `mmap`
+- `.research/src/wlx-overlay-s/wayvr/src/overlays/screen/capture.rs:568`
+  — MemPtr path with raw `frame.ptr` trust
+- `system/lib/xr/wayvr-anv/` — wayvr override; would receive any
+  patch
+- `coredumpctl list wayvr` — both 2026-05-06 cores still on disk;
+  `coredumpctl debug <pid>` to re-inspect
+- `memory/xr-mesa-anv-display-gap.md` — companion file; monado
+  side is clean
