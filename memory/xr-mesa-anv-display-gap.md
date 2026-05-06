@@ -1,87 +1,82 @@
 ---
 type: project
-title: Mesa anv + Intel Arc — direct-mode VR present-time SURFACE_LOST (under investigation)
+title: Mesa anv + Intel Arc — direct-mode WSI scanout (current best hypothesis: monado swapchain usage flags)
 created: 2026-05-06
 ---
 
 **This file's history is a chain of misdiagnoses. Read what's CURRENT
 below before acting.**
 
-## What we know now (2026-05-06, post-v3 + launcher-race fix)
+## Current best hypothesis (2026-05-06, post launcher-fix + EDID 3840 + monado-patch)
 
-On `lewis` (Intel Arc Graphics MTL, Mesa 26.0.6, Hyprland), monado's
-direct-mode display WSI path:
+The blank/streaky panel was **never** a Mesa anv gap. Two real issues
+stack on top of each other:
 
-- ✅ Vulkan instance + display extensions
-- ✅ `vkAcquireDrmDisplayEXT` on leased Rayneo connector
-- ✅ `vkCreateDisplayPlaneSurfaceKHR` succeeds (1920x1080)
-- ✅ `vkCreateSwapchainKHR` succeeds (`A2B10G10R10_UNORM_PACK32`,
-  `STORAGE_BIT` only, FIFO)
-- ✅ vblank thread starts
-- ✅ Kernel-side modeset on DP-2 succeeds — DP link trains at
-  `link rate = 270000, lane count = 4`, pipe C enables, audio codec
-  enables, `verify_connector_state DP-2` passes (verified with
-  `drm.debug=0x1f` in v2 diagnostic)
-- ⚠️ First `vkQueuePresentKHR`: **mostly returns `VK_ERROR_SURFACE_LOST_KHR`.**
-  But **one v3 run hit steady-state present (65 frames at 120Hz target,
-  zero SURFACE_LOST)** — the failure mode is intermittent
-- 🌈 When scanout DOES land on the glasses, content is **"left half
-  black, right half rainbow vertical streaks"** — classic memory-layout
-  mismatch (tiled GPU image scanned out as linear, OR resolution
-  mismatch where only half the panel gets a coherent signal)
+1. **Launcher socket race** (FIXED, commit `f74154b`) — produced
+   SURFACE_LOST-shaped symptoms because wayvr connected before
+   monado-service had the IPC socket; the EXIT trap killed monado
+   mid-frame. Stale `monado_comp_ipc` was the trigger. See
+   `system/lib/xr/breezy-hyprland/launcher.nix`.
+2. **monado allocates the WSI display swapchain with `VK_IMAGE_USAGE_STORAGE_BIT`
+   only** when `use_compute=true` (the default on Linux,
+   `comp_settings.c:13-17`). On Mesa anv, STORAGE-only pushes the
+   image to a non-scanout-compatible tiling/modifier; KMS display
+   planes can't address it; panel shows black/garbage even though
+   the compute shader has filled the image.
 
-## The launcher race (now FIXED)
+## The fix being tested (NOT YET VERIFIED)
 
-A separate failure mode that produced symptoms looking like SURFACE_LOST:
-the launcher's socket-wait loop saw a stale `monado_comp_ipc` from a
-previous run, broke immediately, and launched wayvr before
-monado-service finished init. Wayvr got `Connection refused`, exited
-clean, EXIT trap killed monado mid-frame. Fix: `rm -f` the stale
-socket in the launcher (commit `f74154b`, FIXES.md entry).
+`system/lib/xr/monado-rayneo/patches/comp-renderer-scanout-compatible-tiling.patch`
+pairs `VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT` with `STORAGE_BIT` on the
+compute branch in `comp_renderer.c:543-549` of upstream monado. Patch
+is wired into `system/lib/xr/monado-rayneo/package.nix`'s patches
+array. Hypothesis: with both bits set, Mesa selects a
+scanout-compatible modifier and the display planes can read the
+compute-shader output.
 
-Post-fix, monado actually reaches the present cycle — but the
-SURFACE_LOST and the rainbow-streak content issue both remain.
+**Status: applied, not yet verified.** Run breezy-hyprland after the
+next rebuild; if the glasses show coherent stereo content (instead of
+left-half-black + right-half-rainbow), the hypothesis holds. If
+SURFACE_LOST still appears, investigate Mesa's `wsi_common_display.c`
+modifier negotiation path.
 
-## Suspect causes (still under investigation)
+## Diagnostic findings that supported this hypothesis
 
-1. **Storage-only swapchain → tiling mismatch.** monado requests
-   `VK_IMAGE_USAGE_STORAGE_BIT` only (no `COLOR_ATTACHMENT_BIT`,
-   no `TRANSFER_DST_BIT`). Mesa allocates a compute-shader-optimal
-   tiled image; DRM scans it out as linear; rainbow streaks. Likely
-   fix: patch monado to add `COLOR_ATTACHMENT_BIT` to swapchain usage.
-2. **Resolution mismatch.** monado wants 3840x1080 SBS (`Ignoring
-   given extent 3840x1080 and using 1920x1080 from mode`). Glasses
-   in 3D mode expect SBS too. Result: both eyes get only-half-image
-   content. Likely fix: add a 3840x1080 DTD to the patched EDID so
-   Mesa exposes it as a valid display mode.
-3. **Race in Mesa's wsi_display present path.** The SURFACE_LOST is
-   intermittent — succeeded once, fails most other runs. Could be
-   syncobj/fence ordering, or the page-flip event not arriving in time.
+- v4 run with `XRT_COMPOSITOR_COMPUTE=0` (forces graphics path that
+  already had `COLOR_ATTACHMENT_BIT`) reached FOCUSED, IPD=63mm, NO
+  SURFACE_LOST. (It then SEGV'd in wayvr — separate issue, but the
+  swapchain present cycle was clean.) This localized the failure to
+  the compute-path swapchain usage flags.
+- `comp_settings.c:37` defines `XRT_COMPOSITOR_COMPUTE` env var via
+  `DEBUG_GET_ONCE_BOOL_OPTION`. `rayneo_hmd.c:923` sets
+  `screens[0].w_pixels = panel_w * view_count` (1920*2=3840),
+  confirming why monado wants the 3840 mode.
+- v3 diagnostic also revealed `MESA_VK_WSI_DEBUG=display` is a no-op
+  because Mesa's `wsi_display_debug` macro is `#if 0`'d. See
+  `xr-mesa-wsi-debug-disabled.md`.
+
+## Side-effect to watch: Hyprland safe-mode after EDID 3840 mode
+
+Commit `7122089` added a 3840x1080@60 DTD to the patched EDID so
+monado renders SBS at native. After reboot with this EDID, Hyprland
+intermittently crashes into safe-mode during lease cycles. Aquamarine
+logs show `drm: Cannot commit when a page-flip is awaiting`. Suspected
+CDCLK contention from the new mode. Open issue, separate from the
+swapchain fix.
 
 ## What we have available
 
 - `libvulkan_intel.so` strings include the full `wsi_display_*` symbol
-  family (`wsi_display_setup_crtc`, `_wsi_display_queue_next`,
-  `wsi_display_queue_present`, `drmModeAtomicCommit`,
-  `VK_ERROR_SURFACE_LOST_KHR`). Mesa anv DOES implement device-level
-  display WSI — original "missing functions" claim was WRONG.
+  family. Mesa anv DOES implement device-level display WSI — original
+  "missing functions" claim was WRONG.
 - `libRayNeoXRMiniSDK.so` exposes `SwitchTo2D` / `SwitchTo3D`.
   xr-driver control IPC: `printf 'sbs_mode=enable\n' > /dev/shm/xr_driver_control`
   toggles glasses' SBS mode (see `xr-rayneo-hardware.md`).
 - v1, v2, v3 diagnostic outputs in `.scratch/diagnose-surface-lost/`
-  (gitignored)
-
-## How to make further progress
-
-Before patching anything, the offline source corpus at
-`.research/` (per Jorge's "import all OSS repos" request) gives us
-Mesa's `wsi_common_display.c`, monado's `comp_target_swapchain.c`,
-and Linux i915 atomic check source — read those for the exact
-swapchain image allocation path before guessing.
-
-Re-run the v3 diagnostic via `.scratch/diagnose-surface-lost/run-v3-nosudo.sh`
-after waking glasses. Multiple runs needed to characterize the
-SURFACE_LOST intermittency.
+  (gitignored). v4 is the graphics-path comparison.
+- Offline OSS source corpus at `.research/` — see
+  `xr-research-corpus.md`. Contains Mesa, monado, kernel DRM,
+  Hyprland v0.54.3, wlroots, Aquamarine, gamescope, wivrn.
 
 ## What was wrong (the original misdiagnosis)
 
