@@ -13,13 +13,27 @@ gap" framing was wrong (see correction in
 [`../memory/xr-mesa-anv-display-gap.md`](../memory/xr-mesa-anv-display-gap.md)).
 First diagnosed root cause was monado swapchain usage flags
 (STORAGE-only on the compute path), patched in `3bf13da` and verified
-on the monado side. **Round 2 (2026-05-06 evening):** SURFACE_LOST has
-reappeared in a different form — first present fails despite the
-swapchain creating cleanly with the right usage flags and 3840x1080
-extent. Active phase is now diagnosing the new SURFACE_LOST plus the
-Hyprland event-loop stall on DP-2 hot-plug (see
-[`../memory/xr-hyprland-lease-hotplug-stall.md`](../memory/xr-hyprland-lease-hotplug-stall.md)),
-not the original "no display plane" claim.
+on the monado side. **Round 2 (2026-05-06 evening):** SURFACE_LOST
+reappeared in a different form. **Round 3 (2026-05-07): root cause
+located** — strace v2 caught the kernel errno hidden by Mesa: the
+first `DRM_IOCTL_MODE_ATOMIC` returns `-1 EBUSY`, and Mesa's
+`wsi_common_display.c:3129` flattens any non-EACCES atomic_commit
+failure to `VK_ERROR_SURFACE_LOST_KHR`. Canonical writeup:
+[`../memory/xr-mesa-anv-ebusy-on-first-present.md`](../memory/xr-mesa-anv-ebusy-on-first-present.md).
+
+**Active phase: fix the EBUSY.** Two paths under consideration (see
+the Round 3 next-step list in
+[`../memory/xr-mesa-anv-display-gap.md`](../memory/xr-mesa-anv-display-gap.md)):
+either patch monado to retry on first-present failure
+(`comp_renderer.c renderer_present_swapchain_image` has no retry on
+SURFACE_LOST), or upstream a Mesa change that translates `EBUSY` →
+`VK_NOT_READY` (more semantically correct, lets monado retry via
+normal swapchain timing). Confirming the unconfirmed CRTC-contention
+hypothesis (Hyprland's stale aquamarine CRTC binding on DP-2 vs
+monado's lease) is a parallel cheap diagnostic — read the failing
+atomic blob's `CRTC_ID` from the strace dump. The Hyprland event-loop
+stall on DP-2 hot-plug ([`../memory/xr-hyprland-lease-hotplug-stall.md`](../memory/xr-hyprland-lease-hotplug-stall.md))
+remains a separate open issue.
 
 The original Phase 3 plan is archived at
 [`plans/03-hyprland-breezy-2026-05-06.md`](./plans/03-hyprland-breezy-2026-05-06.md);
