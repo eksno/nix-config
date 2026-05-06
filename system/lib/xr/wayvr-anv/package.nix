@@ -13,8 +13,12 @@
 # Patches apply against the v26.2.1 source nixpkgs pins. If the version
 # bumps, re-verify the patch context.
 
+# Keep pname = "wayvr" so the vendor-staging derivation name doesn't
+# change (vendor staging takes ~20 min of network fetch on first run
+# because nix re-fetches the entire Cargo.lock dep set under the new
+# name, even though contents match upstream). Adding patches only
+# invalidates the build phase, not the vendor — keep that fast.
 wayvr.overrideAttrs (old: {
-  pname = "wayvr-anv";
   patches = (old.patches or [ ]) ++ [
     ./patches/text-atlas-larger-initial-size.patch
   ];
