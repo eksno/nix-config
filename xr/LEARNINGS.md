@@ -747,3 +747,47 @@ Phase 3.5 candidate fixes:
   usage flags
 - Look at Mesa's `wsi_display_image_init` to see if it forces
   scanout-compatible modifier or trusts the requested usage flags
+
+## STORAGE_BIT-only swapchain on Mesa anv → non-scanout tiling (2026-05-06)
+
+`monado/comp_renderer.c:543-549` requests
+`VK_IMAGE_USAGE_STORAGE_BIT` *without* `COLOR_ATTACHMENT_BIT` for the
+WSI display swapchain when `use_compute=true` (default on Linux per
+`comp_settings.c:13-17`). On Mesa anv (Intel Arc MTL), STORAGE-only
+appears to push the image to a tiling/modifier that KMS display
+planes can't address — compute shader fills the image, but the panel
+shows black or garbage.
+
+Evidence: v4 diagnostic with `XRT_COMPOSITOR_COMPUTE=0` (forces the
+graphics path that already had `COLOR_ATTACHMENT_BIT`) reached
+FOCUSED with no SURFACE_LOST and clean swapchain present. SEGV in
+wayvr after that is a separate issue.
+
+Patch lives at
+`system/lib/xr/monado-rayneo/patches/comp-renderer-scanout-compatible-tiling.patch`
+and pairs `COLOR_ATTACHMENT_BIT` with `STORAGE_BIT` on the compute
+branch. Wired into `system/lib/xr/monado-rayneo/package.nix` patches
+array. **NOT YET VERIFIED end-to-end with breezy-hyprland** — pending
+test post-rebuild.
+
+## Mesa wsi_display_debug is compile-time disabled (2026-05-06)
+
+`MESA_VK_WSI_DEBUG=display` and `WSI_DEBUG=display` print **nothing**
+for the KHR_display path because `wsi_display_debug` /
+`wsi_display_debug_code` macros at
+`mesa/src/vulkan/wsi/wsi_common_display.c:99-105` are wrapped in
+`#if 0`. To get traces you'd have to flip the macro and rebuild Mesa.
+See `memory/xr-mesa-wsi-debug-disabled.md`. Don't waste time
+debugging env-var propagation when the macro is off.
+
+## Offline OSS source corpus is high-leverage (2026-05-06)
+
+The `.research/` clone-everything pattern (mesa, monado, kernel DRM,
+Hyprland v0.54.3, wlroots, aquamarine, gamescope, wivrn, vulkan
+loader/headers/validation, OpenXR, wayvr, ~1.8 GB total) was the
+single highest-leverage tool for finding the
+`comp_renderer.c:543-549` smoking gun. Grep against local checkouts
+beats web fetches: faster, no rate limit, can `git log -p`, can
+cross-reference between repos in one shell. Pattern documented in
+`memory/xr-research-corpus.md`. Refresh by `git pull` in individual
+src/ subdirs when upstream lands a relevant change.
