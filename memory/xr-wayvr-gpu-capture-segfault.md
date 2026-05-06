@@ -56,25 +56,44 @@ the panic prints nothing structured — just a raw segfault.
   patch can stay (cheap, harmless, and may still avoid a real future
   race) but they do not unblock the capture crash.
 
+- **CPU-capture override (`capture_method: screencopy`) — RULED OUT.**
+  Round 2 finding (2026-05-06): dropped a `~/.config/wayvr/config.yaml`
+  with `capture_method: screencopy` (out-of-tree, NOT in dotfiles —
+  see `xr/STATE.md` TODO to codify). Confirmed picked up by wayvr:
+  log shows `Not using DMA-buf capture due to ScreenCopyCpu` followed
+  by `Software capture will take place on the main thread`. The
+  segfault then recurs **one log line later**, at the same wall-clock
+  distance from FOCUSED, with no DMA-BUF import in the call path.
+  So DMA-BUF import was *also* a coincident log line, not the cause.
+  The actual crash is in capture-init / post-capture-method-decision
+  region — possibly Vulkan queue-family setup, vulkano-anv interaction,
+  or something deeper in the screencopy CPU path. NOT in the DMA-BUF
+  import path.
+
 ## What to try next
 
-1. **Force CPU capture.** The warning literally says: "go to the
-   Dashboard's Settings tab and switch 'Wayland capture method' to
-   a CPU option." We can't reach the dashboard yet (it's the thing
-   that crashed), so look for a config file or env var override —
-   grep wayvr's source for `capture_method` / `Wayland capture
-   method`, and check `~/.config/wlxoverlay/`-style state files
-   for the persisted setting.
-2. **Capture a backtrace.** `RUST_BACKTRACE=full` only helps for
-   panics, not native segfaults. Run wayvr under `gdb --args` or
-   collect the core dump (`coredumpctl info wayvr`) to confirm the
-   crash is in vulkano's DMA-BUF import and identify which call.
-3. **Patch wayvr / vulkano DMA-BUF import** to handle anv's
-   modifiers — only worth doing once the backtrace pins the exact
-   call site.
-4. **Single-output capture.** lewis has eDP-1 + HDMI-A-1 + the
-   leased DP-2; if multi-output triggers the modifier mismatch,
-   limiting wayvr to one screen may sidestep it.
+DMA-BUF avoidance is exhausted. The crash sits in the
+post-method-decision / capture-init region regardless of GPU vs CPU
+capture choice. Remaining options:
+
+1. **Capture a backtrace — top priority now.** `RUST_BACKTRACE=full`
+   only helps for panics, not native segfaults. Run wayvr under
+   `gdb --args` or collect the core dump (`coredumpctl info wayvr`)
+   to identify the actual crashing frame. Without this, every
+   "blame the last log line" attribution will keep being wrong
+   (see LEARNINGS.md "Coincident log line ≠ root cause, second time").
+2. **Bisect with debug builds.** Build wayvr / vulkano with debug
+   symbols (or `RUSTFLAGS=-g`) and step through the capture init
+   path post-method-selection. Look at queue-family selection,
+   any Vulkan device creation that happens after the capture method
+   is chosen, and the first frame request.
+3. **Single-output capture.** lewis has eDP-1 + HDMI-A-1 + the
+   leased DP-2; if multi-output is part of the trigger, limiting
+   wayvr to one screen may sidestep it. Cheap to try via wayvr config.
+4. **Try a different vulkano version or pin.** If the bug is in a
+   specific vulkano release's interaction with anv, bisecting
+   vulkano (or comparing to a slightly older wayvr that pinned a
+   different vulkano) may localize it.
 
 ## Why
 
