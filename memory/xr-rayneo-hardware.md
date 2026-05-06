@@ -42,19 +42,27 @@ group-permission based and survives the boot-race. Kept at 0660 (not
 
 ## Display modes the panel actually accepts
 
-EDID advertises only **1920x1080** modes (multiple DTDs at 60 and 120 Hz,
-all 1920x1080). There is no 3840x1080 mode in the EDID. So the kernel
-only programs a 1920-wide DP signal.
+**Stock EDID** advertises only **1920x1080** modes (multiple DTDs at 60
+and 120 Hz, all 1920x1080). There is no 3840x1080 mode. The kernel
+without an EDID override only programs a 1920-wide DP signal.
+
+**Patched EDID** (deployed on lewis as of commit `7122089`) injects a
+3840x1080@60 DTD into the patched EDID by replacing base DTD #1, and
+bumps the Display Range Limits max-dotclock from 160 to 300 MHz so the
+mode is accepted. monado then picks 3840x1080 as the highest-pixel
+mode and renders SBS at native (1920 per eye). See
+`xr-edid-override.md` and `xr/edid/patch_glasses_edid.py` for the
+generation pipeline.
 
 The glasses have an internal "3D vs 2D" mode (HID-toggled, see below).
-In 3D mode they treat incoming 1920x1080 as **side-by-side packed** —
-each eye gets the left-half / right-half (960x1080 per eye, scaled).
-In 2D mode they show 1920x1080 to both eyes (mirror).
+In 3D mode they treat the incoming 3840x1080 host signal as **side-by-side
+packed** — each eye gets the left-half / right-half (1920x1080 per
+eye). In 2D mode they show the same image to both eyes.
 
-If a Vulkan client wants stereo (monado: "view count: 2"), it has to
-SBS-pack into the 1920-wide buffer. Direct-mode WSI rendering at
-3840x1080 is **not currently possible** without an EDID modes-extension
-patch. (Phase 3.5 candidate work.)
+Known regression to watch: after reboot with the 3840x1080 EDID,
+Hyprland intermittently crashes into safe-mode during lease cycles.
+Aquamarine logs show `drm: Cannot commit when a page-flip is awaiting`.
+Suspected CDCLK contention from the new mode — open issue.
 
 ## HID toggle: 2D vs 3D mode (xr-driver SDK + control IPC)
 

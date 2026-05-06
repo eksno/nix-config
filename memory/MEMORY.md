@@ -17,6 +17,8 @@
 - [Rayneo hardware facts](xr-rayneo-hardware.md) — Air 4 Pro 1bbb:af50, DP-2 on lewis, cable-quality gotcha, USB ACL boot-race fix
 - [EDID override module](xr-edid-override.md) — how `glasses-edid/` flips non_desktop=1, how to regenerate the patched blob, per-host caveats
 - [Monado/launcher IPC quirks](xr-monado-ipc-quirks.md) — pollable stdin, persistent pipe, XR_RUNTIME_JSON propagation. Ignore at your peril.
+- [Offline OSS source corpus](xr-research-corpus.md) — `.research/` (~1.8 GB, gitignored): mesa, monado, kernel DRM, Hyprland, wlroots, etc. Grep here before re-fetching.
+- [Mesa wsi_display tracing is disabled](xr-mesa-wsi-debug-disabled.md) — `MESA_VK_WSI_DEBUG=display` is a no-op; the macro is `#if 0`'d at `wsi_common_display.c:99-105`.
 
 ### nixos build + host model
 
