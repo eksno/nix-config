@@ -2,10 +2,49 @@
 type: project
 title: Mesa anv + Intel Arc — direct-mode WSI scanout (current best hypothesis: monado swapchain usage flags)
 created: 2026-05-06
+updated: 2026-05-06
 ---
 
 **This file's history is a chain of misdiagnoses. Read what's CURRENT
 below before acting.**
+
+## Round 2 (2026-05-06 evening): SURFACE_LOST has REAPPEARED in a different form
+
+After the rolled-back gen booted (`549bd84`, the gen with both
+`3bf13da` swapchain-usage and `7122089` EDID-3840 patches active), a
+breezy-hyprland run with the glasses already connected reached
+FOCUSED, kept rendering frames, but **monado hit
+`VK_ERROR_SURFACE_LOST_KHR` on first present and stopped trying** —
+two SURFACE_LOST entries total (one from `vk_swapchain_present`, one
+from `comp_target_acquire`), then silence. No retry, no further
+present attempts.
+
+**Both prior monado fixes are confirmed active in this build** (so
+this is not a regression of either fix):
+
+- swapchain log shows `imageUsage: STORAGE_BIT + COLOR_ATTACHMENT_BIT`
+  — `3bf13da` is in
+- swapchain log shows `imageExtent: {3840, 1080}` — EDID 3840x1080
+  mode injection from `7122089` is working
+
+`/sys/class/drm/card1-DP-2/enabled = disabled` while monado held the
+lease — connector was leased but never modeset by Mesa wsi_display.
+
+This is a **different SURFACE_LOST** than the one `3bf13da` addressed.
+The earlier fix targeted swapchain creation (compute-path image was
+non-scanout-compatible). This new failure happens at first present
+despite the swapchain creating cleanly with the right usage flags and
+extent. Suspect Mesa's `wsi_common_display.c` modeset/page-flip path.
+
+Saved monado log copy at
+`.scratch/wayvr-trace/monado-200645.log`. Run logs at
+`.scratch/wayvr-trace/run-20260506-200645.log` and
+`run-20260506-200603.log`.
+
+**Do not** re-blame swapchain usage flags or EDID mode injection —
+both are verified working in this build.
+
+
 
 ## Current best hypothesis (2026-05-06, post launcher-fix + EDID 3840 + monado-patch)
 
