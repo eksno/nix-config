@@ -11,7 +11,7 @@ new known-broken thing).
 
 | Host | User | Status |
 |---|---|---|
-| `lewis` | `jorge` | xr-driver + breezy-gnome + breezy-session + breezy-recenter + **monado-rayneo (patched: comp-renderer pairs COLOR_ATTACHMENT_BIT with STORAGE_BIT) + breezy-hyprland + glasses-edid (EDID override + 3840x1080 mode injection + USB ACL fix)** deployed. GNOME-Breezy soak abandoned. **Phase 3 progress:** (1) launcher socket race FIXED commit `f74154b`; (2) EDID injects 3840x1080@60 DTD so monado renders SBS at native (commit `7122089`); (3) **monado swapchain usage-flag patch APPLIED but NOT YET VERIFIED** — `system/lib/xr/monado-rayneo/patches/comp-renderer-scanout-compatible-tiling.patch` pairs `VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT` with `STORAGE_BIT` on the compute path. Hypothesis: STORAGE-only on Mesa anv was picking non-scanout tiling, blanking the panel. v4 with `XRT_COMPOSITOR_COMPUTE=0` (graphics path, already had COLOR_ATTACHMENT_BIT) reached FOCUSED with no SURFACE_LOST. Pending: run breezy-hyprland after rebuild to confirm patch fixes the compute path too. **Open known-issue:** intermittent Hyprland safe-mode after reboot with the 3840x1080 EDID — Aquamarine logs `drm: Cannot commit when a page-flip is awaiting`, suspected CDCLK contention. Offline OSS source corpus at `.research/` (~1.8 GB, gitignored) supports further diagnosis — see `memory/xr-research-corpus.md`. |
+| `lewis` | `jorge` | xr-driver + breezy-gnome + breezy-session + breezy-recenter + **monado-rayneo (patched: comp-renderer pairs COLOR_ATTACHMENT_BIT with STORAGE_BIT, VERIFIED) + breezy-hyprland (with wayvr-anv override) + glasses-edid (EDID override + 3840x1080 mode injection + USB ACL fix)** deployed. GNOME-Breezy soak abandoned. **Phase 3 progress:** (1) launcher socket race FIXED commit `f74154b`; (2) EDID injects 3840x1080@60 DTD so monado renders SBS at native (commit `7122089`); (3) **monado swapchain usage-flag patch (`3bf13da`) VERIFIED on the monado side** — latest v3 run shows clean swapchain present cycle, no SURFACE_LOST, frames presenting at ~30 fps with "missed frame by 16ms" warnings, both wayvr OpenXR clients connect and disconnect normally. User-facing "see something on the glasses" outcome remains gated on the wayvr crash (next bullet). **Open issues:** (a) **wayvr GPU-capture crash on Mesa anv:** every diagnostic run segfaults wayvr at `wayvr/src/overlays/screen/backend.rs:200` immediately after the "Using GPU capture" warning. The atlas-grow workaround patch (`b02dffa`, wayvr-anv override) was confirmed to suppress the `Grow Color atlas` log line but did NOT prevent the segfault — the atlas log was coincident, not causal. The actual crash is in the DMA-BUF capture init / vulkano import path. See `memory/xr-wayvr-gpu-capture-segfault.md`. (b) **Hyprland safe-mode regression continues:** Hyprland repeatedly crashes into safe-mode during/after the diagnostic run; five `/run/user/1000/hypr/` instance dirs accumulated. Suspected DRM lease cycle issue made worse by the 3840x1080 EDID; Aquamarine previously logged `drm: Cannot commit when a page-flip is awaiting`. Offline OSS source corpus at `.research/` (~1.8 GB, gitignored) supports further diagnosis — see `memory/xr-research-corpus.md`. |
 | `verse` | `eksno` | Same module set wired (xr/driver, xr/breezy-gnome, xr/breezy-session, xr/monado-rayneo, xr/breezy-hyprland). Build verified; not yet exercised on real hardware. |
 
 ## What's deployed
@@ -114,11 +114,17 @@ new known-broken thing).
   (the MR is post-25.1 and already includes the upstream commit it
   backports — applying it again fails with
   "Reversed (or previously applied)").
-- **In-tree patch (NOT YET VERIFIED)**:
+- **In-tree patch (monado-side VERIFIED 2026-05-06)**:
   `system/lib/xr/monado-rayneo/patches/comp-renderer-scanout-compatible-tiling.patch`
   pairs `VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT` with `STORAGE_BIT` in
   `comp_renderer.c:543-549` so Mesa anv selects a scanout-compatible
-  tiling for the compute-path swapchain. Hypothesis tracked in
+  tiling for the compute-path swapchain. Latest v3 run shows clean
+  swapchain present cycle (no SURFACE_LOST), frames presenting at
+  ~30 fps with frame-miss warnings, both OpenXR clients connecting +
+  disconnecting normally. Qualifier: monado-side fix verified; the
+  user-facing "see something on the glasses" outcome is gated on
+  the wayvr GPU-capture segfault — see
+  `memory/xr-wayvr-gpu-capture-segfault.md`. Companion writeup:
   `memory/xr-mesa-anv-display-gap.md`.
 - **Verified**: `monado-cli probe` shows
   `head: RayNeo Air 4 Pro (5e0050125135323833390000), view count: 2`
