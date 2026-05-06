@@ -4,6 +4,18 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-05-06 — breezy-hyprland-stale-monado-ipc-socket-race
+
+**Symptom:** `breezy-hyprland` would sometimes exit cleanly within ~1s of launch with no visible error; wayvr.log showed `Failed to connect to socket /run/user/1000/monado_comp_ipc: Connection refused!` and `XR_ERROR_RUNTIME_UNAVAILABLE`. Monado-service log showed `WARN [create_listen_socket] Removing stale socket file` immediately followed by `INFO [ipc_server_main_common] Server exiting: '0'`. Glasses got a brief "left half black, right half rainbow streaks, on/off" pattern — direct mode WAS working, just being torn down before any frame landed.
+**Affected:** host `lewis`, user `jorge`. `system/lib/xr/breezy-hyprland/launcher.nix:77`.
+**Root cause:** Race condition in the launcher. The socket-wait loop checks `[[ -S "$SOCK" ]]` and breaks immediately if the socket file exists. A stale socket from a previous run satisfies that check. Wayvr launches and tries to connect — but monado-service has just removed the stale socket and hasn't yet created its own. Wayvr gets ECONNREFUSED, OpenXR loader bails with `XR_ERROR_RUNTIME_UNAVAILABLE`, wayvr exits clean, EXIT trap kills monado.
+**Investigation:**
+1. Initial diagnosis chased `VK_ERROR_SURFACE_LOST_KHR` from monado on first present (v1 5s diagnostic). Spent multiple iterations wrong-direction (Mesa anv display-plane gap — refuted) and almost-wrong (i915 atomic_check rejection — refuted by v2 with `drm.debug=0x1f` showing successful DP-2 modeset).
+2. v3 (15s diagnostic) showed monado exiting cleanly with no SURFACE_LOST and no present cycle. Read breezy-stdout: wayvr's "Connection refused" was the actual failure mode.
+3. Checked monado log: `Removing stale socket file` was the smoking gun — explains the race.
+**Fix:** Added `rm -f "$XDG_RUNTIME_DIR/monado_comp_ipc"` next to the existing `rm -f` for `monado.pid` in `system/lib/xr/breezy-hyprland/launcher.nix`.
+**Commit:** `f74154b`
+
 ## 2026-05-05 — xr-driver-crashloop-from-sddm-owned-shm-state
 
 **Symptom:** After logging into the new GNOME-on-Wayland session for the first time, `xr-driver` was stuck in `auto-restart` (exit 1, ~190 restart attempts). `/dev/shm/xr_driver_state` existed but was owned `sddm:sddm`, blocking jorge's driver from overwriting it. Driver log showed a segfault in `fprintf` between "Using hardware id" and "Starting up XR driver".
