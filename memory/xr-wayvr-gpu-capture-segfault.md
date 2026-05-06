@@ -5,13 +5,25 @@ created: 2026-05-06
 updated: 2026-05-06
 ---
 
-`wayvr --openxr --show` segfaults reproducibly on `lewis` (Mesa anv
-26.0.6 + Hyprland 0.54.3 + wayvr 26.2.1) right after the OpenXR
-session reaches FOCUSED. Both prior hypotheses (atlas-grow,
-DMA-BUF import) were red herrings. **Real crash location: the
-`copy_from_slice` memcpy inside `WCommandBuffer::upload_image`,
-called from `receive_callback` while uploading a captured frame
-into a Vulkan staging buffer.**
+`wayvr --openxr --show` has segfaulted on `lewis` (Mesa anv 26.0.6 +
+Hyprland 0.54.3 + wayvr 26.2.1) shortly after the OpenXR session
+reaches FOCUSED in multiple sessions on 2026-05-06. Both prior
+hypotheses (atlas-grow, DMA-BUF import) were red herrings. **Leading
+crash location from coredump: the `copy_from_slice` memcpy inside
+`WCommandBuffer::upload_image`, called from `receive_callback` while
+uploading a captured frame into a Vulkan staging buffer.**
+
+**Timing nuance (2026-05-06 evening):** the `200645` run on the
+rolled-back gen `549bd84` did NOT crash. wayvr launched with the
+glasses already connected, walked past FOCUSED, rendered frames, and
+was still running when Jorge Ctrl+C'd it many minutes later. So the
+segfault is not always-reproducing — it appears to be timing- or
+state-dependent. Open question: do the original crashes correlate with
+hot-plug-mid-init (analogous to the Hyprland event-loop stall in
+`memory/xr-hyprland-lease-hotplug-stall.md`) rather than generic
+session startup? The earlier crashing runs were typically Jorge
+plugging the glasses into a launcher that was already starting; the
+non-crashing `200645` run had glasses-already-connected before launch.
 
 ## Crash signature (from coredump)
 
