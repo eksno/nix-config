@@ -637,3 +637,113 @@ worked at Phase 2 — running breezy-hyprland with the override
 active gets the lease but black glasses; reverting the
 glasses-edid import returns to Phase 2 behavior (Wayland-windowed,
 half-rainbow but visible).
+
+## Correction (2026-05-06): the "Mesa anv display-plane gap" claim above is WRONG
+
+The "Confirmed: Mesa anv direct-display path is broken on Intel Arc"
+section above was based on misreading a `vulkaninfo` warning. Two
+checks killed it:
+
+1. The vulkaninfo warning was emitted by the **dzn** ICD (which
+   crashes during init), not anv. Setting
+   `VK_DRIVER_FILES=/path/to/intel_icd.x86_64.json` to force the
+   Intel ICD made the warning vanish. The "missing display plane
+   functions" message belonged to a totally different ICD.
+2. `libvulkan_intel.so` strings include the full `wsi_display_*`
+   symbol family: `wsi_display_setup_crtc`, `wsi_display_setup_connector`,
+   `_wsi_display_queue_next`, `wsi_display_queue_present`,
+   `drmModeAtomicCommit`, `VK_ERROR_SURFACE_LOST_KHR`. Mesa anv DOES
+   implement device-level display WSI; mesa source `wsi_common_display.c`
+   has zero anv-vs-radv asymmetry.
+
+Don't repeat that diagnosis. See `memory/process-verify-before-recommend.md`.
+
+## breezy-hyprland launcher race: stale monado_comp_ipc socket (FIXED)
+
+The launcher's socket-wait loop was checking `[[ -S "$SOCK" ]]` and
+breaking immediately if `$XDG_RUNTIME_DIR/monado_comp_ipc` existed.
+A stale socket from a previous run satisfied the check. Wayvr then
+launched before monado-service finished init, got `Connection
+refused`, exited clean, and the EXIT trap killed monado mid-frame.
+
+This LOOKED like a SURFACE_LOST from monado but was actually a
+launcher race causing premature shutdown. Fix: `rm -f` the stale
+socket alongside the existing `rm -f` for `monado.pid`. Commit
+`f74154b` + FIXES.md entry.
+
+Diagnostic that caught it: v3 (`.scratch/diagnose-surface-lost/run-v3-nosudo.sh`)
+ran for 15s with verbose env. monado log ended with `Server exiting:
+'0'` and breezy-stdout showed `Failed to connect to socket
+/run/user/1000/monado_comp_ipc: Connection refused!` from wayvr.
+
+## v2 diagnostic with kernel `drm.debug=0x1f`: kernel-side modeset DOES succeed
+
+`echo 0x1f | sudo tee /sys/module/drm/parameters/debug` plus
+`sudo dmesg -t` after the run captures the full atomic-check trace.
+Run window:
+
+- monado-service issues `DRM_IOCTL_MODE_ATOMIC` exactly once per swapchain present
+- `intel_atomic_check` passes — full mode setup runs (CDCLK, DPLL,
+  plane state)
+- DP link training: `Channel EQ done. DP Training successful`,
+  `Link Training passed at link rate = 270000, lane count = 4`
+- `intel_enable_transcoder enabling pipe C`
+- `intel_audio_codec_enable [CONNECTOR:528:DP-2]`
+- `verify_connector_state [CONNECTOR:528:DP-2]` — clean
+- **No EINVAL, no atomic_check rejection, no error returns** from
+  monado-service ioctls during the run
+
+Where SURFACE_LOST originates: NOT kernel-side rejection. Suspects:
+Mesa-internal page-flip event timing, syncobj/fence ordering, or a
+follow-up commit Mesa issues that fails. The intermittency (one v3
+run hit steady-state 65 frames clean; subsequent runs all SURFACE_LOST
+on first present) supports a race-condition hypothesis.
+
+## Glasses SBS-mode HID toggle via xr-driver control IPC
+
+`/dev/shm/xr_driver_control` accepts:
+```
+sbs_mode=enable     # 3D mode, glasses split incoming 1920x1080 SBS to each eye
+sbs_mode=disable    # 2D mode, both eyes see same 1920x1080
+```
+
+Other strings rejected with `Invalid sbs_mode value: %s` (rejects
+`true`/`false`, `0`/`1`, `disabled`/`enabled` plural forms,
+`stretched`). The exact valid values are `enable` / `disable`.
+
+Closed-source `libRayNeoXRMiniSDK.so` exposes
+`ffalcon::XRMiniService::SwitchTo2D()` / `SwitchTo3D()` which the
+control IPC dispatches to.
+
+xr-driver must be running for these to take effect.
+`breezy-hyprland` stops xr-driver, so toggle BEFORE launching it.
+xr-driver does NOT toggle the glasses back to 2D when stopped — the
+glasses retain whatever mode was last set.
+
+## Glasses content rendering: rainbow streaks pattern
+
+When the present cycle DOES land frames on the glasses, the visual
+output is "left half black, right half rainbow vertical streaks."
+Two contributing factors (still being separated):
+
+1. **Resolution mismatch**: monado wants 3840x1080 SBS; EDID only
+   advertises 1920x1080; Mesa restricts surface to 1920x1080
+   (`comp_window_direct_create_surface: Ignoring given extent
+   3840x1080 and using 1920x1080 from mode`); glasses in 3D mode
+   then split the 1920-wide signal into 960x1080 per eye instead
+   of the expected 1920 per eye → distorted/garbled.
+2. **Storage-only swapchain**: monado requests
+   `VK_IMAGE_USAGE_STORAGE_BIT` only (no `COLOR_ATTACHMENT_BIT`,
+   no `TRANSFER_DST_BIT`). Mesa likely allocates the image with a
+   compute-shader-optimal tiling modifier. DRM `MODE_ADDFB2` (the
+   modifier-less variant — no `MODE_ADDFB2_WITH_MODIFIERS` ioctl
+   call observed) defaults the framebuffer to linear. Tiled memory
+   scanned out as linear = vertical-streak rainbow pattern.
+
+Phase 3.5 candidate fixes:
+- Add a 3840x1080 DTD to the patched EDID so monado renders at
+  native, glasses in 3D mode get the SBS signal they expect
+- Patch monado's swapchain create to add `COLOR_ATTACHMENT_BIT` to
+  usage flags
+- Look at Mesa's `wsi_display_image_init` to see if it forces
+  scanout-compatible modifier or trusts the requested usage flags
