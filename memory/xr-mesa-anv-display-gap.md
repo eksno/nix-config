@@ -59,6 +59,29 @@ as the leading hypothesis pending confirmation.
 Canonical entry for the finding:
 `memory/xr-mesa-anv-ebusy-on-first-present.md`.
 
+### Update 2026-05-07 evening: EBUSY is intermittent
+
+Subsequent re-runs with the LD_PRELOAD CRTC-trace shim active did NOT
+reproduce the EBUSY — strace dir
+`.scratch/wayvr-trace/strace-monado-20260507-012348.log.<tid>` shows
+4466 successive atomic_commit calls all returning rc=0 with
+`connector=151 CRTC_ID=267` (so the CRTC-contention geometric premise
+holds — monado IS targeting CRTC 267) and 47670 frames presented at
+~30 fps. The Round 3 capture at `20260507-002455` was a transient race,
+not a guaranteed cold-boot failure.
+
+Possible cause for the shim breaking the race: each atomic_commit is
+preceded by ~10–20 synchronous `DRM_IOCTL_MODE_GETPROPERTY` calls (the
+shim's prop-name lookups), adding ~1–2 ms of latency that may shift
+monado's first commit out of the window where Hyprland's aquamarine
+binding still has a flip pending.
+
+The monado SURFACE_LOST retry patch (commits `baa7b4e` + `d4865e4` +
+`6265f3c`, FIXES.md entry) is still defensible as defense-in-depth
+even if EBUSY proves rare. A Mesa-side EBUSY → VK_NOT_READY translation
+becomes a lower-priority "nice to have" until EBUSY shows up in real
+workloads more often.
+
 ### What to try next (ordered)
 
 1. **Confirm CRTC theory.** Read the `CRTC_ID` in the prop array

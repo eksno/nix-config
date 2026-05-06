@@ -102,6 +102,31 @@ ordered next-step list (confirm CRTC theory, monado retry-on-failure,
 Mesa errno translation to `VK_NOT_READY`, clear Hyprland's stale CRTC
 binding pre-launch).
 
+## Intermittent — not always-reproducing (2026-05-07 evening)
+
+A follow-up CRTC-trace `LD_PRELOAD` shim run (strace dir
+`.scratch/wayvr-trace/strace-monado-20260507-012348.log.<tid>`) saw
+**4466 successive `DRM_IOCTL_MODE_ATOMIC` calls all return rc=0** with
+`connector=151 CRTC_ID=267`, zero EBUSY, zero SURFACE_LOST in monado's
+log, 47670 frames presented (with the usual ~16ms missed-frame warnings
+→ ~30 fps actual). This run kept going until Jorge interrupted.
+
+Implications:
+
+- The Round 3 EBUSY captured at `20260507-002455` was a **transient
+  race**, not a guaranteed failure on every cold boot.
+- The geometric hypothesis is partially confirmed (monado IS targeting
+  CRTC 267, the same CRTC aquamarine binds to DP-2) but **contention
+  is not always firing**. Possible reason: the shim's per-atomic
+  ~10–20 synchronous `DRM_IOCTL_MODE_GETPROPERTY` ioctls add ~1–2 ms
+  of latency that incidentally breaks the timing race.
+- The monado SURFACE_LOST retry patch (commit `baa7b4e` + `d4865e4` +
+  `6265f3c`, see FIXES.md) is still **defensible as defense-in-depth**
+  even if a Mesa fix isn't strictly mandatory.
+- A Mesa-side errno translation (EBUSY → VK_NOT_READY) becomes a
+  lower-priority "nice to have" rather than a must-fix, until/unless
+  EBUSY proves frequent in real workloads.
+
 ## Companion files
 
 - `memory/xr-mesa-anv-display-gap.md` — full investigation log,
