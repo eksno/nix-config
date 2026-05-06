@@ -896,6 +896,51 @@ iterations don't trigger a 30-min re-fetch every time. The wgui
 atlas-grow patch from `b02dffa` is unaffected (the vendor staging
 just rebuilds the build outputs).
 
+## Two distinct Hyprland safe-mode mechanisms (2026-05-06 round 2)
+
+"Hyprland is in safe-mode again" is not a single failure — at least
+two different mechanisms with different log signatures and different
+fixes have hit on `lewis` in the same week:
+
+**(a) CDCLK-overrun page-flip-awaiting loop.** Dead log
+`/run/user/1000/hypr/521ece...1778072203_*/hyprland.log` lines
+5411-5585 show repeated `drm: Cannot commit when a page-flip is
+awaiting` entries while external HDMI-A-1 was plugged. Reproducible
+when eDP-1 + external + leased DP-2 push past the Intel display
+engine's ~1 GP/s CDCLK ceiling. Mitigated by commit `1f84b02`
+(HDMI-A-1 capped to 60Hz). Companion file:
+`memory/xr-hyprland-cdclk-cap.md`.
+
+**(b) Event-loop stall during DP-2 hot-plug.** Same dead log,
+lines 16182-16216, fired at 22:41:09 — but external was unplugged at
+crash time (per line 9415 onward), bandwidth ~870 MP/s, under CDCLK
+ceiling. Watchdog SIGABRT'd Hyprland mid-`SDRMConnector::connect()`
+mode iteration. Internal aquamarine data-setup, NOT a kernel modeset.
+Leading hypothesis (unconfirmed): EDID-blob I2C read at
+`.research/src/aquamarine/src/backend/drm/DRM.cpp:1726` blocking, or
+DRM-fd ioctl contention with monado's concurrent lease ops.
+Mitigated by nothing yet. Companion file:
+`memory/xr-hyprland-lease-hotplug-stall.md`.
+
+**Lesson:** never assume a single root cause when "safe-mode again"
+shows up. Different log signatures, different fixes. Specifically,
+check whether the external monitor was actually plugged at *crash
+time* (not just earlier in the session) and sum active-output
+bandwidth at crash time before attributing to CDCLK. The 1f84b02 cap
+only addresses (a); (b) is independent and currently unmitigated.
+
+## non_desktop is being detected correctly on this stack (2026-05-06)
+
+When investigating Hyprland-DP-2 issues, **don't re-blame the EDID
+override or the `non_desktop` bit.** Aquamarine logs `drm: Non-desktop
+connector` 4 times in the 2026-05-06 session sig 1778072203
+(hyprland.log lines 1984, 2549, 3041, plus one more), and wp-drm-lease
+was granted at lines 2580-2583 (`drm lease: output DP-2 ... lease
+granted with lessee id 2`). The kernel + EDID override + aquamarine
+non_desktop detection are all working as intended. Failures in the
+glasses pipeline at this point are not coming from a missed
+non_desktop bit.
+
 ## Coincident log line ≠ root cause, second time (2026-05-06)
 
 This is the second time we've blamed the wrong thing for the wayvr
