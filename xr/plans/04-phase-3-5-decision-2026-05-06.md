@@ -1,7 +1,8 @@
 # Phase 3.5 — Diagnose `VK_ERROR_SURFACE_LOST_KHR` on first present
 
 Started: 2026-05-06
-Status: data collection in progress (v2 diagnostic queued)
+Status: launcher race fixed (commit `f74154b`); SURFACE_LOST + content
+issues remain; offline OSS source corpus being built at `.research/`
 
 ## What this is
 
@@ -51,7 +52,7 @@ distinguish kernel-side rejection from Mesa-internal early-return
 without (a) raised kernel `drm.debug` and (b) confirmed-working Mesa WSI
 debug.
 
-## v2 diagnostic — designed 2026-05-06, awaiting execution (run-v2.sh)
+## v2 diagnostic — executed 2026-05-06 (run-v2.sh)
 
 **Changes vs v1:**
 1. `sudo` writes `0x1f` to `/sys/module/drm/parameters/debug` for the run
@@ -71,26 +72,82 @@ debug.
   So Mesa anv DOES include the device-level WSI display path; it's
   not stub'd out. The failure is somewhere inside that path.
 
-**Pending hypotheses to check from v2 output:**
+**v2 result:** kernel dmesg showed monado-service issues exactly one
+`DRM_IOCTL_MODE_ATOMIC` per swapchain present, kernel runs full mode
+setup (CDCLK, DPLL alloc, plane state), `intel_atomic_check` passes,
+DP link trains successfully (`Channel EQ done`, `Link Training passed
+at link rate = 270000, lane count = 4`), pipe C enables, audio codec
+enables, `verify_connector_state DP-2` passes — **zero
+atomic_check rejection, zero EINVAL returns from monado-service
+ioctls in the run window.** Whatever causes SURFACE_LOST is NOT a
+kernel-side rejection.
 
-| If kernel dmesg shows... | Then... |
-|---|---|
-| `intel_atomic_check` rejecting plane/CRTC/connector with EINVAL | i915 won't scan out the swapchain image (likely modifier/format/usage mismatch). Fix: coerce monado's swapchain usage flags or carry a Mesa patch for image allocation. |
-| `drm` connector / mode logs but no atomic rejection | Mesa is failing pre-ioctl. Need to read `wsi_display_*` debug or instrument Mesa source. |
-| Kernel still silent + no Mesa WSI output either | Failure is in a no-debug branch of Mesa — likely `wsi_display_setup_crtc` returning no CRTC, or `drmModeAddFB2WithModifiers` failing. Next step would be apitrace or a Mesa source dive. |
+The Mesa WSI debug envs (`MESA_VK_WSI_DEBUG=display`, `WSI_DEBUG=display`)
+produced no output even when confirmed-inherited — the failing branch
+of Mesa's display WSI either lacks debug prints or uses a different
+gating env.
 
-## What's still on the table after v2
+## v3 diagnostic — executed 2026-05-06 (run-v3-nosudo.sh, 15s window)
 
-- **A** — Carry a Mesa patch (cost depends on which Mesa code path is at
-  fault; might be small if it's a usage-flag mismatch, large if it's
-  an Intel display-engine quirk)
-- **B** — Pivot to Wayland-windowed mode + solve the SBS rendering
-  problem from Phase 2. The EDID + USB ACL fix from Phase 3 stays
-  deployed regardless. ~Days of work; produces visible output sooner.
-- **C** — Different OpenXR runtime (Linux OSS options are Monado or
-  nothing — likely dead branch).
+The 5s window of v1+v2 killed monado before its first present landed.
+v3 ran 15s, no sudo (kernel debug already characterized).
 
-The choice depends on what v2 reveals.
+**v3 result revealed a different bug entirely:** monado log ended
+with `Server exiting: '0'` and breezy-stdout showed wayvr's
+`Failed to connect to socket /run/user/1000/monado_comp_ipc:
+Connection refused!`. The monado-service log line right before init
+completion was `WARN [create_listen_socket] Removing stale socket
+file /run/user/1000/monado_comp_ipc` — smoking gun.
+
+Root cause: launcher's socket-wait loop saw the stale socket from a
+previous run, broke immediately, and launched wayvr before
+monado-service had finished init. monado-service then removed the
+stale socket and created its own — but wayvr already got
+ECONNREFUSED, exited clean, EXIT trap killed monado mid-frame.
+SURFACE_LOST in v1 was a downstream symptom of monado being killed
+before it could even attempt a real present cycle.
+
+**Fix:** `rm -f` the stale socket alongside the existing `monado.pid`
+cleanup in `system/lib/xr/breezy-hyprland/launcher.nix`. Commit
+`f74154b`. FIXES.md entry under "2026-05-06 — breezy-hyprland-stale-monado-ipc-socket-race".
+
+## Post-fix state — what remains
+
+After the launcher fix, behavior depends on the run:
+
+- **One v3 run hit steady-state present:** 65 frames over 15s
+  (~60fps effective at 120Hz target — frame-timing warnings, no
+  actual errors). Wayvr connected as Client 1, ran cleanly,
+  disconnected on SIGINT.
+- **Subsequent runs revert to first-present `VK_ERROR_SURFACE_LOST_KHR`.**
+  Same code, same env, different outcome — strongly intermittent.
+
+**Visual output when scanout lands:** "left half black, right half
+rainbow vertical streaks." Two contributing factors:
+1. monado wants 3840x1080 SBS surface; EDID forces 1920x1080;
+   glasses (in 3D mode) split the 1920-wide signal expecting SBS,
+   getting wrong-resolution-per-eye content
+2. monado's `STORAGE_BIT`-only swapchain → Mesa picks
+   compute-optimal tiling → DRM `MODE_ADDFB2` (modifier-less)
+   defaults to linear → tile pattern scanned out as RGB
+
+## What's still on the table
+
+- **A** — Add 3840x1080 DTD to patched EDID. Then monado renders
+  at native SBS resolution. Glasses in 3D mode receive what they
+  expect. Might fix both the resolution-per-eye AND the
+  intermittent SURFACE_LOST if the latter is somehow tied to
+  Mesa's mode-switching path.
+- **B** — Patch monado swapchain create to add
+  `VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT`. Forces Mesa to allocate
+  scanout-compatible tiling. Should fix the rainbow streaks.
+- **C** — Both A and B (likely needed together).
+- **D** — Read Mesa source via the `.research/` corpus to
+  understand what `wsi_display_image_init` does with usage flags.
+  Then make an informed patch decision.
+
+The offline corpus build is queued — see `.research/INDEX.md`
+(once written by the bg agent).
 
 ## What was wrong (the misdiagnosis this file used to enshrine)
 
