@@ -15,7 +15,7 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 3. `tmux show-options -g` showed `@catppuccin_flavor neptune` but `@thm_bg "#1e1e2e"` — proving the source ran but the writes had no effect.
 4. Read `catppuccin_options_tmux.conf` — found a `%if @catppuccin_reset == true` block that does `set -Ugq @thm_*` (unset) for the entire palette. Catppuccin's own flavor-switching docs (the comment block in that file showing dark/light theme hooks) set `@catppuccin_reset "true"` before re-running the plugin for exactly this reason.
 **Fix:** Add `set -g @catppuccin_reset "true"` immediately before the `run ~/.config/tmux/plugins/tmux/catppuccin.tmux` line in `tmux.conf`. Catppuccin's options conf clears the reset flag (`set -Ug @catppuccin_reset` at the bottom of the `%if` block) so it doesn't accumulate.
-**Commit:** `<pending>`
+**Commit:** `22fd835`
 
 ## 2026-05-05 — hypr-mirror-direction-for-correct-aspect-on-external
 
