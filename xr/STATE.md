@@ -1,6 +1,6 @@
 # XR system state
 
-Last updated: 2026-05-07
+Last updated: 2026-05-07 evening
 
 What is currently deployed on `lewis` (and wired for `verse`), what is
 verified working, and what is broken or deferred. Update this whenever
@@ -13,6 +13,100 @@ new known-broken thing).
 |---|---|---|
 | `lewis` | `jorge` | xr-driver + breezy-gnome + breezy-session + breezy-recenter + **monado-rayneo (patched: comp-renderer pairs COLOR_ATTACHMENT_BIT with STORAGE_BIT, `3bf13da` VERIFIED on monado side) + breezy-hyprland (with wayvr-anv override) + glasses-edid (EDID override + 3840x1080 mode injection + USB ACL fix)** deployed. Currently running the rolled-back gen `549bd84` (built 2026-05-05). GNOME-Breezy soak abandoned. **Phase 3 progress:** (1) launcher socket race FIXED commit `f74154b`; (2) EDID injects 3840x1080@60 DTD (`7122089`); (3) monado swapchain usage-flag patch `3bf13da` verified active in current build (swapchain log shows `imageUsage: STORAGE_BIT + COLOR_ATTACHMENT_BIT`, `imageExtent: {3840, 1080}`). User-facing "see something on the glasses" still blocked by the issues below. **Open issues:** (a) **SURFACE_LOST root cause located (Round 3, 2026-05-07):** strace v2 caught the kernel errno hidden behind the SURFACE_LOST — `DRM_IOCTL_MODE_ATOMIC` returns `-1 EBUSY` on the first present commit, and Mesa's `wsi_common_display.c:3129` flattens any non-EACCES atomic_commit failure to `VK_ERROR_SURFACE_LOST_KHR`. Monado has no retry on SURFACE_LOST. Leading hypothesis (unconfirmed): CRTC contention with Hyprland's stale aquamarine CRTC binding on DP-2. See `memory/xr-mesa-anv-ebusy-on-first-present.md` (canonical) and `memory/xr-mesa-anv-display-gap.md` Round 3 for next steps. Strace at `.scratch/wayvr-trace/strace-monado-20260507-002455.log.<tid>`. (b) **wayvr capture-init crash on Mesa anv (timing-dependent):** coredump backtrace localized the crash to `WCommandBuffer::upload_image` `copy_from_slice` (memory/xr-wayvr-gpu-capture-segfault.md) — leading hypothesis is unchecked `mmap` in `receive_callback` MemFd path. **Not always-reproducing:** the 200645 run with glasses-already-connected did NOT crash wayvr; it ran for many minutes until Jorge Ctrl+C'd. May correlate with hot-plug-mid-init rather than generic startup. (c) **Hyprland safe-mode — two distinct mechanisms:** the `1f84b02` HDMI@60 cap remains correct for the CDCLK-overrun mode (real, reproducible per dead log lines 5411-5585 when external is plugged) — see `memory/xr-hyprland-cdclk-cap.md`. **A separate event-loop-stall safe-mode mode** was identified in the 2026-05-06 22:41 crash: external was unplugged at crash time (~870 MP/s, under CDCLK ceiling), Hyprland watchdog SIGABRT'd during aquamarine `SDRMConnector::connect()` mode iteration on DP-2 hot-plug. See `memory/xr-hyprland-lease-hotplug-stall.md`. (d) **Latest gen built 2026-05-06 gray-screens on boot:** Jorge built a "latest" gen today that gray-screens; rolled back to `549bd84`. Root cause unknown, not investigated this session. (e) **TODO — codify the wayvr CPU-capture workaround into dotfiles:** `~/.config/wayvr/config.yaml` is currently out-of-tree (dropped for fast iteration). Once a real fix exists, move the desired config into `dotfiles/default/wayvr/config.yaml` so the dotfile-symlink activation script deploys it. (f) **Minor:** stale `/run/user/1000/monado_comp_ipc` socket can persist after an unclean monado exit; the launcher's `f74154b` cleanup only runs on launcher startup, not on un-clean exit. Next launch handles it; not urgent. |
 | `verse` | `eksno` | Same module set wired (xr/driver, xr/breezy-gnome, xr/breezy-session, xr/monado-rayneo, xr/breezy-hyprland). Build verified; not yet exercised on real hardware. |
+
+## 2026-05-07 evening session — Phase 3.5 progress
+
+The Phase 3.5 plan at `~/.claude/plans/mossy-chasing-cray.md` was
+approved this evening. Two of the three workstreams progressed; one
+deferred.
+
+- **Workstream 1 (CRTC diagnostic) — DONE.** An `LD_PRELOAD` shim
+  (`crtc-trace.c` / `build-crtc-trace.sh`, both gitignored under
+  `.scratch/wayvr-trace/`) was built. Run `20260507-012348` shows
+  monado IS targeting CRTC 267 (the same one aquamarine binds to DP-2)
+  → the geometric premise of the CRTC-contention hypothesis is
+  confirmed. **However**, that same run captured 4466 successive
+  `DRM_IOCTL_MODE_ATOMIC` successes with zero EBUSY and presented
+  47670 frames at ~30 fps. Round 3's EBUSY is therefore **intermittent**,
+  not a guaranteed failure on every cold boot. Possible reason: the
+  shim's per-atomic ~10–20 sync `DRM_IOCTL_MODE_GETPROPERTY` ioctls
+  add ~1–2 ms of latency that incidentally breaks the timing race.
+  See `memory/xr-mesa-anv-ebusy-on-first-present.md` "Intermittent —
+  not always-reproducing" section.
+
+- **Workstream 2 (monado SURFACE_LOST retry) — AUTHORED + COMMITTED,
+  not yet built/tested.** Three commits (`baa7b4e`, `d4865e4`,
+  `6265f3c`) add a bounded retry around
+  `renderer_present_swapchain_image` so a transient first-present
+  EBUSY (which Mesa flattens to SURFACE_LOST) doesn't permanently
+  kill the present cycle. Defense-in-depth — still defensible even
+  with EBUSY proven intermittent. FIXES.md has the entry. **Pending:**
+  `./update-without-update.sh && hyprctl reload` then re-run to
+  confirm the retry path actually executes when EBUSY ever fires
+  again, and that no regressions slip in.
+
+- **Workstream 3 (Mesa errno translation EBUSY → VK_NOT_READY) —
+  DEFERRED.** Lower priority now that EBUSY is intermittent and
+  monado has a retry path. Revisit if EBUSY shows up frequently in
+  real workloads.
+
+### Operational findings
+
+- **Glasses panel transitioned BLACK → DARK.** Earlier in the day the
+  panel was completely off (DPMS off / no signal). Tonight it shows a
+  dark-but-on screen — scanout is happening. Three competing sub-
+  hypotheses, none verified yet: (a) wayvr's default OpenXR composition
+  layer is intentionally dark (no apps streaming), (b) firmware-default
+  brightness is low because xr-driver (which normally bumps it) is
+  masked, (c) `VK_FORMAT_A2B10G10R10_UNORM_PACK32` 10-bit content into
+  an 8-bit panel truncates top 2 bits → ~25% brightness range. Pending
+  visual ground truth from Jorge.
+
+- **xr-driver coordination friction.** `systemctl --user stop
+  xr-driver` is racy because the unit auto-restarts and re-claims the
+  USB device, beating monado's 30-retry libusb_open window. Workaround:
+  `systemctl --user mask xr-driver` for the run; `unmask` after. Wired
+  into `.scratch/wayvr-trace/run-strace-v2.sh`. See
+  `memory/xr-usb-driver-coordination.md`.
+
+- **Rayneo USB topology clarified.** Glasses are libusb at
+  `/dev/bus/usb/003/003` (mode `root:users 660`), NOT hidraw. The
+  two `/dev/hidraw*` on lewis are Intel ISH + I2C touchpad. Monado's
+  `rayneo_usb.c` uses `USBDEVFS_DISCONNECT_CLAIM` /
+  `USBDEVFS_SUBMITURB`. See `memory/xr-rayneo-libusb-not-hidraw.md`.
+
+- **SIGKILL on monado strands the USB claim.** The kernel keeps the
+  `USBDEVFS_DISCONNECT_CLAIM` record for the dead PID, so subsequent
+  `libusb_open` fails until the device is rebound. Soft-reset via
+  `echo 3-2 > /sys/bus/usb/drivers/usb/{unbind,bind}` recovers without
+  unplugging. See `memory/xr-monado-sigkill-usb-stuck.md`.
+
+- **monado RAYNEO_* logs default to INFO.** Critical init lines like
+  `Switching to 3D mode...` and `3D mode confirmed` are DEBUG-only and
+  invisible in default logs (`rayneo_hmd.c:45-48,495,506`). Set
+  `XRT_LOG=debug` to see them — wired into the v2 runner. See
+  `memory/xr-monado-debug-log-level.md`.
+
+- **v2 runner truncate hazard.** `> $MONADO_LOG` plus an orphan monado
+  fd makes the log sparse → ripgrep "binary file matches" with NUL
+  bytes. Always confirm `pgrep -af monado-service` empty before
+  re-running. See `memory/xr-v2-runner-sparse-log.md`.
+
+- **wayvr UTC vs system UTC+7.** A wayvr line dated `2026-05-06T19:13Z`
+  is actually `2026-05-07T02:13` local. Don't flag as stale. See
+  `memory/xr-wayvr-utc-timestamps.md`.
+
+### Outstanding for next session
+
+1. Visual ground truth on the dark screen (uniform vs gradient vs
+   motion-tracked content) — shapes which sub-hypothesis to chase.
+2. Confirm `SwitchTo3D` ACK by grepping this run's monado log (with
+   `XRT_LOG=debug` active) for `Switching to 3D mode...` /
+   `3D mode confirmed` / `3D mode switch timeout`, starting from the
+   second `The Monado service has started` line.
+3. Build + re-verify the monado retry patch (`baa7b4e` etc.) on real
+   hardware.
+4. Brightness control investigation if (1) shows tracked-but-dim content.
 
 ## What's deployed
 

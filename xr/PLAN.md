@@ -1,11 +1,24 @@
 # Active plan
 
-**Active phase: fix the EBUSY on monado's first atomic_commit.** Round
-3 (2026-05-07) located the root cause behind the persistent black-
-panel symptom: `DRM_IOCTL_MODE_ATOMIC` returns `-1 EBUSY` on monado's
-first present, and Mesa's `wsi_common_display.c:3129` flattens any
-non-EACCES atomic_commit failure to `VK_ERROR_SURFACE_LOST_KHR`.
-Canonical writeup:
+**Active phase: figure out why the glasses panel is DARK (not black) and
+verify the monado SURFACE_LOST retry patch on real hardware.** The
+2026-05-07 evening session moved Phase 3.5 forward materially:
+
+- Workstream 1 (CRTC diagnostic) — **DONE.** Confirmed monado IS
+  targeting CRTC 267 (the same CRTC aquamarine binds to DP-2). Round 3
+  EBUSY is **intermittent**, not always-reproducing — the same shim
+  run captured 4466 successive atomic_commit successes and 47670
+  frames presented at ~30 fps.
+- Workstream 2 (monado SURFACE_LOST retry) — **AUTHORED + COMMITTED**
+  (`baa7b4e` + `d4865e4` + `6265f3c`), not yet built or tested on
+  hardware.
+- Workstream 3 (Mesa EBUSY → VK_NOT_READY) — **DEFERRED.** Low priority
+  now that EBUSY is intermittent and monado retries.
+
+The user-visible symptom shifted: the panel went from **completely
+black** (no signal / DPMS off) to **dark-but-on** (scanout happening,
+content dim). That's a different problem, possibly with three
+explanations (see STATE.md "Operational findings"). Canonical writeup:
 [`../memory/xr-mesa-anv-ebusy-on-first-present.md`](../memory/xr-mesa-anv-ebusy-on-first-present.md).
 
 Phase 1 (Monado MR !2737), Phase 2 (WayVR + launcher), and Phase 3
@@ -13,31 +26,45 @@ Phase 1 (Monado MR !2737), Phase 2 (WayVR + launcher), and Phase 3
 on `lewis`. **Phase 3 is architecturally complete**: monado takes
 the DRM lease via `wp-drm-lease-v1`, OpenXR session reaches FOCUSED
 with the real Rayneo head device, IPD = 63mm, pose data flowing.
-Phase 3.5 (this phase) is the visual-output gap that remained.
 
-## Forward options (ordered by cost)
+## Next steps (ordered)
 
-1. **Confirm the CRTC-contention hypothesis.** Mesa's
-   `wsi_display_select_crtc` picks the connector's encoder's current
-   CRTC; aquamarine binds CRTC 267 to DP-2 internally even on the
-   non_desktop early-return path (`SDRMConnector::connect`,
-   `Monitor.cpp:246`). If monado's failing atomic targets the same
-   CRTC Hyprland is holding, contention is the cause. **The existing
-   strace dump cannot answer this** — strace doesn't decode the
-   atomic ioctl's user-pointer prop arrays. Cheapest confirmation
-   paths: kernel ftrace `drm:drm_atomic_state_*` events, an
-   `LD_PRELOAD` ioctl shim that dumps `struct drm_mode_atomic`, or a
-   one-line monado/Mesa instrumentation rebuild.
-2. **Patch monado to retry on first-present SURFACE_LOST.**
-   `comp_renderer.c renderer_present_swapchain_image` only retries on
-   `OUT_OF_DATE`. Bounded retry (e.g. 3 attempts, ~16ms apart) sidesteps
-   the EBUSY race regardless of the underlying root cause.
-3. **Patch Mesa wsi_display: `EBUSY` → `VK_NOT_READY`.** More
-   semantically correct than SURFACE_LOST. Lets monado retry via
-   normal swapchain timing. Upstreamable.
-4. **Hyprland-side: skip CRTC assignment for non_desktop connectors.**
-   Highest leverage if (1) confirms the theory; biggest blast radius
-   (touches aquamarine internals; could regress non-XR multi-monitor).
+1. **Visual verification (read-only, blocks on Jorge).** Jorge to
+   report exactly what the dark screen looks like: uniform dark,
+   gradient, motion-tracked content moving with head pose, OSD text,
+   etc. The answer routes the next workstream:
+   - uniform → likely brightness or 10-bit-into-8-bit format issue
+   - tracked content visible → cosmetic only; investigate brightness
+   - completely featureless → SwitchTo3D may not have actually fired,
+     or composition layer is empty
+
+2. **Confirm `SwitchTo3D` actually fired.** Now that `XRT_LOG=debug`
+   is wired into the v2 runner, grep this run's
+   `/run/user/1000/monado-service.log` (starting from the **second**
+   occurrence of `The Monado service has started`) for:
+   - `Switching to 3D mode...` (DEBUG; should appear if init reached
+     that path)
+   - `3D mode confirmed, waiting for settle...` (DEBUG; success)
+   - `Failed to send 3D mode request` / `3D mode switch timeout`
+     (WARN; failure paths — visible even at INFO)
+   See `../memory/xr-monado-debug-log-level.md` for the macro details.
+
+3. **Build #19 (monado retry patch) and re-verify on real hardware.**
+   `./update-without-update.sh && hyprctl reload`, then re-run the v2
+   runner. Check that:
+   - if EBUSY fires, the new retry log lines (added in `baa7b4e` /
+     `d4865e4` / `6265f3c`) appear and the present cycle continues
+   - no regression on the happy path (commits ran clean before)
+
+4. **Future / conditional:** brightness control investigation if (1)
+   shows tracked-but-dim content. Mesa workstream (#20) only if EBUSY
+   proves frequent in real workloads — `intermittent` is not the same
+   as `rare`, so collect more data points first.
+
+The Hyprland event-loop stall on DP-2 hot-plug
+([`../memory/xr-hyprland-lease-hotplug-stall.md`](../memory/xr-hyprland-lease-hotplug-stall.md))
+remains a separate open issue. The latest gen gray-screen-on-boot
+(currently rolled back to gen `549bd84`) is also still open.
 
 The Hyprland event-loop stall on DP-2 hot-plug
 ([`../memory/xr-hyprland-lease-hotplug-stall.md`](../memory/xr-hyprland-lease-hotplug-stall.md))
