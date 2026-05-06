@@ -17,14 +17,16 @@
 
 let
   monadoRayneo = pkgs.callPackage ../monado-rayneo/package.nix { };
+  wayvrAnv = pkgs.callPackage ../wayvr-anv/package.nix { };
   breezyHyprland = pkgs.callPackage ./launcher.nix {
     inherit monadoRayneo;
-    inherit (pkgs) wayvr hyprland;
+    inherit (pkgs) hyprland;
+    wayvr = wayvrAnv;
   };
 in
 {
   environment.systemPackages = [
-    pkgs.wayvr
+    wayvrAnv
     breezyHyprland
   ];
 

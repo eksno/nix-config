@@ -1,0 +1,18 @@
+diff --git a/wgui/src/renderer_vk/text/text_atlas.rs b/wgui/src/renderer_vk/text/text_atlas.rs
+index dc40d02..f2a2e9e 100644
+--- a/wgui/src/renderer_vk/text/text_atlas.rs
++++ b/wgui/src/renderer_vk/text/text_atlas.rs
+@@ -80,7 +80,12 @@ pub(super) struct InnerAtlas {
+ pub const TEXT_ATLAS_ISLAND_PADDING_PX: u32 = 1;
+ 
+ impl InnerAtlas {
+-	const INITIAL_SIZE: u32 = 256;
++	// Bumped 256 -> 2048 to avoid the grow() path. On Mesa anv (Intel) the
++	// grow path crashes (suspected: in-flight command buffers still hold
++	// the old image_view via descriptor while build_and_execute_now()
++	// submits the copy without waiting for queue idle). 2048x2048 fits
++	// any reasonable dashboard glyph load; 2048x2048 RGBA8 = 16 MiB.
++	const INITIAL_SIZE: u32 = 2048;
+ 
+ 	fn new(common: TextPipeline, kind: Kind) -> anyhow::Result<Self> {
+ 		let max_texture_dimension_2d = common.gfx.device.physical_device().properties().max_image_dimension2_d;
