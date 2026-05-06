@@ -846,3 +846,83 @@ Whichever exists is the cheapest path to "wayvr that doesn't
 crash on lewis," and lets us verify the rest of the visual chain
 (monado present cycle → glasses) end-to-end without first solving
 the DMA-BUF import bug.
+
+## CDCLK budget on Intel display engines bites at lease time (2026-05-06)
+
+The lewis hardware (Intel Arc MTL) tolerates roughly **1.0 GP/s** of
+total active-output pixel bandwidth. Adding the leased 3840x1080@60
+DP-2 surface from the glasses on top of eDP-1@1920x1080@120 +
+HDMI-A-1@1920x1080@119.98 sums to ~1.12 GP/s — over budget.
+
+When wp_drm_lease_v1 fires and Hyprland reconfigures all outputs to
+honour the lease, the atomic modeset fails and aquamarine logs
+
+  drm: Cannot commit when a page-flip is awaiting
+
+repeatedly until the watchdog kills Hyprland into safe-mode.
+Smoking gun: `/run/user/1000/hypr/521ece...1778064687_*/hyprland.log`
+lines 511-513.
+
+Workaround landed in commit `1f84b02`: cap HDMI-A-1 at 60Hz in
+`dotfiles/default/hypr/users/jorge/default/monitor.conf`. Total drops
+to ~995 MP/s, under threshold, page-flip-loop stops. (Hyprland is
+STILL crashing into safe-mode on plain login post-cap; root cause
+of that is open — see `memory/xr-hyprland-cdclk-cap.md`.)
+
+Real upstream fix would be Hyprland sequencing the lease handover so
+non-leased outputs get downgraded *before* the lease modeset. Until
+then, on Intel hosts running XR with a high-bandwidth lease target,
+sum (W × H × refresh) for all active outputs and lower one if you're
+near 1 GP/s. Reference: `memory/xr-hyprland-cdclk-cap.md`.
+
+## fetchCargoVendor derivation name keys off pname (2026-05-06)
+
+`fetchCargoVendor` (the modern replacement for `cargoSetupHook` /
+`cargoFetchHook`) uses the package's `pname` as part of the vendor-
+staging derivation's name. `overrideAttrs` that change `pname` —
+e.g., renaming `wayvr` → `wayvr-anv` to mark a patched variant —
+force a fresh download of the vendor staging. For Rust crates with
+hundreds of transitive dependencies that download is 30+ minutes
+per iteration of any patch tweak.
+
+Lesson: when adding patches to a Rust derivation, **keep `pname`
+stable**. Only the build phase needs to reinvalidate. Add patches
+via `patches = (oldAttrs.patches or []) ++ [ ./foo.patch ]` without
+touching `pname` and the cached vendor staging stays valid.
+
+Applied in commit `5954b91` — dropped the `pname = "wayvr-anv"`
+override on the vendor-staging derivation so future wayvr patch
+iterations don't trigger a 30-min re-fetch every time. The wgui
+atlas-grow patch from `b02dffa` is unaffected (the vendor staging
+just rebuilds the build outputs).
+
+## Coincident log line ≠ root cause, second time (2026-05-06)
+
+This is the second time we've blamed the wrong thing for the wayvr
+segfault based on which line was last in the log:
+
+1. **First time:** atlas-grow (`Grow Color atlas 256 → 512`) was
+   the previous log line; we shipped a patch raising the initial
+   atlas to 2048 (`b02dffa`). The patch worked at its job (no more
+   atlas-grow log) but wayvr segfaulted at the same wall-clock
+   distance from FOCUSED. Documented in the existing
+   "Last log line ≠ last function call" entry.
+2. **Second time (this round):** with the atlas-grow log gone,
+   the `Using GPU capture` warning at `screen/backend.rs:200` looked
+   like the next obvious culprit (DMA-BUF import into vulkano
+   immediately follows). We dropped a `capture_method: screencopy`
+   override at `~/.config/wayvr/config.yaml`. Confirmed by log
+   (`Not using DMA-buf capture due to ScreenCopyCpu`) followed by
+   `Software capture will take place on the main thread`. SEGV one
+   line later. So DMA-BUF was *also* coincident. The actual crash
+   sits in the post-method-decision / capture-init region —
+   probably Vulkan queue setup or a vulkano-anv interaction that
+   logs nothing before crashing.
+
+Pattern: wayvr/vulkano on Mesa anv has a sequencing bug where the
+crash happens shortly after a logged operation, and the operation
+that logs is not the operation that crashes. **Stop blaming the
+last log line. Get a backtrace.** Either `coredumpctl info wayvr`
+post-segfault or `gdb --args wayvr --openxr --show` with `bt full`
+in the crashing frame. Until that's done, every new "obvious next
+suspect" is going to be wrong.
