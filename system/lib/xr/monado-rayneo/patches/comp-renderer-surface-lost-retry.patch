@@ -1,0 +1,60 @@
+diff --git a/src/xrt/compositor/main/comp_renderer.c b/src/xrt/compositor/main/comp_renderer.c
+--- a/src/xrt/compositor/main/comp_renderer.c
++++ b/src/xrt/compositor/main/comp_renderer.c
+@@ -754,6 +754,23 @@
+ 		if (ret != VK_SUCCESS) {
+ 			COMP_ERROR(r->c, "comp_target_acquire: %s", vk_result_string(ret));
+ 		}
++	} else if (ret == VK_ERROR_SURFACE_LOST_KHR) {
++		// Mesa's wsi_common_display.c flattens any non-EACCES atomic_commit
++		// failure (including transient EBUSY from CRTC contention) to
++		// SURFACE_LOST_KHR. Retry a few times with a frame-sized backoff
++		// before giving up; on success the panel comes alive instead of
++		// staying black. See memory/xr-mesa-anv-ebusy-on-first-present.md.
++		for (int attempt = 1; attempt <= 3 && ret == VK_ERROR_SURFACE_LOST_KHR; attempt++) {
++			COMP_INFO(r->c, "comp_target_acquire: SURFACE_LOST retry %d/3", attempt);
++			os_nanosleep(16 * 1000 * 1000); // ~1 frame at 60Hz
++			if (!renderer_ensure_images_and_renderings(r, true)) {
++				break;
++			}
++			ret = comp_target_acquire(r->c->target, &buffer_index);
++		}
++		if (ret != VK_SUCCESS) {
++			COMP_ERROR(r->c, "comp_target_acquire: %s (after retries)", vk_result_string(ret));
++		}
+ 	} else if (ret != VK_SUCCESS) {
+ 		COMP_ERROR(r->c, "comp_target_acquire: %s", vk_result_string(ret));
+ 	}
+@@ -797,6 +814,32 @@
+ 		renderer_resize(r);
+ 		return;
+ 	}
++	if (ret == VK_ERROR_SURFACE_LOST_KHR) {
++		// Same EBUSY-flattened-to-SURFACE_LOST recovery as the acquire path.
++		// Note: r->acquired_buffer was already set to -1 above, so a
++		// successful retry needs to re-acquire a fresh image before
++		// re-presenting. renderer_resize() wraps renderer_ensure_images_and_renderings
++		// with the readiness gate at line 767, matching the OUT_OF_DATE path.
++		for (int attempt = 1; attempt <= 3 && ret == VK_ERROR_SURFACE_LOST_KHR; attempt++) {
++			COMP_INFO(r->c, "comp_target_present: SURFACE_LOST retry %d/3", attempt);
++			os_nanosleep(16 * 1000 * 1000); // ~1 frame at 60Hz
++			renderer_resize(r);
++			uint32_t buffer_index = 0;
++			ret = comp_target_acquire(r->c->target, &buffer_index);
++			if (ret != VK_SUCCESS) {
++				continue;
++			}
++			r->acquired_buffer = buffer_index;
++			ret = comp_target_present(r->c->target, r->c->base.vk.main_queue, r->acquired_buffer,
++			                          render_complete_signal_value, desired_present_time_ns,
++			                          present_slop_ns);
++			r->acquired_buffer = -1;
++		}
++		if (ret != VK_SUCCESS) {
++			COMP_ERROR(r->c, "comp_target_present: %s (after retries)", vk_result_string(ret));
++		}
++		return;
++	}
+ 	if (ret != VK_SUCCESS) {
+ 		COMP_ERROR(r->c, "vk_swapchain_present: %s", vk_result_string(ret));
+ 	}

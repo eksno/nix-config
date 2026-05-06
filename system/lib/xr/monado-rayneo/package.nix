@@ -33,13 +33,22 @@ monado.overrideAttrs (old: {
   # "Reversed (or previously applied) patch detected." Filter it out by name;
   # keep any other patches nixpkgs adds in the future.
   #
-  # Locally added: comp-renderer-scanout-compatible-tiling.patch — pairs
-  # COLOR_ATTACHMENT_BIT with STORAGE_BIT on the compute-path swapchain so
-  # Mesa anv picks scanout-compatible tiling for direct WSI display. See
-  # patches/comp-renderer-scanout-compatible-tiling.patch for details.
+  # Locally added:
+  # - comp-renderer-scanout-compatible-tiling.patch — pairs
+  #   COLOR_ATTACHMENT_BIT with STORAGE_BIT on the compute-path swapchain so
+  #   Mesa anv picks scanout-compatible tiling for direct WSI display. See
+  #   patches/comp-renderer-scanout-compatible-tiling.patch for details.
+  # - comp-renderer-surface-lost-retry.patch — bounded retry on
+  #   VK_ERROR_SURFACE_LOST_KHR in renderer_acquire_swapchain_image and
+  #   renderer_present_swapchain_image. Sidesteps the transient kernel EBUSY
+  #   on monado's first DRM_IOCTL_MODE_ATOMIC, which Mesa flattens to
+  #   SURFACE_LOST. See memory/xr-mesa-anv-ebusy-on-first-present.md.
   patches =
     builtins.filter (
       p: !(builtins.match ".*monado-cylinder-aspectRatio.*" (toString p) != null)
     ) (old.patches or [ ])
-    ++ [ ./patches/comp-renderer-scanout-compatible-tiling.patch ];
+    ++ [
+      ./patches/comp-renderer-scanout-compatible-tiling.patch
+      ./patches/comp-renderer-surface-lost-retry.patch
+    ];
 })

@@ -4,6 +4,19 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-05-07 — monado-surface-lost-retry-on-mesa-ebusy-flatten
+
+**Symptom:** Rayneo Air 4 Pro panel stayed black even after monado reached FOCUSED with IPD/pose flowing. SBS scene rendered fine on the laptop screen but not on the glasses. `monado-service.log` showed a single `VK_ERROR_SURFACE_LOST_KHR` from `comp_target_acquire`/`comp_target_present` then deadlocked waiting on `drm_syncobj_array_wait_timeout` fences that would never signal.
+**Affected:** host `lewis`, user `jorge`. `system/lib/xr/monado-rayneo/package.nix:40`, new `system/lib/xr/monado-rayneo/patches/comp-renderer-surface-lost-retry.patch`.
+**Root cause:** Kernel returns `EBUSY` on monado's *first* `DRM_IOCTL_MODE_ATOMIC` (CRTC contention with Hyprland's stale binding to DP-2, even though aquamarine takes the `non_desktop` early-return at `Monitor.cpp:246`). Mesa's `wsi_common_display.c:3129` flattens any non-`EACCES` `atomic_commit` failure to `VK_ERROR_SURFACE_LOST_KHR`. Monado's `renderer_acquire_swapchain_image` and `renderer_present_swapchain_image` only special-case `VK_ERROR_OUT_OF_DATE_KHR` and `VK_SUBOPTIMAL_KHR`, so SURFACE_LOST falls through to a single log line and the present cycle stalls.
+**Investigation:**
+1. **Round 1 (dead end):** Suspected swapchain-usage / Mesa anv display-plane gap. Authored `comp-renderer-scanout-compatible-tiling.patch` pairing `COLOR_ATTACHMENT_BIT` with `STORAGE_BIT`. Necessary fix (kept) but didn't solve the black panel.
+2. **Round 2 (dead end):** Suspected EDID 3840-mode injection / i915 atomic_check rejection. v2 strace with `drm.debug=0x1f` showed *successful* DP-2 modeset — refuted.
+3. **Round 3 (real diagnosis):** v3 strace showed `DRM_IOCTL_MODE_ATOMIC = -1 EBUSY` immediately preceding the SURFACE_LOST log. Read Mesa source: `wsi_common_display.c:3129` confirms the `if (ret != -EACCES)` branch unconditionally maps to `VK_ERROR_SURFACE_LOST_KHR`. Read monado source: only OUT_OF_DATE/SUBOPTIMAL branches exist, no SURFACE_LOST recovery. Documented in `memory/xr-mesa-anv-ebusy-on-first-present.md`.
+4. Considered the symmetric Mesa fix (`EBUSY → VK_NOT_READY`) but verified monado treats `VK_NOT_READY` exactly like SURFACE_LOST — Mesa-side change alone is useless without a monado pair patch. Minimal-blast-radius decision: patch monado only.
+**Fix:** New patch `comp-renderer-surface-lost-retry.patch` adds bounded retries (3 attempts × 16 ms backoff) on `VK_ERROR_SURFACE_LOST_KHR` in both `renderer_acquire_swapchain_image` (calls `renderer_ensure_images_and_renderings(r, true)` then re-acquires) and `renderer_present_swapchain_image` (calls `renderer_resize(r)`, re-acquires a fresh `buffer_index` since `r->acquired_buffer == -1` by that point, then re-presents). On exhaustion the original log-and-return behavior is preserved. Wired into `system/lib/xr/monado-rayneo/package.nix` patches list.
+**Commit:** `_pending_`
+
 ## 2026-05-06 — breezy-hyprland-stale-monado-ipc-socket-race
 
 **Symptom:** `breezy-hyprland` would sometimes exit cleanly within ~1s of launch with no visible error; wayvr.log showed `Failed to connect to socket /run/user/1000/monado_comp_ipc: Connection refused!` and `XR_ERROR_RUNTIME_UNAVAILABLE`. Monado-service log showed `WARN [create_listen_socket] Removing stale socket file` immediately followed by `INFO [ipc_server_main_common] Server exiting: '0'`. Glasses got a brief "left half black, right half rainbow streaks, on/off" pattern — direct mode WAS working, just being torn down before any frame landed.
