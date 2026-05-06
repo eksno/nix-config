@@ -4,6 +4,8 @@ return {
     lazy = true,
     name = "catppuccin",
     opts = {
+      flavour = "mocha",
+      color_overrides = require("startino"),
       integrations = {
         aerial = true,
         alpha = true,
