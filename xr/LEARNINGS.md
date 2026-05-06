@@ -971,3 +971,37 @@ last log line. Get a backtrace.** Either `coredumpctl info wayvr`
 post-segfault or `gdb --args wayvr --openxr --show` with `bt full`
 in the crashing frame. Until that's done, every new "obvious next
 suspect" is going to be wrong.
+
+## EBUSY on atomic_commit means CRTC contention (or transient flip), not surface-lost (2026-05-07)
+
+When investigating `VK_ERROR_SURFACE_LOST_KHR` in Vulkan WSI direct-
+display on Mesa, the actual kernel errno can be one of several
+(`EBUSY`, `EINVAL`, `ENOSPC`, `EIO`, …). Mesa's
+`wsi_common_display.c:3122-3134` translates **any non-`EACCES`
+atomic_commit failure** to a single `VK_ERROR_SURFACE_LOST_KHR`. The
+original errno is dropped on the floor. `wsi_display_debug` could log
+it but is `#if 0`'d at compile time (see
+`memory/xr-mesa-wsi-debug-disabled.md`).
+
+**Strace is the only way to see the real errno without rebuilding
+Mesa.** Run monado-service under `strace -f -e trace=ioctl
+-o .scratch/.../strace.log` and grep
+`DRM_IOCTL_MODE_ATOMIC.*= -1 E`. The line right before the
+`VK_ERROR_SURFACE_LOST_KHR` write is the one that matters.
+
+In the 2026-05-07 v2 strace on `lewis` the errno was `EBUSY`. EBUSY
+in this context means "another DRM client is holding state you tried
+to commit" — i.e. CRTC, plane, or connector contention, possibly
+transient (a page-flip in flight) or persistent (someone else owns
+the resource). It is **not** "surface destroyed by the system". A
+caller that retries on the proper errno would likely succeed; monado
+doesn't, because it sees `VK_ERROR_SURFACE_LOST_KHR` and
+`comp_renderer.c renderer_present_swapchain_image` has no retry path
+for that. See `memory/xr-mesa-anv-ebusy-on-first-present.md` for the
+canonical writeup.
+
+Lesson: when SURFACE_LOST shows up in a Mesa WSI display path, treat
+the Vulkan error code as "something failed in `wsi_common_display.c`,
+unknown errno". Don't reason about it as "surface lost"
+semantically — Mesa just used the closest available enum. Strace
+first.
