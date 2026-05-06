@@ -791,3 +791,58 @@ beats web fetches: faster, no rate limit, can `git log -p`, can
 cross-reference between repos in one shell. Pattern documented in
 `memory/xr-research-corpus.md`. Refresh by `git pull` in individual
 src/ subdirs when upstream lands a relevant change.
+
+## Last log line ≠ last function call (2026-05-06)
+
+When a crash happens in unsafe FFI / Vulkan code, the relevant
+signal is **what code path is entered next**, not what logged most
+recently. We spent a fix-and-verify cycle on the wrong thing here:
+
+- v4 breezy run: last two log lines were the wayvr "Using GPU
+  capture" warning at `screen/backend.rs:200`, then wgui's
+  `Grow Color atlas 256 → 512` at `text_atlas.rs:190`, then SEGV.
+- The previous agent attributed the crash to atlas-grow (citing
+  the racy `text_atlas::grow()` that swaps `image_view` without
+  `queue.wait_idle()`), shipped a workaround in `b02dffa` raising
+  the initial atlas from 256 → 2048 so growth never happens, and
+  wired it as the `wayvr-anv` overlay.
+- The patch worked at its stated job: the post-patch v3 log shows
+  NO `Grow Color atlas` line. But wayvr **still segfaults at the
+  same wall-clock distance from FOCUSED**, in the same place.
+
+So the atlas log was the *previous log line*, not the *previous
+function call*. The actual next step after the GPU capture warning
+is `MyFirstDmaExporter::new(...)` and `self.capture.init(...)` two
+lines below in `backend.rs:200-217` — DMA-BUF import into vulkano,
+which never logs anything before it crashes natively.
+
+Lesson: in unsafe code, treat "log line right before SEGV" as a
+location estimate, not an attribution. Read the next 20 lines of
+source after the last log call before assigning blame. If the
+post-patch crash is identical to the pre-patch crash, the patch
+fixed something that wasn't the bug.
+
+## wayvr's GPU-capture warning lists the workaround inline (2026-05-06)
+
+The warning text itself says how to fall back to CPU capture:
+
+  "Using GPU capture. If you're having issues with screens, go to
+  the Dashboard's Settings tab and switch 'Wayland capture method'
+  to a CPU option!"
+
+Useful when GPU capture crashes (it does on Mesa anv — see
+`memory/xr-wayvr-gpu-capture-segfault.md`). Catch: we don't have
+the dashboard rendering yet (the dashboard is the thing wayvr is
+trying to open when it crashes). So the in-UI toggle is unreachable
+right now. Look for:
+
+- a config file under `~/.config/wlxoverlay/` or similar that
+  persists `capture_method`
+- an env var override (grep wayvr source for `capture_method` /
+  `CaptureType` / `WAYVR_*`)
+- a CLI flag on `wayvr --openxr ...`
+
+Whichever exists is the cheapest path to "wayvr that doesn't
+crash on lewis," and lets us verify the rest of the visual chain
+(monado present cycle → glasses) end-to-end without first solving
+the DMA-BUF import bug.
