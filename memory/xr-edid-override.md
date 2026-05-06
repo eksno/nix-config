@@ -1,23 +1,31 @@
 ---
 type: project
-title: EDID non-desktop override — how the module works
+title: EDID override — non-desktop bit + 3840x1080 SBS mode injection
 created: 2026-05-06
 ---
 
 The `system/lib/xr/glasses-edid/` module makes Linux see the Rayneo
-glasses as a non-desktop output, which is the prerequisite for wlroots
-advertising the connector via `wp-drm-lease-v1`. See
-[wlroots leasing rules](xr-wlroots-leasing-rules.md) for why.
+glasses as a non-desktop output (so wlroots advertises the connector
+via `wp-drm-lease-v1`) AND exposes the 3840x1080@60 native SBS mode the
+glasses' panel actually drives in 3D mode. See
+[wlroots leasing rules](xr-wlroots-leasing-rules.md) for the lease half.
 
 ## Pieces
 
 - **Original EDID**: `xr/edid/glasses-original.bin` (256 bytes captured
   from `/sys/class/drm/card1-DP-2/edid`).
-- **Patcher**: `xr/edid/patch_glasses_edid.py`. Inserts a Microsoft HMD
-  Vendor-Specific Data Block (OUI `0x5C 0x12 0xCA`, 21-byte payload,
-  version `0x02`) into the CTA-861 extension. Bumps DTD start offset,
-  shifts DTDs forward, recomputes CTA-861 checksum, refuses to overwrite
-  non-zero bytes.
+- **Patcher**: `xr/edid/patch_glasses_edid.py`. Three modifications:
+  1. Inserts a Microsoft HMD Vendor-Specific Data Block (OUI
+     `0x5C 0x12 0xCA`, 21-byte payload, version `0x02`) into the
+     CTA-861 extension. Kernel sets `non_desktop=1` on the connector.
+  2. Replaces base EDID DTD 1 with a synthesized 3840x1080@60 mode
+     (297 MHz pixel clock, derived by doubling the original
+     1920x1080@60's H values). monado's `choose_best_vk_mode_auto`
+     picks this (highest pixel count) and the SBS surface lands at
+     native size.
+  3. Bumps the Display Range Limits descriptor's max-dotclock cap
+     from 160 → 300 MHz so kernels that validate added modes against
+     the cap accept the 297 MHz mode.
 - **Patched EDID**: `xr/edid/glasses-nondesktop.bin`. Verified with
   `edid-decode`. THIS is what gets shipped.
 - **Module**: `system/lib/xr/glasses-edid/default.nix` installs the patched
