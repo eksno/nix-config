@@ -40,6 +40,47 @@ rule sets `MODE="0660", GROUP="users"` for `1bbb:af50`. This is
 group-permission based and survives the boot-race. Kept at 0660 (not
 0666) so non-`users` accounts can't open the headset.
 
+## Display modes the panel actually accepts
+
+EDID advertises only **1920x1080** modes (multiple DTDs at 60 and 120 Hz,
+all 1920x1080). There is no 3840x1080 mode in the EDID. So the kernel
+only programs a 1920-wide DP signal.
+
+The glasses have an internal "3D vs 2D" mode (HID-toggled, see below).
+In 3D mode they treat incoming 1920x1080 as **side-by-side packed** —
+each eye gets the left-half / right-half (960x1080 per eye, scaled).
+In 2D mode they show 1920x1080 to both eyes (mirror).
+
+If a Vulkan client wants stereo (monado: "view count: 2"), it has to
+SBS-pack into the 1920-wide buffer. Direct-mode WSI rendering at
+3840x1080 is **not currently possible** without an EDID modes-extension
+patch. (Phase 3.5 candidate work.)
+
+## HID toggle: 2D vs 3D mode (xr-driver SDK + control IPC)
+
+The closed-source `libRayNeoXRMiniSDK.so` exposes
+`ffalcon::XRMiniService::SwitchTo2D()` and `SwitchTo3D()`. xr-driver
+calls these via its plugin glue and surfaces a runtime control through
+`/dev/shm/xr_driver_control`:
+
+```
+printf 'sbs_mode=enable\n'  > /dev/shm/xr_driver_control   # 3D mode
+printf 'sbs_mode=disable\n' > /dev/shm/xr_driver_control   # 2D mode
+```
+
+(Other valid values rejected: `false`/`true`, `0`/`1`, `disabled`,
+`enabled`, `stretched`. **The exact string is `enable` / `disable`.**
+The driver logs `Invalid sbs_mode value: %s` for anything else.)
+
+Confirm via `cat /dev/shm/xr_driver_state | grep sbs_mode_enabled`.
+
+xr-driver must be running for these to take effect — `breezy-hyprland`
+stops xr-driver, so toggle BEFORE launching it.
+
+When stopped, xr-driver does NOT toggle the glasses back to 2D — they
+stay in whatever mode was last set. Default startup behavior with
+`external_mode=breezy_desktop` is to enable SBS.
+
 ## Common enemy of past sessions
 
 - "It worked yesterday" → check the cable
