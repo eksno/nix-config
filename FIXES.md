@@ -15,7 +15,7 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 3. **Round 3 (real diagnosis):** v3 strace showed `DRM_IOCTL_MODE_ATOMIC = -1 EBUSY` immediately preceding the SURFACE_LOST log. Read Mesa source: `wsi_common_display.c:3129` confirms the `if (ret != -EACCES)` branch unconditionally maps to `VK_ERROR_SURFACE_LOST_KHR`. Read monado source: only OUT_OF_DATE/SUBOPTIMAL branches exist, no SURFACE_LOST recovery. Documented in `memory/xr-mesa-anv-ebusy-on-first-present.md`.
 4. Considered the symmetric Mesa fix (`EBUSY → VK_NOT_READY`) but verified monado treats `VK_NOT_READY` exactly like SURFACE_LOST — Mesa-side change alone is useless without a monado pair patch. Minimal-blast-radius decision: patch monado only.
 **Fix:** New patch `comp-renderer-surface-lost-retry.patch` adds bounded retries (3 attempts × 16 ms backoff) on `VK_ERROR_SURFACE_LOST_KHR` in both `renderer_acquire_swapchain_image` (calls `renderer_ensure_images_and_renderings(r, true)` then re-acquires) and `renderer_present_swapchain_image` (calls `renderer_resize(r)`, re-acquires a fresh `buffer_index` since `r->acquired_buffer == -1` by that point, then re-presents). On exhaustion the original log-and-return behavior is preserved. Wired into `system/lib/xr/monado-rayneo/package.nix` patches list.
-**Commit:** `_pending_`
+**Commit:** `baa7b4e`
 
 ## 2026-05-06 — breezy-hyprland-stale-monado-ipc-socket-race
 
