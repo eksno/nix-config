@@ -79,6 +79,18 @@ in
             https://github.com/tmux-plugins/tpm \
             "$cfg/tmux/plugins/tpm" 2>/dev/null || true
         fi
+        # Drop Startino flavors into the catppuccin/tmux plugin's themes/ dir
+        # via symlink, so re-pulling ~/themes refreshes them automatically.
+        # Guarded: only runs after TPM has installed catppuccin/tmux on first
+        # tmux start, and only if the user's ~/themes clone is present.
+        if [ -d "$cfg/tmux/plugins/tmux/themes" ] && \
+           [ -d "/home/${user}/themes/ports/tmux/dist" ]; then
+          for flavor in mercury mars jupiter neptune; do
+            ln -sfn \
+              "/home/${user}/themes/ports/tmux/dist/catppuccin_$flavor"_tmux.conf \
+              "$cfg/tmux/plugins/tmux/themes/catppuccin_$flavor"_tmux.conf
+          done
+        fi
         chown -R ${user}:users "$cfg/tmux" 2>/dev/null || true
 
         # ── Read-only apps (directory-level symlinks) ──
