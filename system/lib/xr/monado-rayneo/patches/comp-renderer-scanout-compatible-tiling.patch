@@ -1,0 +1,19 @@
+diff --git a/src/xrt/compositor/main/comp_renderer.c b/src/xrt/compositor/main/comp_renderer.c
+index f6c403015..5aba9910a 100644
+--- a/src/xrt/compositor/main/comp_renderer.c
++++ b/src/xrt/compositor/main/comp_renderer.c
+@@ -543,7 +543,14 @@ renderer_ensure_images_and_renderings(struct comp_renderer *r, bool force_recrea
+ 
+ 	VkImageUsageFlags image_usage = 0;
+ 	if (r->settings->use_compute) {
++		// On Mesa anv (Intel) the WSI display swapchain image is scanned
++		// out by KMS. STORAGE_BIT alone makes Mesa pick a tiling that the
++		// display planes can't address, leaving the panel showing garbage
++		// or nothing. Pair it with COLOR_ATTACHMENT_BIT so Mesa selects a
++		// scanout-compatible modifier. The compute shader writes still
++		// work with both bits set.
+ 		image_usage |= VK_IMAGE_USAGE_STORAGE_BIT;
++		image_usage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+ 	} else {
+ 		image_usage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+ 	}

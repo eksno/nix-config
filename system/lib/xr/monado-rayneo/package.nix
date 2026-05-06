@@ -32,7 +32,14 @@ monado.overrideAttrs (old: {
   # the upstream commit that patch backports — applying it again fails with
   # "Reversed (or previously applied) patch detected." Filter it out by name;
   # keep any other patches nixpkgs adds in the future.
-  patches = builtins.filter (
-    p: !(builtins.match ".*monado-cylinder-aspectRatio.*" (toString p) != null)
-  ) (old.patches or [ ]);
+  #
+  # Locally added: comp-renderer-scanout-compatible-tiling.patch — pairs
+  # COLOR_ATTACHMENT_BIT with STORAGE_BIT on the compute-path swapchain so
+  # Mesa anv picks scanout-compatible tiling for direct WSI display. See
+  # patches/comp-renderer-scanout-compatible-tiling.patch for details.
+  patches =
+    builtins.filter (
+      p: !(builtins.match ".*monado-cylinder-aspectRatio.*" (toString p) != null)
+    ) (old.patches or [ ])
+    ++ [ ./patches/comp-renderer-scanout-compatible-tiling.patch ];
 })
