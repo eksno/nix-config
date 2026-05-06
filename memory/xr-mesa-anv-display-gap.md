@@ -61,10 +61,16 @@ Canonical entry for the finding:
 
 ### What to try next (ordered)
 
-1. **Confirm CRTC theory.** Read the failing atomic blob's `CRTC_ID`
-   from the strace dump (the prop array passed to `DRM_IOCTL_MODE_ATOMIC`
-   at the EBUSY call). If it's CRTC 267, contention with Hyprland's
-   stale aquamarine binding is confirmed.
+1. **Confirm CRTC theory.** Read the `CRTC_ID` in the prop array
+   passed to `DRM_IOCTL_MODE_ATOMIC` at the EBUSY call. **The existing
+   v2 strace dump can NOT answer this** — strace 7.0 with `-s 256`
+   doesn't decode the atomic ioctl's user-pointer arrays. Use one of:
+   kernel ftrace (`drm:drm_atomic_state_*`), an `LD_PRELOAD` shim
+   that intercepts `ioctl(fd, DRM_IOCTL_MODE_ATOMIC, ...)` and dumps
+   `struct drm_mode_atomic` + the prop arrays, or a one-line
+   monado/Mesa instrumentation rebuild that logs the chosen CRTC.
+   If it's CRTC 267, contention with Hyprland's stale aquamarine
+   binding is confirmed.
 2. **Patch monado to retry on first-present failure.**
    `comp_renderer.c renderer_present_swapchain_image` currently has
    no retry on SURFACE_LOST (only OUT_OF_DATE retries near
@@ -79,9 +85,11 @@ Canonical entry for the finding:
    skip CRTC assignment entirely for non_desktop, or a runtime way to
    clear it before lease handover.
 
-## Round 2 (2026-05-06 evening): SURFACE_LOST has REAPPEARED in a different form
+---
 
-**(Superseded by Round 3 above — kept for log continuity.)**
+# Historical rounds (superseded by Round 3 above — kept for log continuity)
+
+## Round 2 (2026-05-06 evening): SURFACE_LOST has REAPPEARED in a different form
 
 After the rolled-back gen booted (`549bd84`, the gen with both
 `3bf13da` swapchain-usage and `7122089` EDID-3840 patches active), a
@@ -119,7 +127,11 @@ both are verified working in this build.
 
 
 
-## Current best hypothesis (2026-05-06, post launcher-fix + EDID 3840 + monado-patch)
+## Round 1 best hypothesis (2026-05-06, post launcher-fix + EDID 3840 + monado-patch)
+
+**(Superseded by Round 3 — round-1 fixes are still in the build and
+verified active, but the symptom that remained turned out to be the
+EBUSY case captured in Round 3, not the swapchain-usage path.)**
 
 The blank/streaky panel was **never** a Mesa anv gap. Two real issues
 stack on top of each other:

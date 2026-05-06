@@ -1,44 +1,62 @@
 # Active plan
 
-**[`plans/04-phase-3-5-decision-2026-05-06.md`](./plans/04-phase-3-5-decision-2026-05-06.md)** — Decision document (not an implementation plan). Awaiting Jorge's choice between four forward options.
+**Active phase: fix the EBUSY on monado's first atomic_commit.** Round
+3 (2026-05-07) located the root cause behind the persistent black-
+panel symptom: `DRM_IOCTL_MODE_ATOMIC` returns `-1 EBUSY` on monado's
+first present, and Mesa's `wsi_common_display.c:3129` flattens any
+non-EACCES atomic_commit failure to `VK_ERROR_SURFACE_LOST_KHR`.
+Canonical writeup:
+[`../memory/xr-mesa-anv-ebusy-on-first-present.md`](../memory/xr-mesa-anv-ebusy-on-first-present.md).
 
 Phase 1 (Monado MR !2737), Phase 2 (WayVR + launcher), and Phase 3
 (EDID non-desktop override + USB ACL fix) all shipped and verified
 on `lewis`. **Phase 3 is architecturally complete**: monado takes
 the DRM lease via `wp-drm-lease-v1`, OpenXR session reaches FOCUSED
 with the real Rayneo head device, IPD = 63mm, pose data flowing.
+Phase 3.5 (this phase) is the visual-output gap that remained.
 
-**Visual output is still black.** The original "Mesa anv display-plane
-gap" framing was wrong (see correction in
-[`../memory/xr-mesa-anv-display-gap.md`](../memory/xr-mesa-anv-display-gap.md)).
-First diagnosed root cause was monado swapchain usage flags
-(STORAGE-only on the compute path), patched in `3bf13da` and verified
-on the monado side. **Round 2 (2026-05-06 evening):** SURFACE_LOST
-reappeared in a different form. **Round 3 (2026-05-07): root cause
-located** — strace v2 caught the kernel errno hidden by Mesa: the
-first `DRM_IOCTL_MODE_ATOMIC` returns `-1 EBUSY`, and Mesa's
-`wsi_common_display.c:3129` flattens any non-EACCES atomic_commit
-failure to `VK_ERROR_SURFACE_LOST_KHR`. Canonical writeup:
-[`../memory/xr-mesa-anv-ebusy-on-first-present.md`](../memory/xr-mesa-anv-ebusy-on-first-present.md).
+## Forward options (ordered by cost)
 
-**Active phase: fix the EBUSY.** Two paths under consideration (see
-the Round 3 next-step list in
-[`../memory/xr-mesa-anv-display-gap.md`](../memory/xr-mesa-anv-display-gap.md)):
-either patch monado to retry on first-present failure
-(`comp_renderer.c renderer_present_swapchain_image` has no retry on
-SURFACE_LOST), or upstream a Mesa change that translates `EBUSY` →
-`VK_NOT_READY` (more semantically correct, lets monado retry via
-normal swapchain timing). Confirming the unconfirmed CRTC-contention
-hypothesis (Hyprland's stale aquamarine CRTC binding on DP-2 vs
-monado's lease) is a parallel cheap diagnostic — read the failing
-atomic blob's `CRTC_ID` from the strace dump. The Hyprland event-loop
-stall on DP-2 hot-plug ([`../memory/xr-hyprland-lease-hotplug-stall.md`](../memory/xr-hyprland-lease-hotplug-stall.md))
-remains a separate open issue.
+1. **Confirm the CRTC-contention hypothesis.** Mesa's
+   `wsi_display_select_crtc` picks the connector's encoder's current
+   CRTC; aquamarine binds CRTC 267 to DP-2 internally even on the
+   non_desktop early-return path (`SDRMConnector::connect`,
+   `Monitor.cpp:246`). If monado's failing atomic targets the same
+   CRTC Hyprland is holding, contention is the cause. **The existing
+   strace dump cannot answer this** — strace doesn't decode the
+   atomic ioctl's user-pointer prop arrays. Cheapest confirmation
+   paths: kernel ftrace `drm:drm_atomic_state_*` events, an
+   `LD_PRELOAD` ioctl shim that dumps `struct drm_mode_atomic`, or a
+   one-line monado/Mesa instrumentation rebuild.
+2. **Patch monado to retry on first-present SURFACE_LOST.**
+   `comp_renderer.c renderer_present_swapchain_image` only retries on
+   `OUT_OF_DATE`. Bounded retry (e.g. 3 attempts, ~16ms apart) sidesteps
+   the EBUSY race regardless of the underlying root cause.
+3. **Patch Mesa wsi_display: `EBUSY` → `VK_NOT_READY`.** More
+   semantically correct than SURFACE_LOST. Lets monado retry via
+   normal swapchain timing. Upstreamable.
+4. **Hyprland-side: skip CRTC assignment for non_desktop connectors.**
+   Highest leverage if (1) confirms the theory; biggest blast radius
+   (touches aquamarine internals; could regress non-XR multi-monitor).
 
-The original Phase 3 plan is archived at
+The Hyprland event-loop stall on DP-2 hot-plug
+([`../memory/xr-hyprland-lease-hotplug-stall.md`](../memory/xr-hyprland-lease-hotplug-stall.md))
+remains a separate open issue. The latest gen gray-screen-on-boot
+(currently rolled back to gen `549bd84`) is also still open.
+
+## Historical context
+
+The 2026-05-06 decision document
+[`plans/04-phase-3-5-decision-2026-05-06.md`](./plans/04-phase-3-5-decision-2026-05-06.md)
+listed four options for Phase 3.5; the data from Round 3 effectively
+chose by exposing the EBUSY. Read it only for historical framing.
+
+The original Phase 3 implementation plan is archived at
 [`plans/03-hyprland-breezy-2026-05-06.md`](./plans/03-hyprland-breezy-2026-05-06.md);
 its post-reboot verification checklist all passed except the final
-visual step.
+visual step. The "Mesa anv display-plane gap" framing was an early
+misdiagnosis — see correction in
+[`../memory/xr-mesa-anv-display-gap.md`](../memory/xr-mesa-anv-display-gap.md).
 
 ## Why this is the active path
 
