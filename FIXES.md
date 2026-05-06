@@ -15,7 +15,7 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 3. Considered running the plugin twice (reset, then re-run with customizations re-set) — also ugly.
 4. Realized the cleanest fix is a surgical palette-only reset: just `set -gu @thm_*` for the 26 palette vars before the `run` line. Catppuccin's `%if` block runs only when `@catppuccin_reset` is set, so leaving it unset preserves the user customizations entirely.
 **Fix:** Replace `set -g @catppuccin_reset "true"` in `tmux.conf` with 26 explicit `set -gu @thm_*` lines covering only the palette. Verified after reload: `@catppuccin_window_status_style rounded`, `@catppuccin_window_default_text " #W"`, and `@thm_bg "#171919"` (Neptune) all coexist correctly.
-**Commit:** `<pending>`
+**Commit:** `0c51848`
 
 ## 2026-05-06 — tmux-catppuccin-flavor-switch-needs-reset
 
