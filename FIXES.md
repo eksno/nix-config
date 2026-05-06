@@ -4,6 +4,18 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-05-06 — waybar-icon-percentage-color-mismatch
+
+**Symptom:** In waybar, the audio icon and the percentage rendered in different colors — icon was Catppuccin purple, value was Startino pink. Same pattern would have hit backlight if anyone had looked closely.
+**Affected:** `dotfiles/default/waybar/config:30,47,48`. Any waybar module using inline pango `<span color='#...'>` overrides.
+**Root cause:** The pulseaudio and backlight modules' `format` strings embedded hardcoded Catppuccin Mocha hexes inline (`<span color='#cba6f7'>{icon}</span>` for mauve, `#f9e2af` for yellow). The CSS sets the module color via `@mauve`/`@yellow`, but inline pango spans take precedence on the wrapped character only. Result: the icon stayed at the Catppuccin hex (purple/yellow) while the bare percentage outside the span rendered in the CSS variable. Visible on Neptune because Startino collapses `mauve` → pink — icon ended up purple, value ended up pink.
+**Investigation:**
+1. Suspected the rosewater/clash session (just landed) had broken something — checked. Rosewater was a separate concern; this was independent.
+2. `grep -n "color='#" dotfiles/default/waybar/config` surfaced three inline overrides: `#f9e2af` (backlight icon), `#cba6f7` (pulseaudio icon), and the mute-state span. All Catppuccin Mocha hexes baked into the JSON.
+3. Fix: drop the spans entirely. CSS already styles the whole module via `#pulseaudio { color: @mauve; }`, so removing inline overrides yields uniform color *and* lets palette changes propagate downstream automatically.
+**Fix:** `format` simplified to `"{icon} {percent}%"` / `"{icon} {volume}%"`; format-muted simplified the same way. No CSS changes needed.
+**Commit:** `415515f`
+
 ## 2026-05-06 — tmux-catppuccin-reset-also-nukes-window-customizations
 
 **Symptom:** After adding `set -g @catppuccin_reset "true"` to fix the flavor-switch (see entry below), tmux lost the rounded window-status style and the `" #W"` window-name format — windows rendered with default catppuccin styling instead of the `@catppuccin_window_status_style "rounded"` and `@catppuccin_window_*_text` customizations set in `tmux.conf`.
