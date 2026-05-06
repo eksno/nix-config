@@ -4,6 +4,19 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-05-06 — tmux-catppuccin-reset-also-nukes-window-customizations
+
+**Symptom:** After adding `set -g @catppuccin_reset "true"` to fix the flavor-switch (see entry below), tmux lost the rounded window-status style and the `" #W"` window-name format — windows rendered with default catppuccin styling instead of the `@catppuccin_window_status_style "rounded"` and `@catppuccin_window_*_text` customizations set in `tmux.conf`.
+**Affected:** `dotfiles/default/tmux/tmux.conf`. Anyone using `@catppuccin_reset` to switch flavors while also customizing window/status modules.
+**Root cause:** The `%if @catppuccin_reset == true` block in `catppuccin_options_tmux.conf` unsets the entire `@thm_*` palette **and** `@catppuccin_window_status_style`, `@catppuccin_window_*_text`, all `@catppuccin_window_flags_*`, and the status separators. So `@catppuccin_reset` is a sledgehammer that clears user customizations along with stale palette values.
+**Investigation:**
+1. Re-read `catppuccin_options_tmux.conf:20-78` carefully — the `%if` block contains `set -Ugq` for the full `@thm_*` palette **plus** `@catppuccin_window_status_style`, `@catppuccin_window_text_color`, `@catppuccin_window_default_text`, etc. Roughly 30 unsets total, only a third of which are palette.
+2. Considered re-applying user customizations after `run catppuccin.tmux` — would need to be done before catppuccin_tmux.conf finishes (it reads them during render-string construction). Ugly.
+3. Considered running the plugin twice (reset, then re-run with customizations re-set) — also ugly.
+4. Realized the cleanest fix is a surgical palette-only reset: just `set -gu @thm_*` for the 26 palette vars before the `run` line. Catppuccin's `%if` block runs only when `@catppuccin_reset` is set, so leaving it unset preserves the user customizations entirely.
+**Fix:** Replace `set -g @catppuccin_reset "true"` in `tmux.conf` with 26 explicit `set -gu @thm_*` lines covering only the palette. Verified after reload: `@catppuccin_window_status_style rounded`, `@catppuccin_window_default_text " #W"`, and `@thm_bg "#171919"` (Neptune) all coexist correctly.
+**Commit:** `<pending>`
+
 ## 2026-05-06 — tmux-catppuccin-flavor-switch-needs-reset
 
 **Symptom:** After switching `@catppuccin_flavor` from `"mocha"` to `"neptune"` (Startino flavor file symlinked into the plugin's `themes/` dir) and reloading via `tmux source-file ~/.config/tmux/tmux.conf`, the status bar kept rendering with mocha colors. `tmux show-options -g | grep @thm_bg` returned `#1e1e2e` (mocha) instead of `#171919` (neptune).
