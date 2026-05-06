@@ -16,17 +16,17 @@
 @define-color blue       #3bddc8;
 @define-color lavender   #a3d0ac;
 @define-color text       #cbecec;
-@define-color subtext1   #accbcc;
-@define-color subtext0   #93b0b0;
-@define-color overlay2   #759192;
-@define-color overlay1   #5f7878;
-@define-color overlay0   #475f5f;
-@define-color surface2   #344b4c;
-@define-color surface1   #263c3c;
-@define-color surface0   #182e2e;
-@define-color base       #061c1d;
-@define-color mantle     #021717;
-@define-color crust      #001111;
+@define-color subtext1   #afcdcd;
+@define-color subtext0   #95b3b3;
+@define-color overlay2   #7a9595;
+@define-color overlay1   #637d7d;
+@define-color overlay0   #4e6565;
+@define-color surface2   #3a5252;
+@define-color surface1   #2e4343;
+@define-color surface0   #203535;
+@define-color base       #102424;
+@define-color mantle     #0c1d1e;
+@define-color crust      #091717;
 
 /* Brand aliases — mint primary, pink secondary */
 @define-color accent     #45dfa4;
