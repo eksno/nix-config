@@ -4,6 +4,19 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-05-08 — hyprland-layerrule-ignorealpha-rejected-as-invalid-field
+
+**Symptom:** Three cascading config errors after adding a layerrule for the eww keyboard cheatsheet: `invalid field type ignorealpha` at `layerrules.conf:13`, propagated up through `users/jorge/default.conf:4` and `hyprland.conf:1` (each just re-reports the inner failure).
+**Affected:** host `lewis`, user `jorge`. `dotfiles/default/hypr/shared/utility/layerrules.conf`.
+**Root cause:** Hyprland 0.54.3 expects snake_case effect names (matches the existing `no_anim` rule in the same file). The correct spelling is `ignore_alpha`, not `ignorealpha`. The parser falls through to the `invalid field type` branch in `ConfigManager.cpp:3053` for any unknown name.
+**Investigation:**
+1. Reproduced via `hyprctl configerrors` — only line 13 was the real failure; the other two were re-raised at the include-site, not separate errors.
+2. Tried to grep the binary for valid effect names — Hyprland's binary is stripped to ~26 strings, so binary inspection was useless.
+3. Verified against v0.54.3 source: `src/desktop/rule/layerRule/LayerRuleEffectContainer.cpp` enumerates the valid effects (`no_anim`, `blur`, `blur_popups`, `dim_around`, `xray`, `animation`, `order`, `above_lock`, `no_screen_share`, `ignore_alpha`).
+4. **Important footnote:** I'd reached for `ignore_alpha` thinking it gave click-through (input passthrough). It doesn't — it's a *blur optimization* (skip blur where alpha < threshold). Hyprland 0.54 has no layerrule for input passthrough; the wlr-layer-shell `set_input_region` call would have to come from the surface (eww), and eww 0.6.0 / master @ 2026-03-05 does not expose that — see open eww issues #896 and #1253. So even with the corrected name, the cheatsheet still captures pointer events on its bbox.
+**Fix:** Renamed `ignorealpha` → `ignore_alpha` in `dotfiles/default/hypr/shared/utility/layerrules.conf:13` and updated the comment to clarify it's a blur optimization, not click-through.
+**Commit:** `13928d9`
+
 ## 2026-05-08 — edid-override-keyed-only-on-DP-2-misses-DP-1
 
 **Symptom:** Glasses connected and showed Hyprland content, but `breezy-hyprland` couldn't lease the connector via `wp-drm-lease-v1`. Glasses appeared as a regular desktop output instead of a non_desktop one.
