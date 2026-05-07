@@ -27,6 +27,7 @@
 - [monado-rayneo uses its own RAYNEO_LOG env var (default WARN)](xr-monado-debug-log-level.md) — XRT_LOG=debug alone is NOT enough. Rayneo driver has `DEBUG_GET_ONCE_LOG_OPTION(RAYNEO_LOG, WARN)`; need `RAYNEO_LOG=debug` to see SwitchTo3D path.
 - [xr-driver vs monado-rayneo USB conflict](xr-usb-driver-coordination.md) — `systemctl --user stop xr-driver` races; auto-restart re-claims USB. Use `mask` for clean monado runs, `unmask` after.
 - [SIGKILL on monado strands the USB claim](xr-monado-sigkill-usb-stuck.md) — kernel keeps `USBDEVFS_DISCONNECT_CLAIM` for the dead PID; soft-reset via `/sys/bus/usb/drivers/usb/{unbind,bind}` recovers without replug.
+- [Rayneo replug can come back USB-only (no DP altmode)](xr-rayneo-dp-altmode-replug.md) — DP altmode is direction-sensitive; sometimes need to flip the USB-C cable orientation. Detect via `/sys/class/typec/port1-partner/accessory_mode=none` or DP-2 stuck `disconnected`.
 - [v2 runner truncate makes monado log sparse](xr-v2-runner-sparse-log.md) — orphan monado fd at high offset causes NUL-padded sparse file → ripgrep "binary file matches". Verify `pgrep monado-service` empty first.
 - [wayvr logs are UTC, system is UTC+7](xr-wayvr-utc-timestamps.md) — a `2026-05-06T19:13Z` wayvr line is `2026-05-07T02:13` local; not stale, just a different timezone label.
 
