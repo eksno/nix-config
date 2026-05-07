@@ -2,6 +2,7 @@
   writeShellApplication,
   systemd,
   hyprland,
+  jq,
   monadoRayneo,
   wayvr,
 }:
@@ -26,6 +27,7 @@ writeShellApplication {
   runtimeInputs = [
     systemd
     hyprland
+    jq
     monadoRayneo
     wayvr
   ];
@@ -46,6 +48,15 @@ writeShellApplication {
     # no-op when HDMI-A-1 is absent.
     GLASSES_BASELINE="desc:Technical Concepts Ltd SmartGlasses, 1920x1080@120, auto, 1, mirror, HDMI-A-1"
 
+    # Phase 4A — per-workspace virtual screens.
+    # Spawn N headless wl_outputs and move workspaces 1..N onto them, so
+    # WayVR sees N+1 screens at startup (laptop + N workspaces) and we get
+    # one independent capture per workspace. N=4 default; override with
+    # BREEZY_N_SCREENS=K. Set BREEZY_N_SCREENS=0 to disable and keep the
+    # legacy single-screen behavior.
+    BREEZY_N_SCREENS=''${BREEZY_N_SCREENS:-4}
+    HEADLESS_OUTPUTS=()
+
     cleanup() {
       if [[ -n ''${MONADO_PID:-} ]]; then
         # SIGINT, not SIGTERM/SIGKILL: monado needs to release its DRM
@@ -62,6 +73,11 @@ writeShellApplication {
       fi
       # Reap the `sleep infinity` that's keeping monado's stdin open.
       pkill -P $$ -x sleep 2>/dev/null || true
+      # Remove headless outputs AFTER monado/wayvr exit, so they don't
+      # disappear under wayvr mid-frame.
+      for out in "''${HEADLESS_OUTPUTS[@]:-}"; do
+        [[ -n "$out" ]] && hyprctl output remove "$out" >/dev/null 2>&1 || true
+      done
       hyprctl keyword monitor "$GLASSES_BASELINE" >/dev/null 2>&1 || true
       systemctl --user start xr-driver 2>/dev/null || true
     }
@@ -83,6 +99,45 @@ writeShellApplication {
     # connect with "Connection refused" and exits clean, taking monado
     # down with it before any frame is presented. Verified 2026-05-06.
     rm -f "''${XDG_RUNTIME_DIR}/monado_comp_ipc"
+
+    if [[ "$BREEZY_N_SCREENS" -gt 0 ]]; then
+      echo "[breezy-hyprland] creating $BREEZY_N_SCREENS headless outputs"
+      # hyprctl output create returns the assigned name on stdout in the
+      # form "ok\n" — we have to discover the new monitor by diffing
+      # `hyprctl monitors -j` before/after.
+      for _ in $(seq 1 "$BREEZY_N_SCREENS"); do
+        # `.[].name` walks the top-level array (monitors only), avoiding
+        # the nested `activeWorkspace.name` field which `grep "name"`
+        # would also match.
+        BEFORE=$(hyprctl monitors -j | jq -r '.[].name' | sort -u)
+        hyprctl output create headless >/dev/null
+        # Hyprland needs a tick to register the new output.
+        sleep 0.2
+        AFTER=$(hyprctl monitors -j | jq -r '.[].name' | sort -u)
+        NEW=$(comm -13 <(echo "$BEFORE") <(echo "$AFTER") | head -1)
+        if [[ -n "$NEW" ]]; then
+          HEADLESS_OUTPUTS+=("$NEW")
+          echo "[breezy-hyprland]   spawned $NEW"
+        else
+          echo "[breezy-hyprland]   warning: failed to detect new headless output" >&2
+        fi
+      done
+      # Move workspaces 1..N onto the headless outputs we just made.
+      # Workspace 0 doesn't exist in Hyprland; ws 1 stays on the laptop
+      # (eDP-1) since that's the user's primary surface. Ws 2..N+1 go
+      # onto HEADLESS-2..HEADLESS-(N+1) one-to-one.
+      for i in "''${!HEADLESS_OUTPUTS[@]}"; do
+        WS=$((i + 2))
+        OUT="''${HEADLESS_OUTPUTS[$i]}"
+        # Make sure the workspace exists before moving it. Empty
+        # workspaces aren't created until first focus; force creation by
+        # focusing then immediately moving.
+        hyprctl dispatch workspace "$WS" >/dev/null 2>&1 || true
+        hyprctl dispatch moveworkspacetomonitor "$WS $OUT" >/dev/null 2>&1 || true
+      done
+      # Return focus to workspace 1 so the user starts on the laptop.
+      hyprctl dispatch workspace 1 >/dev/null 2>&1 || true
+    fi
 
     echo "[breezy-hyprland] starting monado-service in background (log: $LOG)"
     # Stdin needs to be a pipe that stays open forever. The full constraint:
