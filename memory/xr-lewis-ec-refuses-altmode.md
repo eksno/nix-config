@@ -132,6 +132,71 @@ and `find /sys/class/typec -name svid` returns nothing.
   NVRAM (or some persistent flash region), not EC RAM. Replug,
   port swap, and orientation flip post-reset all also no-op.
 
+## Where the lockout state lives (2026-05-08 three-agent deep dive)
+
+Three parallel sub-agents (temporal diff, EC NVRAM write paths, cross-
+distro/community workarounds) converged on the same answer: the
+lockout flag is in the EC firmware's persistent flash region (SPI or
+OTP), unreachable from any userspace path on this hardware.
+
+Evidence:
+
+- **DSDT + 21 SSDTs fully dumped and searched** (via `acpidump` +
+  `iasl -d`). Zero methods reset/clear UCSI/altmode policy state. The
+  UCSI bridge in SSDT19 (`UsbCTabl`, OEM `_ASUS_`) maps the PPM to
+  EC0 via shared-memory at EC0:UBCB (offsets 0x04-0x2F at bank 0xC9).
+  The kernel drives UCSI via `_DSM` function 1 (write CTL→EC0
+  registers) and function 2 (read CCI/MGI←EC0). Standard pattern.
+- **`acpi_call` exploration**: only one EC custom command callable
+  via WMI is `\ATKD.WMNB(0, 0x00100013, 0x02)` → EC SMFI command 0xB6
+  (likely power/perf mode, NOT altmode). No targeted method exists.
+- **EC RAM write region**: bank 0xC9 offsets 0x04-0x2F are the live
+  UCSI registers — already kernel-writable via `_DSM`. The EC PPM
+  ignores `SET_NEW_CAM` (0x0f) writes in the wedge state. RP2E/WP2E
+  protect 0x40-0x70 (battery channel, not UCSI). The "register a CAM
+  or refuse" decision lives in EC firmware, not in any RAM region.
+- **[SLIMBOOK EVO15-A8 case (March 2026)](https://gist.github.com/gnespolino/81abd597153fd19aa2a039f66b8359a3)**:
+  identical fingerprint (`GET_CAM_SUPPORTED=0`, `SET_NEW_CAM` timeout)
+  on a different vendor's ASUS-sourced ITE EC firmware. Tested across
+  same-distro live USB — reproduced identically. Recovery: only EC
+  firmware reflash worked.
+- **Kernel-side fix is already present**: Berg's PPM-change-info
+  workaround commit `217504a055` (merged 5.10, backported to stable)
+  is what would have routed around the missing `CAM_CHANGE` bit
+  signal. Every NixOS kernel jorge has run includes it. Kernel swap
+  cannot help — `linuxPackages_latest`, `_zen`, `_xanmod_latest` all
+  resolve to 7.0.x and have identical UCSI behavior.
+- **`fwupdmgr get-devices` confirms no separate EC firmware device**.
+  ASUS bundles EC firmware inside the BIOS capsule. The only
+  userspace-accessible write path that reaches the EC's policy region
+  is a BIOS update (EZ Flash with the .CAP file from ASUS).
+
+**Honest bottom line.** No combination of ACPI methods, WMI commands,
+sysfs writes, kernel module reloads, or supported UCSI commands can
+clear the wedge. BIOS update (or EC firmware reflash via EZ Flash) is
+the only path with documented mechanism + community precedent.
+
+Cheap probes worth running before flashing (untested as of writing):
+
+1. **Suspend → wait for `-70` UCSI errors in dmesg → fresh replug.**
+   See `memory/xr-ec-altmode-suspend-replug-untested.md`. The 14:12
+   working session yesterday had a lid-suspend 32 minutes prior; the
+   resume produced two `ucsi_acpi GET_CONNECTOR_STATUS failed (-70)`
+   errors. Today's wedged boot has had zero suspends. Cost ~30 sec.
+2. **Plug glasses during BIOS POST, sit in BIOS 30-60s, then boot.**
+   The EC's UCSI mailbox initializes during POST without Linux's
+   `ucsi_acpi` driver issuing commands; possibly a different EC code
+   path. Circumstantial evidence only. Cost ~5 min.
+3. **Live USB Fedora 42 (kernel 6.12.x)** — diagnostic only,
+   confirms or rules out NixOS-specific kernel state. Slimbook tested
+   their same-distro live USB; nobody has tested a different-kernel
+   live USB yet for this fingerprint. Cost ~30 min.
+
+If 1-3 fail: BIOS update to 311 is the recommended next step. The
+.CAP file is already downloaded and verified at
+`.scratch/bios-311/UX3405MAAS.311` (gitignored; re-download from
+ASUS if missing).
+
 ## Worked once today (2026-05-07 at ~14:12)
 
 The Hyprland aquamarine log on the same NixOS gen `549bd84` (kernel 7.0.3)

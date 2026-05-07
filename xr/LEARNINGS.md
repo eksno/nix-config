@@ -1131,3 +1131,46 @@ on stdout, NOT the new monitor's name. To discover the name, diff
 for "name" in the JSON — `activeWorkspace.name` is also called
 "name" and pollutes the diff. See `system/lib/xr/breezy-hyprland/
 launcher.nix` for the working sequence.
+
+## EC altmode wedge state lives in EC firmware flash, not RAM or BIOS NVRAM (2026-05-08)
+
+A three-agent deep dive on lewis (ASUS UX3405MA, Intel Meteor Lake)
+established with high confidence that the `GET_CAM_SUPPORTED=0`
+altmode wedge fingerprint is **firmware-side and unreachable from
+userspace**. Findings:
+
+- **ACPI surface is empty.** Full DSDT + 21 SSDTs dump and search:
+  zero methods reset or clear UCSI/altmode policy state. The UCSI
+  bridge in SSDT19 (`UsbCTabl`, OEM `_ASUS_`) only shuttles protocol
+  bytes between kernel and EC via shared-memory at EC0:UBCB. The
+  "register a CAM or refuse" decision is made entirely inside EC
+  firmware in a flash region (SPI or OTP) that is **not addressable
+  from any ACPI method, WMI path, kernel debugfs, or sysfs**.
+- **Power resets don't reach the flash region.** 40s+AC power-button
+  hold (the deepest userspace-reachable EC reset, cuts EC RAM rail),
+  BIOS Restore Defaults (clears the BIOS NVRAM zone), kernel cmdline
+  thrash, UCSI runtime commands, driver unbind/rebind — wedge
+  survives every one.
+- **Independent corroboration.** [SLIMBOOK EVO15-A8 case (March
+  2026)](https://gist.github.com/gnespolino/81abd597153fd19aa2a039f66b8359a3)
+  tested the exact fingerprint across multiple distros via live USB
+  — reproduced identically — and concluded EC firmware reflash was
+  the only recovery. ASUS bundles EC firmware in the BIOS capsule,
+  so on this hardware the only flash-rewrite path is `BIOS update`
+  via EZ Flash (no separate EC firmware tool exists; `fwupdmgr`
+  confirms no separate EC device).
+- **Kernel-side fix is already present.** Berg's PPM-change-info
+  workaround (commit `217504a055`, the only known kernel fix for this
+  fingerprint class) was merged in 5.10 and backported to stable. All
+  available NixOS kernels (`linuxPackages_latest`, `_zen`,
+  `_xanmod_latest`) are 7.0.x — newer than the fix and identical in
+  UCSI behavior. Kernel swap is a dead end.
+
+**Apply:** when this fingerprint shows up (`GET_CAM_SUPPORTED=0` with
+partner correctly advertising DP altmode SVID 0xff01), don't burn
+hours on userspace recovery. The evidence weighted heavily toward
+"EC flash region must be rewritten." Cheap untested probes worth
+exhausting first: suspend→`-70` UCSI errors→fresh replug timing
+(`memory/xr-ec-altmode-suspend-replug-untested.md`), plug glasses
+during BIOS POST then boot. After those, BIOS update is the
+recommended next step.
