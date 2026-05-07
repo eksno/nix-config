@@ -87,6 +87,12 @@ and `find /sys/class/typec -name svid` returns nothing.
 - UCSI `SET_NEW_CAM` (0x0f) — times out, EC won't accept it
 - Disconnecting charger to test charger-presence theory (no effect)
 - `usbcore.autosuspend=-1` — no effect
+- BIOS Restore Defaults (F2 → F9 → F10) on 2026-05-08 — no effect; EC
+  policy state persists across BIOS NVRAM clear
+- Booting with all four aggressive power-saving kernel params dropped
+  (`i915.enable_dc=4`, `pcie_aspm=force`, `acpi.ec_no_wakeup=1`,
+  `usbcore.autosuspend=1`) — no effect on 2026-05-08; rules out runtime
+  EC/USB/display power management as the wedge cause
 
 ## Worked once today (2026-05-07 at ~14:12)
 
