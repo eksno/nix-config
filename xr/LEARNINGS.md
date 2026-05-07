@@ -1075,3 +1075,59 @@ the Vulkan error code as "something failed in `wsi_common_display.c`,
 unknown errno". Don't reason about it as "surface lost"
 semantically — Mesa just used the closest available enum. Strace
 first.
+
+## UCSI debugfs is NOT a reliable signal for actual altmode state (2026-05-08)
+
+Spent most of a day debugging an EC altmode wedge on lewis based on
+the `/sys/kernel/debug/usb/ucsi/USBC000:00/{command,response}`
+fingerprint: `GET_CAM_SUPPORTED=0`, `accessory_mode=none`, no
+`partner.0/svid`. We exhausted the entire UCSI/EC-side recovery
+playbook (cold cycle, BIOS Restore Defaults, kernel cmdline thrash,
+runtime UCSI commands) before altmode came back on its own. Once it
+came back, **the UCSI fingerprint was identical to the wedged
+state** — `GET_CAM_SUPPORTED` still `0x0000…`, `accessory_mode` still
+`none` — but `hyprctl monitors -j` showed
+`DP-1 1920x1080@120 dpmsStatus=true mirrorOf=none` and the user could
+see Hyprland content on the panel.
+
+i915's DP altmode negotiation can engage (and produce real signal on
+the panel) without UCSI's cached state machine reflecting it. The
+two paths are not synchronized in lockstep on this stack.
+
+**Apply:** use `hyprctl monitors -j | jq '.[] | select(.description |
+contains("SmartGlasses"))'` and `cat /sys/class/drm/card1-DP-*/status`
+as the ground truth for "is the panel about to scan out", not the
+UCSI fingerprint. Keep the UCSI recipe in
+`memory/xr-lewis-ec-refuses-altmode.md` for the case where altmode
+genuinely fails (sometimes it does, and the fingerprint is the
+fastest detection) — but always cross-check before declaring it
+broken or fixed.
+
+## Hyprland's `hyprctl output create headless` is the per-workspace capture primitive (2026-05-08)
+
+`hyprctl output create headless` spawns a virtual wl_output (named
+`HEADLESS-N`, monotonically incrementing across the session) at
+1920x1080@60. Each headless output:
+
+- Appears as a real wl_output to wlr-screencopy / wp-drm-lease-v1
+  consumers, so wayvr enumerates and captures it the same as a
+  physical monitor.
+- Auto-receives the next free workspace (just like a real monitor
+  hot-plug).
+- Can have any workspace assigned via
+  `hyprctl dispatch moveworkspacetomonitor 'WS HEADLESS-N'`.
+- Is removable via `hyprctl output remove HEADLESS-N` — Hyprland
+  auto-migrates the workspace contents back to remaining monitors.
+
+That makes "N curved virtual screens, one per Hyprland workspace"
+trivial to wire up: spawn N headless outputs at session start, move
+workspaces 1..N+1 onto them, run wayvr. No WayVR code changes
+required for the *enumeration* side; only the *layout* side (curved
+arc placement) needs a patch (Phase 4B).
+
+**Detection gotcha:** `hyprctl output create headless` returns "ok"
+on stdout, NOT the new monitor's name. To discover the name, diff
+`hyprctl monitors -j | jq -r '.[].name'` before/after. Don't grep
+for "name" in the JSON — `activeWorkspace.name` is also called
+"name" and pollutes the diff. See `system/lib/xr/breezy-hyprland/
+launcher.nix` for the working sequence.

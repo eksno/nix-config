@@ -4,6 +4,37 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-05-08 — edid-override-keyed-only-on-DP-2-misses-DP-1
+
+**Symptom:** Glasses connected and showed Hyprland content, but `breezy-hyprland` couldn't lease the connector via `wp-drm-lease-v1`. Glasses appeared as a regular desktop output instead of a non_desktop one.
+**Affected:** host `lewis`, user `jorge`. `system/lib/xr/glasses-edid/default.nix:44`.
+**Root cause:** The Rayneo connector name on lewis varies between DP-1 and DP-2 across sessions/replugs (per `memory/xr-rayneo-connector-name-varies.md`). The kernel cmdline override `drm.edid_firmware=DP-2:edid/...` only applies on the matching connector — when the glasses came up on DP-1, the connector kept its native (desktop) EDID, so `non_desktop` wasn't set and wlroots never advertised it on `wp-drm-lease-v1`.
+**Investigation:**
+1. After UCSI altmode wedge recovered (cause unknown), `hyprctl monitors` showed glasses on DP-1, not DP-2.
+2. Greped kernel cmdline (`/proc/cmdline`) — confirmed only `DP-2:` was listed in `drm.edid_firmware`.
+3. Memory file `xr-rayneo-connector-name-varies.md` already flagged the gap; we'd just never broadened the override.
+**Fix:** `system/lib/xr/glasses-edid/default.nix:44` now lists both connectors comma-separated:
+```
+drm.edid_firmware=DP-1:edid/rayneo-air4pro-glasses.bin,DP-2:edid/rayneo-air4pro-glasses.bin
+```
+Kernel applies the override only on the matching connector, so listing both is safe — both connectors are never the glasses simultaneously.
+**Commit:** `96dd306`
+
+## 2026-05-08 — DP-altmode-wedge-on-lewis-not-caused-by-power-saving-flags
+
+**Symptom:** Mid-day on 2026-05-07, DP altmode stopped entering for the Rayneo Air 4 Pro after working at 14:12. UCSI debugfs fingerprint: `GET_CONNECTOR_STATUS` reports altmode-capable partner with SVID `0xff01`, but `GET_CAM_SUPPORTED=0` and `SET_NEW_CAM` times out.
+**Affected:** host `lewis`, user `jorge`. EC firmware (UX3405MA.301), no specific file.
+**Root cause:** Unknown — wedge state lives in EC firmware memory that survives cold cycle, BIOS Restore Defaults, every kernel-cmdline tweak, and every UCSI runtime command we tried. The wedge recovered on its own around 2026-05-08 evening with no deliberate fix.
+**Investigation:**
+1. Tested cable on Jorge's phone — works fine. Cable ruled out.
+2. Tried every UCSI runtime command (`CONNECTOR_RESET`, `PPM_RESET`, `SET_NEW_CAM`) and every driver rebind (`ucsi_acpi`, `xhci`). No effect.
+3. Cold cycle (shutdown + AC unplug + 30s power-button hold). No effect.
+4. BIOS Restore Defaults (F2 → F9 → F10). No effect — also re-enabled secure boot, breaking NixOS boot until Jorge disabled it again.
+5. **Tested kernel cmdline without aggressive power-saving flags** (`i915.enable_dc=4`, `pcie_aspm=force`, `acpi.ec_no_wakeup=1`, `usbcore.autosuspend=1`) — committed `fa683f4` to disable, rebuilt, rebooted. UCSI fingerprint identical → ruled out as the cause. Reverted in `30e1aad`.
+6. While building Phase 4 (per-workspace headless outputs), altmode came back on its own. Glasses now drive `DP-1 1920x1080@120` as an active independent display, even though UCSI debugfs *still* reports the wedge fingerprint.
+**Fix:** No deliberate fix. Recovery cause unknown. Documented in `memory/xr-lewis-ec-refuses-altmode.md` (status: recovered 2026-05-08 evening). Key takeaway: **UCSI debugfs is not a reliable signal for actual altmode state on this stack** — i915 can engage DP independently. Cross-check `hyprctl monitors -j` / `/sys/class/drm/card1-DP-*/status` for ground truth. See `xr/LEARNINGS.md` "UCSI debugfs is NOT a reliable signal" entry.
+**Commit:** `627cfee` (memory update); investigation commits `12fd3f8`, `fa683f4`, `30e1aad`, `1a92a06`.
+
 ## 2026-05-07 — monado-surface-lost-retry-on-mesa-ebusy-flatten
 
 **Symptom:** Rayneo Air 4 Pro panel stayed black even after monado reached FOCUSED with IPD/pose flowing. SBS scene rendered fine on the laptop screen but not on the glasses. `monado-service.log` showed a single `VK_ERROR_SURFACE_LOST_KHR` from `comp_target_acquire`/`comp_target_present` then deadlocked waiting on `drm_syncobj_array_wait_timeout` fences that would never signal.

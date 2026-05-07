@@ -1,21 +1,35 @@
 # Active plan
 
-**HARD-BLOCKED 2026-05-08: DP altmode firmware-wedged on lewis.** No
-"glasses panel" work can progress until lewis's EC firmware recovers
-from its current "refuse to register CAMs for any partner" state. UCSI
-debugfs queries fingerprint the failure: partner advertises DP altmode
-SVID `0xff01` correctly, EC has the data, but `GET_CAM_SUPPORTED`
-returns 0 and `SET_NEW_CAM` times out. Cable is fine (works on phone).
-Cold cycle didn't recover. See STATE.md "2026-05-08 morning session"
-section and `memory/xr-lewis-ec-refuses-altmode.md` for the full
-diagnostic and recovery options.
+**2026-05-08 evening: UNBLOCKED.** DP altmode came back on lewis with
+no deliberate fix (cause unknown — see
+`memory/xr-lewis-ec-refuses-altmode.md`). Glasses now show as
+`DP-1 1920x1080@120` active independent display, panel content
+visible. **UCSI debugfs still misreports the wedge** even while i915
+is driving the panel — cross-check via `hyprctl monitors -j` /
+`/sys/class/drm/card1-DP-*/status` for ground truth, never UCSI alone.
 
-**While altmode is broken, what's still possible**: sideview / mouse
-mode through xr-driver works (USB+HID, no altmode needed); software
-changes that don't need real glasses display verification (Phase 4
-design, monado-retry-patch code review, Mesa workstream code review);
-re-testing periodically with the 5-command UCSI recipe to detect when
-the EC recovers.
+**Phase 4 BUILT** (commits `212a6f0` + `4b10b72`):
+- 4A — breezy-hyprland launcher spawns `BREEZY_N_SCREENS=4` headless
+  wl_outputs and assigns workspaces 2..5 onto them. wayvr enumerates
+  the new outputs and creates one screen overlay per. Cleanup trap
+  removes the headless outputs after monado/wayvr exit.
+- 4B — wayvr-anv has the curved-arc patch: when N≥2 outputs, screens
+  are placed at θ_i = (i − (N−1)/2)·SPACING around the user
+  (R=0.6m, SPACING=0.6 rad ≈ 34°). Single-screen sessions fall back
+  to the legacy (0, 0, −0.5) anchor.
+
+**EDID override broadened** (`96dd306`): drm.edid_firmware now lists
+both DP-1 and DP-2, so wp-drm-lease-v1 advertises the glasses on
+whichever connector they land — the post-recovery DP-1/DP-2 fork is
+no longer a config blocker.
+
+**Pending verification (after reboot + replug)**:
+1. `cat /sys/class/drm/card1-DP-*/non_desktop` should print `1` on
+   the glasses' connector.
+2. Glasses should NOT appear in `hyprctl monitors` (Hyprland skips
+   non_desktop outputs).
+3. `breezy-hyprland` should spawn 4 headless outputs, monado leases
+   the glasses, wayvr displays N+1 curved virtual screens.
 
 **Pre-block plan (resume when altmode is back):** figure out why the
 glasses panel is DARK (not black) and verify the monado SURFACE_LOST

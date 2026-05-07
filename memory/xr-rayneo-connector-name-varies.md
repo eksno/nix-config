@@ -19,11 +19,12 @@ Empirical:
 
 ## Why this matters
 
-1. The EDID firmware override at `system/lib/xr/glasses-edid/default.nix`
-   is keyed on **DP-2** via `drm.edid_firmware=DP-2:edid/rayneo-air4pro-glasses.bin`.
-   When the connector lands on DP-1, the override does not apply on
-   that connector. Whether non_desktop is still set on DP-1 depends on
-   the glasses' own EDID — needs verification.
+1. ~~The EDID firmware override at `system/lib/xr/glasses-edid/default.nix`
+   is keyed on DP-2 only.~~ **FIXED 2026-05-08 (`96dd306`)**: the
+   override now lists both DP-1 and DP-2, so wp-drm-lease-v1
+   advertises the glasses regardless of which connector they land on.
+   The kernel only applies the override on the matching connector,
+   so listing both is safe.
 2. All sysfs probes (`/sys/class/drm/card1-DP-2/status` etc.) return
    misleading `disconnected` on the wrong connector, masking a working
    DP-1.
