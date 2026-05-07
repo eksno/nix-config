@@ -1,8 +1,26 @@
 # Active plan
 
-**Active phase: figure out why the glasses panel is DARK (not black) and
-verify the monado SURFACE_LOST retry patch on real hardware.** The
-2026-05-07 evening session moved Phase 3.5 forward materially:
+**HARD-BLOCKED 2026-05-08: DP altmode firmware-wedged on lewis.** No
+"glasses panel" work can progress until lewis's EC firmware recovers
+from its current "refuse to register CAMs for any partner" state. UCSI
+debugfs queries fingerprint the failure: partner advertises DP altmode
+SVID `0xff01` correctly, EC has the data, but `GET_CAM_SUPPORTED`
+returns 0 and `SET_NEW_CAM` times out. Cable is fine (works on phone).
+Cold cycle didn't recover. See STATE.md "2026-05-08 morning session"
+section and `memory/xr-lewis-ec-refuses-altmode.md` for the full
+diagnostic and recovery options.
+
+**While altmode is broken, what's still possible**: sideview / mouse
+mode through xr-driver works (USB+HID, no altmode needed); software
+changes that don't need real glasses display verification (Phase 4
+design, monado-retry-patch code review, Mesa workstream code review);
+re-testing periodically with the 5-command UCSI recipe to detect when
+the EC recovers.
+
+**Pre-block plan (resume when altmode is back):** figure out why the
+glasses panel is DARK (not black) and verify the monado SURFACE_LOST
+retry patch on real hardware. The 2026-05-07 evening session moved
+Phase 3.5 forward materially:
 
 - Workstream 1 (CRTC diagnostic) — **DONE.** Confirmed monado IS
   targeting CRTC 267 (the same CRTC aquamarine binds to DP-2). Round 3
@@ -28,6 +46,24 @@ the DRM lease via `wp-drm-lease-v1`, OpenXR session reaches FOCUSED
 with the real Rayneo head device, IPD = 63mm, pose data flowing.
 
 ## Next steps (ordered)
+
+0. **Recover DP altmode on lewis** (NEW, blocks everything else).
+   The EC firmware refuses to register CAMs for the Rayneo partner;
+   no DP signal reaches the glasses panel. Recovery options ordered
+   by cost (Jorge to choose; he is not familiar with BIOS work and
+   wants to be careful):
+   - (a) **Wait + retest periodically**: re-run the 5-command UCSI
+     recipe in `memory/xr-lewis-ec-refuses-altmode.md` every few
+     hours. If `GET_CAM_SUPPORTED` returns nonzero, altmode is
+     back; resume Phase 3.10. Zero risk, possibly zero progress.
+   - (b) **BIOS "Restore Defaults"** (NOT a flash): F2 at POST →
+     F9 → confirm → F10 → confirm. Resets BIOS settings to factory,
+     usually clears EC NVRAM as a side effect. Safe; doesn't modify
+     firmware code; doesn't touch OS or files. Worst case: WiFi or
+     fan profiles re-enable to defaults.
+   - (c) Try a **TBT4-certified USB-C cable** if one becomes
+     available (rules out cable-specific firmware quirk).
+   - (d) BIOS update from ASUS (last-resort; flashing risk).
 
 1. **Visual verification (read-only, blocks on Jorge).** Jorge to
    report exactly what the dark screen looks like: uniform dark,

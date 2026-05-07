@@ -162,6 +162,76 @@ laptop screen).
 If `lsusb` ever shows the glasses but `/dev/hidraw*` doesn't gain a new
 node, suspect the cable next, not the driver.
 
+### Cable can ALSO be ruled in/out with a phone test
+
+If the same cable+glasses combination successfully enters DP altmode on
+a phone (visible content on the glasses panel), the cable is not the
+blocker for the laptop's missing altmode. Phones run more permissive
+USB-C altmode policies than laptop UCSI/TBT4 stacks; "works on phone"
+only proves the cable can carry DP altmode at all, not that it
+satisfies the laptop's stricter cable-classification requirements.
+But it does conclusively rule out hard cable failure as a cause when
+the laptop refuses altmode.
+
+### UCSI/EC altmode wedge survives soft AND hard reset paths on lewis
+
+Discovered 2026-05-08 on lewis (ASUS Zenbook 14 UX3405MA, BIOS
+UX3405MA.301). After heavy plug/unplug cycling the EC firmware can
+reach a state where it reports the partner correctly (PD2 negotiated,
+`partner_flags=2 = altmode capable`) and even returns the partner's
+DP altmode SVID `0xff01` from `GET_ALTERNATE_MODES`, but
+`GET_CAM_SUPPORTED` returns 0 and `SET_NEW_CAM` times out. The kernel
+never calls `ucsi_register_altmodes` because the EC never sets the
+`UCSI_CONSTAT_CHANGE_CAM` (bit 10) flag in its connector-change
+events.
+
+Things that **don't** clear this wedge:
+
+- Cable orientation flip / port swap
+- `ucsi_acpi` driver unbind/rebind
+- xhci PCI device unbind/rebind
+- 5-min glasses unplug for capacitor discharge
+- `usbcore.autosuspend=-1` runtime
+- `systemctl suspend` + wake
+- `sudo reboot`
+- Cold cycle (full shutdown + AC unplug + 30s power-button hold)
+- UCSI `CONNECTOR_RESET` (soft and hard variants 0x03 / 0x03|bit23)
+- UCSI `SET_NEW_CAM` (kernel-blocked / EC times out)
+- UCSI `PPM_RESET` (kernel-blocked: "Operation not supported")
+- UCSI `SET_NOTIFICATION_ENABLE` (same kernel block)
+- BIOS Restore Defaults (F2 → F9 → F10) — VERIFIED 2026-05-08
+
+The EC altmode policy state lives in NVRAM that BIOS Restore Defaults
+doesn't reach. Remaining theoretical recovery paths:
+
+- **Long idle wait** — some EC firmware bugs self-clear after hours/days
+  of no USB-C activity. Untested duration.
+- **Battery-disconnect pinhole** — if the laptop has one (Zenbook 14
+  models vary). Most aggressive non-flash reset.
+- **BIOS firmware update** — flashing newer firmware almost always
+  resets EC NVRAM as a side effect, regardless of code differences.
+- **Try the laptop without the kernel power-saving cmdline params**
+  (`i915.enable_dc=4`, `pcie_aspm=force`, `acpi.ec_no_wakeup=1`,
+  `usbcore.autosuspend=1`) — these were active when the wedge first
+  triggered. Removing them and rebooting might allow the EC to
+  re-evaluate. Untested.
+
+**Diagnostic recipe** (5 UCSI commands, 30 seconds) to fingerprint this
+specific wedge is in `memory/xr-lewis-ec-refuses-altmode.md`.
+
+### NixOS + Secure Boot is not configured by default
+
+If you ever run "Restore Defaults" in BIOS, secure boot will be re-enabled
+and NixOS won't boot (the `\EFI\nixos\*` bootloader entries aren't signed
+against the OEM/Microsoft keys secure boot expects). Symptom: BIOS skips
+NixOS and falls through to whatever else is in the boot order (Ubuntu
+fallback, USB stick, etc.). Disable secure boot in BIOS to recover.
+
+To make NixOS work with secure boot, enable
+[`lanzaboote`](https://github.com/nix-community/lanzaboote) — it signs
+the bootloader entries with a self-managed key. Not currently set up
+on lewis or verse.
+
 ---
 
 ## NixOS plumbing — schemas and dconf are awkward off-the-beaten-path

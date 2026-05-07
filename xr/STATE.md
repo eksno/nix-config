@@ -1,6 +1,6 @@
 # XR system state
 
-Last updated: 2026-05-07 evening
+Last updated: 2026-05-08 morning
 
 What is currently deployed on `lewis` (and wired for `verse`), what is
 verified working, and what is broken or deferred. Update this whenever
@@ -11,8 +11,123 @@ new known-broken thing).
 
 | Host | User | Status |
 |---|---|---|
-| `lewis` | `jorge` | xr-driver + breezy-gnome + breezy-session + breezy-recenter + **monado-rayneo (patched: comp-renderer pairs COLOR_ATTACHMENT_BIT with STORAGE_BIT, `3bf13da` VERIFIED on monado side) + breezy-hyprland (with wayvr-anv override) + glasses-edid (EDID override + 3840x1080 mode injection + USB ACL fix)** deployed. Currently running the rolled-back gen `549bd84` (built 2026-05-05). GNOME-Breezy soak abandoned. **Phase 3 progress:** (1) launcher socket race FIXED commit `f74154b`; (2) EDID injects 3840x1080@60 DTD (`7122089`); (3) monado swapchain usage-flag patch `3bf13da` verified active in current build (swapchain log shows `imageUsage: STORAGE_BIT + COLOR_ATTACHMENT_BIT`, `imageExtent: {3840, 1080}`). User-facing "see something on the glasses" still blocked by the issues below. **Open issues:** (a) **SURFACE_LOST root cause located (Round 3, 2026-05-07):** strace v2 caught the kernel errno hidden behind the SURFACE_LOST — `DRM_IOCTL_MODE_ATOMIC` returns `-1 EBUSY` on the first present commit, and Mesa's `wsi_common_display.c:3129` flattens any non-EACCES atomic_commit failure to `VK_ERROR_SURFACE_LOST_KHR`. Monado has no retry on SURFACE_LOST. Leading hypothesis (unconfirmed): CRTC contention with Hyprland's stale aquamarine CRTC binding on DP-2. See `memory/xr-mesa-anv-ebusy-on-first-present.md` (canonical) and `memory/xr-mesa-anv-display-gap.md` Round 3 for next steps. Strace at `.scratch/wayvr-trace/strace-monado-20260507-002455.log.<tid>`. (b) **wayvr capture-init crash on Mesa anv (timing-dependent):** coredump backtrace localized the crash to `WCommandBuffer::upload_image` `copy_from_slice` (memory/xr-wayvr-gpu-capture-segfault.md) — leading hypothesis is unchecked `mmap` in `receive_callback` MemFd path. **Not always-reproducing:** the 200645 run with glasses-already-connected did NOT crash wayvr; it ran for many minutes until Jorge Ctrl+C'd. May correlate with hot-plug-mid-init rather than generic startup. (c) **Hyprland safe-mode — two distinct mechanisms:** the `1f84b02` HDMI@60 cap remains correct for the CDCLK-overrun mode (real, reproducible per dead log lines 5411-5585 when external is plugged) — see `memory/xr-hyprland-cdclk-cap.md`. **A separate event-loop-stall safe-mode mode** was identified in the 2026-05-06 22:41 crash: external was unplugged at crash time (~870 MP/s, under CDCLK ceiling), Hyprland watchdog SIGABRT'd during aquamarine `SDRMConnector::connect()` mode iteration on DP-2 hot-plug. See `memory/xr-hyprland-lease-hotplug-stall.md`. (d) **Latest gen built 2026-05-06 gray-screens on boot:** Jorge built a "latest" gen today that gray-screens; rolled back to `549bd84`. Root cause unknown, not investigated this session. (e) **TODO — codify the wayvr CPU-capture workaround into dotfiles:** `~/.config/wayvr/config.yaml` is currently out-of-tree (dropped for fast iteration). Once a real fix exists, move the desired config into `dotfiles/default/wayvr/config.yaml` so the dotfile-symlink activation script deploys it. (f) **Minor:** stale `/run/user/1000/monado_comp_ipc` socket can persist after an unclean monado exit; the launcher's `f74154b` cleanup only runs on launcher startup, not on un-clean exit. Next launch handles it; not urgent. |
+| `lewis` | `jorge` | xr-driver + breezy-gnome + breezy-session + breezy-recenter + **monado-rayneo (patched: comp-renderer pairs COLOR_ATTACHMENT_BIT with STORAGE_BIT, `3bf13da` VERIFIED on monado side) + breezy-hyprland (with wayvr-anv override) + glasses-edid (EDID override + 3840x1080 mode injection + USB ACL fix)** deployed. Currently running the rolled-back gen `549bd84` (built 2026-05-05). GNOME-Breezy soak abandoned. **Phase 3 progress:** (1) launcher socket race FIXED commit `f74154b`; (2) EDID injects 3840x1080@60 DTD (`7122089`); (3) monado swapchain usage-flag patch `3bf13da` verified active in current build (swapchain log shows `imageUsage: STORAGE_BIT + COLOR_ATTACHMENT_BIT`, `imageExtent: {3840, 1080}`). User-facing "see something on the glasses" still blocked by the issues below. **Open issues:** (a) **SURFACE_LOST root cause located (Round 3, 2026-05-07):** strace v2 caught the kernel errno hidden behind the SURFACE_LOST — `DRM_IOCTL_MODE_ATOMIC` returns `-1 EBUSY` on the first present commit, and Mesa's `wsi_common_display.c:3129` flattens any non-EACCES atomic_commit failure to `VK_ERROR_SURFACE_LOST_KHR`. Monado has no retry on SURFACE_LOST. Leading hypothesis (unconfirmed): CRTC contention with Hyprland's stale aquamarine CRTC binding on DP-2. See `memory/xr-mesa-anv-ebusy-on-first-present.md` (canonical) and `memory/xr-mesa-anv-display-gap.md` Round 3 for next steps. Strace at `.scratch/wayvr-trace/strace-monado-20260507-002455.log.<tid>`. (b) **wayvr capture-init crash on Mesa anv (timing-dependent):** coredump backtrace localized the crash to `WCommandBuffer::upload_image` `copy_from_slice` (memory/xr-wayvr-gpu-capture-segfault.md) — leading hypothesis is unchecked `mmap` in `receive_callback` MemFd path. **Not always-reproducing:** the 200645 run with glasses-already-connected did NOT crash wayvr; it ran for many minutes until Jorge Ctrl+C'd. May correlate with hot-plug-mid-init rather than generic startup. (c) **Hyprland safe-mode — two distinct mechanisms:** the `1f84b02` HDMI@60 cap remains correct for the CDCLK-overrun mode (real, reproducible per dead log lines 5411-5585 when external is plugged) — see `memory/xr-hyprland-cdclk-cap.md`. **A separate event-loop-stall safe-mode mode** was identified in the 2026-05-06 22:41 crash: external was unplugged at crash time (~870 MP/s, under CDCLK ceiling), Hyprland watchdog SIGABRT'd during aquamarine `SDRMConnector::connect()` mode iteration on DP-2 hot-plug. See `memory/xr-hyprland-lease-hotplug-stall.md`. (d) **Latest gen built 2026-05-06 gray-screens on boot:** Jorge built a "latest" gen today that gray-screens; rolled back to `549bd84`. Root cause unknown, not investigated this session. (e) **TODO — codify the wayvr CPU-capture workaround into dotfiles:** `~/.config/wayvr/config.yaml` is currently out-of-tree (dropped for fast iteration). Once a real fix exists, move the desired config into `dotfiles/default/wayvr/config.yaml` so the dotfile-symlink activation script deploys it. (f) **Minor:** stale `/run/user/1000/monado_comp_ipc` socket can persist after an unclean monado exit; the launcher's `f74154b` cleanup only runs on launcher startup, not on un-clean exit. Next launch handles it; not urgent. (g) **NEW 2026-05-08 — DP altmode firmware-wedged on lewis.** Worked at 14:12 on 2026-05-07; broke for the rest of that day and through cold cycle. UCSI debugfs queries pin the bug to lewis's EC firmware: `GET_CONNECTOR_STATUS` reports `partner_flags=2` (altmode capable) and `GET_ALTERNATE_MODES` returns SVID `0xff01` (DisplayPort), but `GET_CAM_SUPPORTED` returns 0 and `SET_NEW_CAM` times out. Kernel never calls `ucsi_register_altmodes` because `CAM_CHANGE` event never fires. Cable is fine (works on phone). Cold cycle didn't recover — EC NVRAM persists across cold cycle. **Phase 3.10+ (display-side anything) is blocked on hardware until altmode comes back.** Sideview / mouse mode (xr-driver over plain USB+HID) is unaffected. Recovery paths (untried, ordered cheap → expensive): (i) BIOS Restore Defaults (F2 at POST → F9 → F10) clears EC NVRAM without flashing, (ii) wait some hours/days for EC's lockout-counter to expire on its own, (iii) BIOS update for UX3405MA from ASUS (current is `.301` from 2023-12-15, almost certainly outdated), (iv) try a TBT4-certified cable, (v) battery-disconnect pinhole if this Zenbook has one. Diagnostic recipe in `memory/xr-lewis-ec-refuses-altmode.md`. |
 | `verse` | `eksno` | Same module set wired (xr/driver, xr/breezy-gnome, xr/breezy-session, xr/monado-rayneo, xr/breezy-hyprland). Build verified; not yet exercised on real hardware. |
+
+## 2026-05-08 morning session — DP altmode firmware wedge diagnosed
+
+Phase 3.10 verification got hard-blocked when DP altmode stopped
+entering on lewis after the heavy plug/unplug cycling on 2026-05-07.
+The morning was spent narrowing down the cause:
+
+- **What worked at 14:12 on 2026-05-07** (Hyprland aquamarine log
+  proves it): SmartGlasses connected on DP-1 with EDID, monado
+  successfully leased it via `wp-drm-lease-v1`, OpenXR FOCUSED.
+  Same NixOS gen `549bd84`, same kernel 7.0.3, same BIOS, same cable,
+  same glasses.
+
+- **What didn't recover it across the day and morning**: cable
+  orientation flip, USB-C port swap (top vs bottom), 5-min
+  glasses-unplugged for cap discharge, `ucsi_acpi` driver
+  unbind/rebind on `USBC000:00`, xhci PCI driver unbind/rebind
+  on `0000:00:14.0`, `usbcore.autosuspend=-1` runtime tweak,
+  `systemctl suspend` + wake, `sudo reboot`, full cold cycle
+  (shutdown + AC unplug + 30s power button hold), UCSI
+  `CONNECTOR_RESET` (0x03) via debugfs, UCSI `SET_NEW_CAM` (0x0f) to
+  force-enter DP altmode (times out), UCSI `PPM_RESET` (0x01)
+  ("Operation not supported"), connecting glasses with no charger.
+
+- **The fingerprint** (proven via raw UCSI debugfs at
+  `/sys/kernel/debug/usb/ucsi/USBC000:00/{command,response}`):
+
+  | UCSI command | Result | Implication |
+  |---|---|---|
+  | `GET_CAPABILITY` (0x06) | `features = 0x0000` | No `ALT_MODE_DETAILS` capability bit |
+  | `GET_CONNECTOR_STATUS` (0x12) | byte 2 includes `partner_flags=2` | EC SEES partner is altmode capable |
+  | `GET_ALTERNATE_MODES` (0x0c) | `0x...0405ff01` | Partner advertises DP SVID `0xff01` (correct) |
+  | `GET_CAM_SUPPORTED` (0x0d) | `0x0000...` | EC won't expose any CAM for the port |
+  | `SET_NEW_CAM` (0x0f) | timeout | EC actively refuses altmode entry |
+
+  The EC has the partner data but its policy refuses to register a
+  CAM. Function trace of `ucsi_*` confirms the kernel never calls
+  `ucsi_register_altmodes` because `ucsi_handle_connector_change`
+  only invokes it when `change & UCSI_CONSTAT_CAM_CHANGE` (bit 10)
+  is set, and bit 10 is never set in any of the connect events
+  (observed `change=0x4800, 0x5800, 0x0a00`).
+
+- **The "why now and not before" answer** (honest version): we don't
+  know what specifically transitioned the EC's altmode policy from
+  "register CAMs" → "refuse CAMs" between 14:12 and 14:30 on
+  2026-05-07. Most plausible: a specific sequence during the heavy
+  cycling we were doing (some combination of monado-leasing,
+  Hyprland-watchdog-killing-aquamarine-mid-altmode-active,
+  SIGKILL-on-monado-stranding-USB-claim, etc.) wrote a "lockout"
+  state to the EC's NVRAM region. Cold cycle wipes RAM but not
+  NVRAM, which is why even shutdown + 30s power button hold
+  doesn't recover.
+
+- **Sudoers timestamp_timeout extended to 60min**:
+  `system/lib/power-mode/default.nix:1040-1042` — single
+  `sudo -v` now primes credentials across all of jorge's shells
+  (including Claude Code Bash tool calls) for an hour. Saves
+  password prompts during debug sessions involving lots of sudo
+  (kernel tracing, sysfs writes). `!tty_tickets` makes the sudo
+  ticket cache shared across ttys instead of per-tty.
+
+- **Memory entry**: `memory/xr-lewis-ec-refuses-altmode.md` has the
+  5-command UCSI recipe so future-Claude can fingerprint this
+  failure mode in 30 seconds without re-deriving it. Index entry
+  added to `memory/MEMORY.md`. Older
+  `memory/xr-lewis-altmode-discovery-stuck.md` (which claimed cold
+  cycle is the fix) is now superseded but retained for narrative
+  trail.
+
+### What's not blocked
+
+- **xr-driver / IMU / mouse mode** — works fine over plain USB+HID.
+  Pose data still flows; sideview is fully usable. Phase 3.10's
+  "see something on the glasses panel" goal is what's blocked.
+- **Software changes that don't need real hardware** — Phase 3.7
+  monado retry patch can still be polished/reviewed; Phase 4
+  (N-screen layout) design work; Phase 3.8 (Mesa errno translation)
+  if we choose to revive it.
+
+### Recovery options tested
+
+1. **F2 at POST → F9 (Restore Defaults) → F10 (Save & Exit)** —
+   ❌ **VERIFIED INEFFECTIVE 2026-05-08**: post-reset UCSI fingerprint
+   identical to pre-reset (`GET_CAM_SUPPORTED=0`, `accessory_mode=none`,
+   no svid). Only attribute byte changed by 1 bit (`0x4146 → 0x4046`).
+   Side effect: re-enabled secure boot → NixOS skipped, fell through
+   to Ubuntu fallback; Jorge disabled secure boot to recover. The EC's
+   altmode policy state is NOT in the NVRAM region BIOS Restore
+   Defaults clears.
+2. **Long idle wait** — UNTESTED. Some EC firmware bugs self-clear
+   after hours/days of no USB-C activity. Re-test periodically with
+   the 5-command UCSI recipe in
+   `memory/xr-lewis-ec-refuses-altmode.md`.
+3. **TBT4-certified cable** — UNTESTED. Rules out cable-specific
+   firmware quirk. Cable works on phone but lewis's TBT4 controller
+   is stricter.
+4. **BIOS firmware flash** — UNTESTED. Latest BIOS for UX3405MA at
+   https://www.asus.com/laptops/for-home/zenbook/asus-zenbook-14-oled-ux3405ma/helpdesk_bios/.
+   Flashing newer BIOS almost always clears EC NVRAM as a side
+   effect, regardless of code changes.
+5. **Battery-disconnect pinhole** — UNTESTED. If this Zenbook model
+   has one (some do). Most aggressive non-flash reset.
+6. **Boot without aggressive power-saving kernel params** — UNTESTED.
+   `system/lib/device/intel/default.nix` sets `i915.enable_dc=4`,
+   `pcie_aspm=force`, `acpi.ec_no_wakeup=1`, `usbcore.autosuspend=1`.
+   These were active when the wedge first triggered. Worth a one-off
+   reboot with them removed to see if the EC behaves differently.
+
+### Other things proven INEFFECTIVE in the same diagnostic session
+
+UCSI runtime resets that all returned no-change: `CONNECTOR_RESET`
+soft (0x03 con=1), `CONNECTOR_RESET` hard (0x03 with bit 23 set).
+Kernel-blocked: `PPM_RESET` (0x01), `SET_NOTIFICATION_ENABLE` (0x05),
+`SET_NEW_CAM` (0x0f) all return "Operation not supported" or time out
+when issued via `/sys/kernel/debug/usb/ucsi/USBC000:00/command`.
 
 ## 2026-05-07 evening session — Phase 3.5 progress
 
