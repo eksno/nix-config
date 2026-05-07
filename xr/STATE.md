@@ -231,7 +231,7 @@ deferred.
   v2.9.4. Includes patched udev rules (Rayneo hidraw subsystem match,
   uinput uaccess) and a stubbed `imu_protocol_xreal_one` so we can drop the
   XREAL One Rust subdriver without breaking link.
-- **Runtime config**: `dotfiles/default/xr_driver/config.ini`. Three lines:
+- **Runtime config**: `dotfiles/default/xr_driver/config.ini`. Four lines:
   ```
   disabled=false
   output_mode=external_only
@@ -239,7 +239,9 @@ deferred.
   use_roll_axis=true
   ```
   `external_mode=breezy_desktop` is what enables the SHM IPC writer;
-  `output_mode=external_only` alone is not enough.
+  `output_mode=external_only` alone is not enough. `use_roll_axis=true`
+  feeds head roll into the pose stream (defaults differ by upstream
+  build; explicit here for reproducibility).
 - **Deployment**: Repo template installed by systemd `ExecStartPre install
   -Dm644 ${...}/dotfiles/default/xr_driver/config.ini %h/.config/xr_driver/config.ini`.
   The driver mutates this file at runtime (e.g. flips `disabled=true` when
