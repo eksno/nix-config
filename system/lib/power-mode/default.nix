@@ -1037,8 +1037,14 @@ in
   ];
 
   # Allow sudo without a tty (needed for systemd user services calling power-mode)
+  # Longer timestamp + !tty_tickets so a single `sudo -v` primes credentials
+  # across all of the user's shells (Claude Code Bash tool, terminal panes,
+  # background scripts) for an hour — saves password prompts during debug
+  # sessions involving lots of sudo (kernel tracing, sysfs writes, etc.)
   security.sudo.extraConfig = ''
     Defaults !requiretty
+    Defaults timestamp_timeout=60
+    Defaults !tty_tickets
   '';
 
   environment.systemPackages = [
