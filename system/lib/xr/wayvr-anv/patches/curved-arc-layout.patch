@@ -1,0 +1,113 @@
+diff --git a/wayvr/src/overlays/screen/mod.rs b/wayvr/src/overlays/screen/mod.rs
+index 653e599..36b1f8b 100644
+--- a/wayvr/src/overlays/screen/mod.rs
++++ b/wayvr/src/overlays/screen/mod.rs
+@@ -29,6 +29,7 @@ fn create_screen_from_backend(
+     transform: Transform,
+     session: &AppSession,
+     backend: Box<dyn OverlayBackend>,
++    arc_index: Option<(usize, usize)>,
+ ) -> OverlayWindowConfig {
+     let angle = if session.config.upright_screen_fix {
+         match transform {
+@@ -41,6 +42,26 @@ fn create_screen_from_backend(
+         0.
+     };
+ 
++    let scale = Vec3::ONE * 1.5 * session.config.desktop_view_scale;
++    let z_rot = Quat::from_rotation_z(angle);
++
++    // Distribute multiple screens across a horizontal arc around the
++    // user. Single screen falls back to the legacy (0, 0, -0.5) anchor.
++    // R = arc radius (m); SPACING = angular step between adjacent
++    // screens (rad, ~0.6 rad ≈ 34°).
++    let (translation, world_rot) = match arc_index {
++        Some((i, n)) if n > 1 => {
++            const R: f32 = 0.6;
++            const SPACING: f32 = 0.6;
++            let theta = (i as f32 - (n as f32 - 1.0) * 0.5) * SPACING;
++            let pos = vec3(R * theta.sin(), 0.0, -R * theta.cos());
++            // Rotate so each screen's −Z axis points back at the user.
++            let rot = Quat::from_rotation_y(-theta) * z_rot;
++            (pos, rot)
++        }
++        _ => (vec3(0.0, 0.0, -0.5), z_rot),
++    };
++
+     OverlayWindowConfig {
+         name,
+         category: OverlayCategory::Screen,
+@@ -49,11 +70,7 @@ fn create_screen_from_backend(
+             positioning: Positioning::Anchored,
+             interactable: true,
+             curvature: Some(0.15),
+-            transform: Affine3A::from_scale_rotation_translation(
+-                Vec3::ONE * 1.5 * session.config.desktop_view_scale,
+-                Quat::from_rotation_z(angle),
+-                vec3(0.0, 0.0, -0.5),
+-            ),
++            transform: Affine3A::from_scale_rotation_translation(scale, world_rot, translation),
+             ..OverlayWindowState::default()
+         },
+         keyboard_focus: Some(KeyboardFocus::PhysicalScreen),
+diff --git a/wayvr/src/overlays/screen/wl.rs b/wayvr/src/overlays/screen/wl.rs
+index 899fc4b..e1e1211 100644
+--- a/wayvr/src/overlays/screen/wl.rs
++++ b/wayvr/src/overlays/screen/wl.rs
+@@ -101,10 +101,24 @@ pub fn create_screens_wayland(wl: &mut WlxClient, app: &mut AppState) -> ScreenC
+     let pw_tokens_copy = pw_tokens.clone();
+     let has_wlr_screencopy = wl.maybe_wlr_screencopy_mgr.is_some();
+ 
+-    for (id, output) in &wl.outputs {
+-        if app.screens.iter().any(|s| s.name == output.name) {
+-            continue;
+-        }
++    // Pre-collect the outputs we'll actually create overlays for, so we
++    // can pass each one its (index, total) for arc layout placement.
++    // wl.outputs is an IdMap keyed by wayland object id — iteration is
++    // in numerical id order, which is the order outputs were
++    // advertised. That gives a stable left-to-right arc.
++    let pending: Vec<u32> = wl
++        .outputs
++        .iter()
++        .filter(|(_, o)| !app.screens.iter().any(|s| s.name == o.name))
++        .map(|(id, _)| *id)
++        .collect();
++    let arc_total = pending.len();
++
++    for (idx, id) in pending.iter().enumerate() {
++        let output = match wl.outputs.get(id) {
++            Some(o) => o,
++            None => continue,
++        };
+ 
+         log::info!(
+             "{}: Init screen of res {:?}, logical {:?} at {:?}",
+@@ -127,6 +141,7 @@ pub fn create_screens_wayland(wl: &mut WlxClient, app: &mut AppState) -> ScreenC
+                 output.transform,
+                 &app.session,
+                 Box::new(backend),
++                Some((idx, arc_total)),
+             );
+ 
+             let meta = ScreenMeta {
+diff --git a/wayvr/src/overlays/screen/x11.rs b/wayvr/src/overlays/screen/x11.rs
+index f1f4068..1452c62 100644
+--- a/wayvr/src/overlays/screen/x11.rs
++++ b/wayvr/src/overlays/screen/x11.rs
+@@ -118,6 +118,7 @@ pub fn create_screens_x11pw(app: &mut AppState) -> anyhow::Result<ScreenCreateDa
+                 Transform::Normal,
+                 &app.session,
+                 Box::new(backend),
++                None,
+             );
+ 
+             let meta = ScreenMeta {
+@@ -201,6 +202,7 @@ pub fn create_screens_xshm(app: &mut AppState) -> anyhow::Result<ScreenCreateDat
+                 Transform::Normal,
+                 &app.session,
+                 Box::new(backend),
++                None,
+             );
+ 
+             let meta = ScreenMeta {

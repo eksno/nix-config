@@ -10,6 +10,14 @@
 #   descriptor while build_and_execute_now() submits the copy without
 #   waiting for queue idle). 2048x2048 RGBA8 = 16 MiB up-front; cheap.
 #
+# - curved-arc-layout.patch — Phase 4B: distribute screens across a
+#   horizontal arc around the user instead of stacking them all at
+#   z=-0.5. Each screen at index i of n gets θ_i = (i - (n-1)/2) *
+#   SPACING, position (R sin θ, 0, -R cos θ), rotation
+#   from_rotation_y(-θ) so its -Z faces the user. Defaults: R=0.6m,
+#   SPACING=0.6 rad (~34°). Single-screen sessions fall back to the
+#   legacy (0, 0, -0.5) anchor.
+#
 # Patches apply against the v26.2.1 source nixpkgs pins. If the version
 # bumps, re-verify the patch context.
 
@@ -21,5 +29,6 @@
 wayvr.overrideAttrs (old: {
   patches = (old.patches or [ ]) ++ [
     ./patches/text-atlas-larger-initial-size.patch
+    ./patches/curved-arc-layout.patch
   ];
 })
