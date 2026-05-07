@@ -2,7 +2,7 @@
 type: project
 title: lewis EC firmware refuses to register CAMs for partners that DO advertise DP altmode (deeper than xr-lewis-altmode-discovery-stuck)
 created: 2026-05-08
-status: recovered 2026-05-08 evening (cause unknown)
+status: WEDGED again 2026-05-09 (recovery on 2026-05-08 was transient; survived reboot, replug cycles, and ASUS 40s+AC EC reset). Next escalation: BIOS UX3405MA.301 → 311.
 ---
 
 ## STATUS UPDATE 2026-05-08 evening
@@ -123,6 +123,14 @@ and `find /sys/class/typec -name svid` returns nothing.
   (`i915.enable_dc=4`, `pcie_aspm=force`, `acpi.ec_no_wakeup=1`,
   `usbcore.autosuspend=1`) — no effect on 2026-05-08; rules out runtime
   EC/USB/display power management as the wedge cause
+- ASUS-documented EC reset: `shutdown -h now`, AC charger plugged in,
+  hold power button 40 seconds (FAQ 1050239) — NO EFFECT on 2026-05-09.
+  Procedure deeper than the prior 30s+AC-unplug attempt (cuts EC RAM
+  rail), still didn't clear the wedge. Post-reset UCSI fingerprint
+  identical: `GET_CAM_SUPPORTED=0`, no altmode subdir on partner,
+  panel pure black on connect. Confirms the lockout state is in EC
+  NVRAM (or some persistent flash region), not EC RAM. Replug,
+  port swap, and orientation flip post-reset all also no-op.
 
 ## Worked once today (2026-05-07 at ~14:12)
 
