@@ -1,0 +1,144 @@
+// ─────────────────────────────────────────────────────────────
+//  Toucan keyboard cheatsheet — Catppuccin Mocha
+// ─────────────────────────────────────────────────────────────
+
+$base:     #1e1e2e;
+$mantle:   #181825;
+$crust:    #11111b;
+$surface0: #313244;
+$surface1: #45475a;
+$surface2: #585b70;
+$overlay0: #6c7086;
+$overlay1: #7f849c;
+$text:     #cdd6f4;
+$subtext0: #a6adc8;
+$mauve:    #cba6f7;
+$lavender: #b4befe;
+$peach:    #fab387;
+
+* {
+  all: unset;
+  font-family: "JetBrainsMono Nerd Font", "JetBrains Mono", monospace;
+}
+
+window {
+  background: transparent;
+}
+
+.kbd {
+  padding: 8px 12px;
+}
+
+// ── panels ───────────────────────────────────────────────────
+
+.panel {
+  background-color: rgba(17, 17, 27, 0.72);     // crust @ 72%
+  border: 1px solid rgba(108, 112, 134, 0.30);  // overlay0 @ 30%
+  border-radius: 12px;
+  padding: 10px 14px;
+  min-width: 380px;
+}
+
+.panel-active {
+  background-color: rgba(30, 30, 46, 0.85);     // base @ 85%
+  border: 1px solid rgba(203, 166, 247, 0.55);  // mauve @ 55%
+}
+
+.layer-name {
+  color: $subtext0;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  margin-bottom: 4px;
+}
+
+.panel-active .layer-name {
+  color: $mauve;
+}
+
+// ── rows / sides ─────────────────────────────────────────────
+
+.row, .thumb-row {
+  margin: 1px 0;
+}
+
+.side {
+  // group of 5 keys (one half of a row)
+}
+
+// ── keys ─────────────────────────────────────────────────────
+
+.key {
+  background-color: rgba(49, 50, 68, 0.55);     // surface0 @ 55%
+  border: 1px solid rgba(88, 91, 112, 0.45);    // surface2 @ 45%
+  border-radius: 5px;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 2px 0;
+}
+
+.key-label {
+  color: $text;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.key-sub {
+  color: $peach;
+  font-size: 8px;
+  font-weight: 500;
+  margin-top: -2px;
+}
+
+.key.key-dim {
+  background-color: rgba(49, 50, 68, 0.18);
+  border-color: rgba(88, 91, 112, 0.18);
+}
+
+.key.key-dim .key-label {
+  color: rgba(166, 173, 200, 0.32);             // subtext0 @ 32%
+  font-weight: 400;
+}
+
+// ── thumbs ───────────────────────────────────────────────────
+
+.thumb {
+  background-color: rgba(69, 71, 90, 0.60);     // surface1 @ 60%
+  border: 1px solid rgba(127, 132, 156, 0.45);  // overlay1 @ 45%
+  border-radius: 5px;
+  min-width: 44px;
+  min-height: 32px;
+  padding: 2px 6px;
+  margin-top: 4px;
+}
+
+.thumb-tap {
+  color: $text;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.thumb-hold {
+  color: $lavender;
+  font-size: 8px;
+  margin-top: -1px;
+}
+
+.thumb.key-dim {
+  background-color: rgba(69, 71, 90, 0.18);
+  border-color: rgba(127, 132, 156, 0.18);
+}
+
+.thumb.key-dim .thumb-tap {
+  color: rgba(166, 173, 200, 0.32);
+  font-weight: 400;
+}
+
+// ── combos line ──────────────────────────────────────────────
+
+.combos {
+  color: $overlay1;
+  font-size: 9px;
+  letter-spacing: 1px;
+  margin-top: 6px;
+}

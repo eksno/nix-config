@@ -88,6 +88,7 @@ in
         ${linkDir "btop" "$cfg/btop"}
         ${linkDir "tofi" "$cfg/tofi"}
         ${linkDir "waybar" "$cfg/waybar"}
+        ${linkDir "eww" "$cfg/eww"}
         ${linkDir "xdg-desktop-portal" "$cfg/xdg-desktop-portal"}
 
         # ── Locals ──
