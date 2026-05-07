@@ -2,7 +2,37 @@
 type: project
 title: lewis EC firmware refuses to register CAMs for partners that DO advertise DP altmode (deeper than xr-lewis-altmode-discovery-stuck)
 created: 2026-05-08
+status: recovered 2026-05-08 evening (cause unknown)
 ---
+
+## STATUS UPDATE 2026-05-08 evening
+
+DP altmode came back without us deliberately fixing anything. The
+glasses now appear as `DP-1` 1920x1080@120 with `dpmsStatus=true`,
+`mirrorOf=none` — a fully active independent display, content
+visible on the panel. **`UCSI debugfs still reports the same wedge
+fingerprint** (GET_CAM_SUPPORTED=0, accessory_mode=none) even while
+the i915 DP path is clearly engaged. So **don't trust the UCSI
+fingerprint as definitive**: i915 can negotiate DP independently of
+what UCSI debugfs sees. Use `hyprctl monitors -j` or
+`/sys/class/drm/card1-DP-*/status` for the source of truth on
+whether the glasses panel will actually scan out.
+
+Plausible recovery triggers (none confirmed):
+- The `hyprctl output create headless` × 4 + `output remove` cycle
+  during Phase 4A testing may have nudged Hyprland to re-evaluate
+  real outputs, forcing a fresh DP probe.
+- Time-based EC lockout expiry (we did wait several hours over
+  multiple reboots).
+- Kernel cmdline thrash (3 reboots on 2026-05-08 with different
+  power-saving flags) accidentally hit a state the EC was happier
+  with.
+- Plain replug after the cmdline-revert reboot.
+
+Because the cause is unknown, expect this to recur. The 5-command
+UCSI fingerprint below remains the right detection recipe, but
+**also check `hyprctl monitors -j | jq '.[].dpmsStatus'`** before
+declaring it broken — UCSI may misreport.
 
 ## What this is
 
