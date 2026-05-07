@@ -3,6 +3,7 @@
 ;;  Persistent overlay. Layers L→R: NUM | HOME | NAV
 ;;  Subscript on a key = home-row mod hold (⌘ ⌥ ⌃ ⇧).
 ;;  Dim keys are &trans (fall through to home layer).
+;;  Inline cell between halves shows positional combo (HOME only).
 ;; ─────────────────────────────────────────────────────────────
 
 (defwidget key [label sub dim]
@@ -17,21 +18,21 @@
     (label :class "thumb-tap"  :text tap)
     (label :class "thumb-hold" :text hold :visible {hold != ""})))
 
+(defwidget combo-cell [text]
+  (box :class "combo-cell" :valign "center" :halign "center"
+    (label :class "combo-label" :text text :visible {text != ""})))
+
 (defwidget side []
-  (box :class "side" :orientation "h" :spacing 3 :halign "center"
+  (box :class "side" :orientation "h" :spacing 2 :halign "center"
     (children)))
 
-(defwidget split-row []
-  (box :class "row" :orientation "h" :spacing 14 :halign "center"
-    (children)))
-
-(defwidget thumb-row []
-  (box :class "thumb-row" :orientation "h" :spacing 14 :halign "center"
+(defwidget kbd-row [combo]
+  (box :class "row" :orientation "h" :spacing 4 :halign "center"
     (children)))
 
 (defwidget panel [name accent]
   (box :class { "panel " + accent }
-       :orientation "v" :spacing 4 :valign "start"
+       :orientation "v" :spacing 2 :valign "start"
     (label :class "layer-name" :text name)
     (children)))
 
@@ -40,8 +41,8 @@
 (defwindow keyboard-cheatsheet
   :monitor 0
   :geometry (geometry :anchor "bottom center"
-                      :x "0" :y "12px"
-                      :width "1280px" :height "240px")
+                      :x "0" :y "10px"
+                      :width "1080px" :height "200px")
   :stacking "overlay"
   :exclusive false
   :focusable false
@@ -49,42 +50,46 @@
   (keyboard))
 
 (defwidget keyboard []
-  (box :class "kbd" :orientation "h" :space-evenly false :spacing 22 :halign "center"
+  (box :class "kbd" :orientation "h" :space-evenly false :spacing 14 :halign "center"
 
     ;; ──────────── NUM ────────────
     (panel :name "NUM" :accent ""
-      (split-row
+      (kbd-row :combo ""
         (side
           (key :label "!" :sub "" :dim "") (key :label "@" :sub "" :dim "")
           (key :label "{" :sub "" :dim "") (key :label "}" :sub "" :dim "")
           (key :label "|" :sub "" :dim ""))
+        (combo-cell :text "")
         (side
           (key :label "+" :sub "" :dim "") (key :label "7" :sub "" :dim "")
           (key :label "8" :sub "" :dim "") (key :label "9" :sub "" :dim "")
           (key :label "*" :sub "" :dim "")))
-      (split-row
+      (kbd-row :combo ""
         (side
           (key :label "#" :sub "⌘" :dim "") (key :label "$" :sub "⌥" :dim "")
           (key :label "(" :sub "⌃" :dim "") (key :label ")" :sub "⇧" :dim "")
           (key :label "`" :sub "" :dim ""))
+        (combo-cell :text "")
         (side
           (key :label "-" :sub "" :dim "")  (key :label "4" :sub "⇧" :dim "")
           (key :label "5" :sub "⌃" :dim "") (key :label "6" :sub "⌥" :dim "")
           (key :label ":" :sub "⌘" :dim "")))
-      (split-row
+      (kbd-row :combo ""
         (side
           (key :label "%" :sub "" :dim "") (key :label "^" :sub "" :dim "")
           (key :label "[" :sub "" :dim "") (key :label "]" :sub "" :dim "")
           (key :label "~" :sub "" :dim ""))
+        (combo-cell :text "")
         (side
-          (key :label "=" :sub "" :dim "")  (key :label "1" :sub "" :dim "")
-          (key :label "2" :sub "" :dim "")  (key :label "3" :sub "" :dim "")
+          (key :label "=" :sub "" :dim "")    (key :label "1" :sub "" :dim "")
+          (key :label "2" :sub "" :dim "")    (key :label "3" :sub "" :dim "")
           (key :label "\\\\" :sub "" :dim "")))
-      (thumb-row
+      (box :class "thumb-row" :orientation "h" :spacing 4 :halign "center"
         (side
           (thumb :tap "/" :hold "" :dim "")
           (thumb :tap "?" :hold "" :dim "")
           (thumb :tap "Del" :hold "" :dim ""))
+        (combo-cell :text "")
         (side
           (thumb :tap "↵" :hold "" :dim "")
           (thumb :tap "␣" :hold "" :dim "")
@@ -92,90 +97,97 @@
 
     ;; ──────────── HOME (active) ────────────
     (panel :name "HOME" :accent "panel-active"
-      (split-row
+      (kbd-row :combo "-"
         (side
           (key :label "Q" :sub "" :dim "") (key :label "W" :sub "" :dim "")
           (key :label "E" :sub "" :dim "") (key :label "R" :sub "" :dim "")
           (key :label "T" :sub "" :dim ""))
+        (combo-cell :text "−")
         (side
           (key :label "Y" :sub "" :dim "") (key :label "U" :sub "" :dim "")
           (key :label "I" :sub "" :dim "") (key :label "O" :sub "" :dim "")
           (key :label "P" :sub "" :dim "")))
-      (split-row
+      (kbd-row :combo "CAPS"
         (side
           (key :label "A" :sub "⌘" :dim "") (key :label "S" :sub "⌥" :dim "")
           (key :label "D" :sub "⌃" :dim "") (key :label "F" :sub "⇧" :dim "")
           (key :label "G" :sub "" :dim ""))
+        (combo-cell :text "CAPS")
         (side
           (key :label "H" :sub "" :dim "")  (key :label "J" :sub "⇧" :dim "")
           (key :label "K" :sub "⌃" :dim "") (key :label "L" :sub "⌥" :dim "")
           (key :label ";" :sub "⌘" :dim "")))
-      (split-row
+      (kbd-row :combo "_"
         (side
           (key :label "Z" :sub "" :dim "") (key :label "X" :sub "" :dim "")
           (key :label "C" :sub "" :dim "") (key :label "V" :sub "" :dim "")
           (key :label "B" :sub "" :dim ""))
+        (combo-cell :text "_")
         (side
           (key :label "N" :sub "" :dim "") (key :label "M" :sub "" :dim "")
           (key :label "," :sub "" :dim "") (key :label "." :sub "" :dim "")
           (key :label "/" :sub "" :dim "")))
-      (thumb-row
+      (box :class "thumb-row" :orientation "h" :spacing 4 :halign "center"
         (side
           (thumb :tap "Esc" :hold "↳sp"  :dim "")
           (thumb :tap "⌫"   :hold "↳num" :dim "")
           (thumb :tap "Tab" :hold "↳nav" :dim ""))
+        (combo-cell :text "")
         (side
           (thumb :tap "↵" :hold "↳nav" :dim "")
           (thumb :tap "␣" :hold "↳num" :dim "")
-          (thumb :tap "⌘" :hold "↳sp"  :dim "")))
-      (label :class "combos" :text "F+J → CAPS    V+M → _    R+U → -"))
+          (thumb :tap "⌘" :hold "↳sp"  :dim ""))))
 
     ;; ──────────── NAV ────────────
     (panel :name "NAV" :accent ""
-      (split-row
+      (kbd-row :combo ""
         (side
           (key :label "F1" :sub "" :dim "")
           (key :label "F2" :sub "" :dim "")
           (key :label "F3" :sub "" :dim "")
           (key :label "F4" :sub "" :dim "")
           (key :label "T"  :sub "" :dim "key-dim"))
+        (combo-cell :text "")
         (side
           (key :label "Y"   :sub "" :dim "key-dim")
           (key :label "U"   :sub "" :dim "key-dim")
           (key :label "PgD" :sub "" :dim "")
           (key :label "PgU" :sub "" :dim "")
           (key :label "P"   :sub "" :dim "key-dim")))
-      (split-row
+      (kbd-row :combo ""
         (side
           (key :label "F5"   :sub "⌘"  :dim "")
           (key :label "F6"   :sub "⌥"  :dim "")
           (key :label "F7"   :sub "⌃"  :dim "")
           (key :label "F8"   :sub "⇧"  :dim "")
           (key :label "⌃C"   :sub "⌃V" :dim ""))
+        (combo-cell :text "")
         (side
           (key :label "H" :sub "" :dim "key-dim")
           (key :label "←" :sub "⇧" :dim "")
           (key :label "↓" :sub "⌃" :dim "")
           (key :label "↑" :sub "⌥" :dim "")
           (key :label "→" :sub "⌘" :dim "")))
-      (split-row
+      (kbd-row :combo ""
         (side
           (key :label "F9"   :sub "" :dim "")
           (key :label "F10"  :sub "" :dim "")
           (key :label "F11"  :sub "" :dim "")
           (key :label "F12"  :sub "" :dim "")
           (key :label "PrSc" :sub "" :dim ""))
+        (combo-cell :text "")
         (side
           (key :label "N" :sub "" :dim "key-dim")
           (key :label "M" :sub "" :dim "key-dim")
           (key :label "," :sub "" :dim "key-dim")
           (key :label "." :sub "" :dim "key-dim")
           (key :label "/" :sub "" :dim "key-dim")))
-      (thumb-row
+      (box :class "thumb-row" :orientation "h" :spacing 4 :halign "center"
         (side
           (thumb :tap "BTclr" :hold "" :dim "")
           (thumb :tap "BT→"   :hold "" :dim "")
           (thumb :tap "Tab"   :hold "" :dim "key-dim"))
+        (combo-cell :text "")
         (side
           (thumb :tap "↵" :hold "" :dim "key-dim")
           (thumb :tap "␣" :hold "" :dim "key-dim")
