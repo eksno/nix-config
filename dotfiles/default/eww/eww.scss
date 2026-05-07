@@ -33,15 +33,15 @@ window {
 // ── panels ───────────────────────────────────────────────────
 
 .panel {
-  background-color: rgba(17, 17, 27, 0.18);     // crust @ 18%
-  border: 1px solid rgba(108, 112, 134, 0.12);  // overlay0 @ 12%
+  background-color: rgba(17, 17, 27, 0.34);     // crust @ 34%
+  border: 1px solid rgba(108, 112, 134, 0.22);  // overlay0 @ 22%
   border-radius: 8px;
   padding: 4px 8px;
 }
 
 .panel-active {
-  background-color: rgba(30, 30, 46, 0.26);     // base @ 26%
-  border: 1px solid rgba(203, 166, 247, 0.32);  // mauve @ 32%
+  background-color: rgba(30, 30, 46, 0.44);     // base @ 44%
+  border: 1px solid rgba(203, 166, 247, 0.50);  // mauve @ 50%
 }
 
 .layer-name {
@@ -59,10 +59,10 @@ window {
 // ── keys ─────────────────────────────────────────────────────
 
 .key {
-  background-color: rgba(49, 50, 68, 0.14);     // surface0 @ 14%
-  border: 1px solid rgba(88, 91, 112, 0.16);    // surface2 @ 16%
+  background-color: rgba(49, 50, 68, 0.28);     // surface0 @ 28%
+  border: 1px solid rgba(88, 91, 112, 0.28);    // surface2 @ 28%
   border-radius: 3px;
-  min-width: 20px;
+  min-width: 24px;
   min-height: 20px;
   padding: 0;
 }
@@ -81,20 +81,30 @@ window {
 }
 
 .key.key-dim {
-  background-color: rgba(49, 50, 68, 0.10);
-  border-color: rgba(88, 91, 112, 0.10);
+  background-color: rgba(49, 50, 68, 0.18);
+  border-color: rgba(88, 91, 112, 0.18);
 }
 
 .key.key-dim .key-label {
-  color: rgba(166, 173, 200, 0.30);
+  color: rgba(166, 173, 200, 0.40);
   font-weight: 400;
 }
+
+// ── column stagger (Toucan 36 columnar layout) ───────────────
+// Pinky lowest (8px), ring 4, middle 0 (top), index 4, inner 6.
+// Same offset on left + right (mirrored) — col class drives it.
+
+.key.col-pinky  { margin-top: 8px; }
+.key.col-ring   { margin-top: 4px; }
+.key.col-middle { margin-top: 0px; }
+.key.col-index  { margin-top: 4px; }
+.key.col-inner  { margin-top: 6px; }
 
 // ── thumbs ───────────────────────────────────────────────────
 
 .thumb {
-  background-color: rgba(69, 71, 90, 0.18);     // surface1 @ 18%
-  border: 1px solid rgba(127, 132, 156, 0.18);  // overlay1 @ 18%
+  background-color: rgba(69, 71, 90, 0.32);     // surface1 @ 32%
+  border: 1px solid rgba(127, 132, 156, 0.30);  // overlay1 @ 30%
   border-radius: 3px;
   min-width: 32px;
   min-height: 24px;
@@ -115,19 +125,25 @@ window {
 }
 
 .thumb.key-dim {
-  background-color: rgba(69, 71, 90, 0.10);
-  border-color: rgba(127, 132, 156, 0.10);
+  background-color: rgba(69, 71, 90, 0.18);
+  border-color: rgba(127, 132, 156, 0.18);
 }
 
 .thumb.key-dim .thumb-tap {
-  color: rgba(166, 173, 200, 0.30);
+  color: rgba(166, 173, 200, 0.40);
   font-weight: 400;
 }
+
+// ── thumb cluster arc (outer thumbs slightly lower) ──────────
+
+.thumb.thumb-outer { margin-top: 6px; }
+.thumb.thumb-mid   { margin-top: 3px; }
+.thumb.thumb-inner { margin-top: 2px; }
 
 // ── inline combo cell (between halves) ───────────────────────
 
 .combo-cell {
-  min-width: 26px;
+  min-width: 10px;       // empty case = thin gap
   min-height: 20px;
   padding: 0 2px;
 }
