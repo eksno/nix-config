@@ -39,9 +39,13 @@ in
 
   # `drm.edid_firmware=<connector>:<path>` — the path is relative to
   # /lib/firmware. The connector name comes from /sys/class/drm/card*-NAME.
-  # Hardcoded to DP-2 (lewis); copy this module and adjust if porting.
+  # Cover both DP-1 and DP-2 because the Rayneo can come up on either
+  # depending on which USB-C port + the EC's altmode lane assignment;
+  # see memory/xr-rayneo-connector-name-varies.md. The kernel only
+  # applies the override on the matching connector, so listing both is
+  # safe — never both connectors will be the glasses simultaneously.
   boot.kernelParams = [
-    "drm.edid_firmware=DP-2:edid/rayneo-air4pro-glasses.bin"
+    "drm.edid_firmware=DP-1:edid/rayneo-air4pro-glasses.bin,DP-2:edid/rayneo-air4pro-glasses.bin"
   ];
 
   # Stable USB access for the Rayneo regardless of when the device
