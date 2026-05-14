@@ -1,0 +1,154 @@
+// ─────────────────────────────────────────────────────────────────────────
+//  Toucan keyboard cheatsheet — Catppuccin Mocha — single-panel design
+//  Layout matches physical Toucan: columnar stagger + thumb arc.
+// ─────────────────────────────────────────────────────────────────────────
+
+$base:     #1e1e2e;
+$mantle:   #181825;
+$crust:    #11111b;
+$surface0: #313244;
+$surface1: #45475a;
+$surface2: #585b70;
+$overlay0: #6c7086;
+$overlay1: #7f849c;
+$text:     #cdd6f4;
+$subtext0: #a6adc8;
+$mauve:    #cba6f7;
+$lavender: #b4befe;
+$peach:    #fab387;
+
+* {
+    all: unset;
+    font-family: "JetBrainsMono Nerd Font", "JetBrains Mono", monospace;
+}
+
+window.cheatsheet {
+    background: transparent;
+}
+
+.root {
+    padding: 4px 8px;
+}
+
+// ── panel (single, always shows the active layer) ──────────────────────────
+
+.panel {
+    background-color: rgba(30, 30, 46, 0.44);     // base @ 44%
+    border: 1px solid rgba(203, 166, 247, 0.40);  // mauve @ 40%
+    border-radius: 8px;
+    padding: 6px 10px;
+}
+
+.layer-name {
+    color: $mauve;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    margin-bottom: 2px;
+}
+
+// ── key cell ───────────────────────────────────────────────────────────────
+
+.key {
+    background-color: rgba(49, 50, 68, 0.30);
+    border: 1px solid rgba(88, 91, 112, 0.32);
+    border-radius: 3px;
+    min-width: 24px;
+    min-height: 22px;
+    padding: 0;
+}
+
+.key-label {
+    color: $text;
+    font-size: 11px;
+    font-weight: 600;
+    margin: 0 2px;
+}
+
+.key-mod {
+    color: $peach;
+    font-size: 7px;
+    font-weight: 600;
+    margin-right: 2px;
+    margin-bottom: 0;
+}
+
+.key.key-dim {
+    background-color: rgba(49, 50, 68, 0.14);
+    border-color: rgba(88, 91, 112, 0.16);
+}
+
+.key.key-dim .key-label {
+    color: rgba(166, 173, 200, 0.36);
+    font-weight: 400;
+}
+
+// ── column stagger (Toucan ergonomic columnar layout) ──────────────────────
+
+.key.col-pinky  { margin-top: 8px; }
+.key.col-ring   { margin-top: 4px; }
+.key.col-middle { margin-top: 0px; }
+.key.col-index  { margin-top: 4px; }
+.key.col-inner  { margin-top: 6px; }
+
+// ── thumbs ─────────────────────────────────────────────────────────────────
+
+.thumb {
+    background-color: rgba(69, 71, 90, 0.34);
+    border: 1px solid rgba(127, 132, 156, 0.34);
+    border-radius: 3px;
+    min-width: 32px;
+    min-height: 24px;
+    padding: 0 4px;
+    margin-top: 4px;
+}
+
+.thumb-label {
+    color: $text;
+    font-size: 11px;
+    font-weight: 600;
+    margin: 0 2px;
+}
+
+.thumb-mod {
+    color: $lavender;
+    font-size: 7px;
+    font-weight: 600;
+    margin-right: 2px;
+}
+
+.thumb.key-dim {
+    background-color: rgba(69, 71, 90, 0.14);
+    border-color: rgba(127, 132, 156, 0.14);
+}
+
+.thumb.key-dim .thumb-label {
+    color: rgba(166, 173, 200, 0.36);
+    font-weight: 400;
+}
+
+// thumb arc (outer thumbs slightly lower than inner)
+.thumb.thumb-outer { margin-top: 8px; }
+.thumb.thumb-mid   { margin-top: 5px; }
+.thumb.thumb-inner { margin-top: 4px; }
+
+// ── combos column (between halves; floating annotations, not key-shaped) ───
+
+.combo-col {
+    min-width: 30px;
+    padding: 0 4px;
+}
+
+.combo-annot {
+    color: $lavender;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    min-height: 22px;
+}
+
+// ── matrix container ───────────────────────────────────────────────────────
+
+.matrix {
+    // no background/border — all visual weight is on keys + panel
+}
