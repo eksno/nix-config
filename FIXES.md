@@ -14,7 +14,7 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 2. Confirmed jorge's `wifite2` is still commented; only eksno's needed re-applying.
 3. No new investigation needed — re-applying the documented fix.
 **Fix:** Re-comment `wifite2` in `system/users/eksno/programs/default.nix:44`.
-**Commit:** `<pending>`
+**Commit:** `71625e7`
 
 ## 2026-05-06 — waybar-icon-percentage-color-mismatch
 
