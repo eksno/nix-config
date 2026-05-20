@@ -4,6 +4,18 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-05-20 — wireshark-cli-hash-mismatch-recurrence-eksno
+
+**Symptom:** `./update.sh` aborted with the same `wireshark-cli-4.6.5` hash mismatch (`got: sha256-Zvrwxjp4LK2J3QnxmPxKKrU01YHQvPyp54UWzeGNCjA=`) seen on 2026-05-05, blocking an unrelated audio change.
+**Affected:** `system/users/eksno/programs/default.nix:44`. `jorge` was already commented out from the prior fix; eksno's `wifite2` line had been re-uncommented since `d7914d6`.
+**Root cause:** Upstream `wireshark-cli` source hash still not fixed in nixpkgs unstable. Same pure-upstream issue as before. `nix flake update` in `update.sh` keeps pulling the broken revision.
+**Investigation:**
+1. Greppped FIXES.md per CLAUDE.md rule — found the 2026-05-05 "recurring" entry with the exact same hash and the documented fix (comment `wifite2`).
+2. Confirmed jorge's `wifite2` is still commented; only eksno's needed re-applying.
+3. No new investigation needed — re-applying the documented fix.
+**Fix:** Re-comment `wifite2` in `system/users/eksno/programs/default.nix:44`.
+**Commit:** `<pending>`
+
 ## 2026-05-06 — waybar-icon-percentage-color-mismatch
 
 **Symptom:** In waybar, the audio icon and the percentage rendered in different colors — icon was Catppuccin purple, value was Startino pink. Same pattern would have hit backlight if anyone had looked closely.
