@@ -5,7 +5,7 @@
 
      def to_c(self):
 -        self.values = list(map(lambda x: max(min(x, 150), 0), self.values))
-+        self.values = list(map(lambda x: max(min(x, 250), 0), self.values))
++        self.values = list(map(lambda x: max(min(x, 1000), 0), self.values))
          for x in range(self.channels):
              self.cvolume.values[x] = round((self.values[x] * PA_VOLUME_NORM) / 100)
          return self.cvolume
@@ -14,7 +14,7 @@
          self.media_name, self.media_name_wide, self.media_name_widths = '', False, []
          self.poll_data(pa, 0, 0)
 -        self.maxsize = 150
-+        self.maxsize = 250
++        self.maxsize = 1000
          self.locked = True
 
      def poll_data(self, pa, owned, stream_index):

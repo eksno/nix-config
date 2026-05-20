@@ -66,5 +66,27 @@
     };
   };
 
+  # Wireplumber: force software volume on the internal speakers so the
+  # CS35L41 smart amps always see full-amplitude analog from the codec.
+  # Below 100% on the sink would otherwise drive the hardware "Speaker"
+  # attenuator down (-18 dB at 50%, -36 dB at 25%), starving the smart
+  # amp's DSP tuning and making playback sound thin at low volumes.
+  # With soft-mixer enabled the hardware attenuator stays at 0 dB and
+  # all volume changes happen in software.
+  services.pipewire.wireplumber.extraConfig."51-cs35l41-soft-mixer" = {
+    "monitor.alsa.rules" = [
+      {
+        matches = [
+          { "device.name" = "alsa_card.pci-0000_00_1f.3-platform-skl_hda_dsp_generic"; }
+        ];
+        actions = {
+          update-props = {
+            "api.alsa.soft-mixer" = true;
+          };
+        };
+      }
+    ];
+  };
+
   networking.hostName = "verse"; # Define your hostname.
 }
