@@ -1,0 +1,20 @@
+--- a/pulsemixer
++++ b/pulsemixer
+@@ -914,7 +914,7 @@
+         self.cvolume.channels = self.channels
+
+     def to_c(self):
+-        self.values = list(map(lambda x: max(min(x, 150), 0), self.values))
++        self.values = list(map(lambda x: max(min(x, 250), 0), self.values))
+         for x in range(self.channels):
+             self.cvolume.values[x] = round((self.values[x] * PA_VOLUME_NORM) / 100)
+         return self.cvolume
+@@ -950,7 +950,7 @@
+         self.stream_index = -1
+         self.media_name, self.media_name_wide, self.media_name_widths = '', False, []
+         self.poll_data(pa, 0, 0)
+-        self.maxsize = 150
++        self.maxsize = 250
+         self.locked = True
+
+     def poll_data(self, pa, owned, stream_index):

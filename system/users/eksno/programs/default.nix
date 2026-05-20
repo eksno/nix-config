@@ -108,7 +108,14 @@
     cloudflared
 
     playerctl # managing eww music
-    pulsemixer # TUI audio device and volume control
+    (pulsemixer.overrideAttrs (old: {
+      # Raise the hardcoded 150% cap to 250%. On hardware with smart amps
+      # (e.g. Zenbook 14 UX3405MA's Cirrus CS35L41), pushing the sink hard
+      # while attenuating per-app brings the codec's tuning into its
+      # designed-for regime — see patches/pulsemixer-max-volume-250.patch.
+      patches = (old.patches or [ ]) ++ [ ../../../../patches/pulsemixer-max-volume-250.patch ];
+    })) # TUI audio device and volume control
+    alsa-utils # alsamixer / amixer / alsactl — direct ALSA controls (CS35L41 knobs)
     speechd
     eww
     waybar
