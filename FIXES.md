@@ -4,6 +4,19 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-05-21 — wireplumber-soft-mixer-mutes-speaker-and-mic-on-cold-boot
+
+**Symptom:** After a reboot, built-in speaker AND mic both completely dead. Card enumerates, PipeWire/Wireplumber running, Speaker sink + Mic source present in `wpctl`, CS35L41 amps bound cleanly (calibration applied, firmware loaded) — yet no playback and mic records pure digital silence (rms=0).
+**Affected:** host `verse`, user `eksno`. `system/hosts/verse/default.nix` (the reverted `services.pipewire.wireplumber.extraConfig."51-cs35l41-soft-mixer"` block).
+**Root cause:** An `api.alsa.soft-mixer = true` Wireplumber rule (added to keep the CS35L41 fed at full analog regardless of sink %) tells PipeWire to stop managing the hardware mixer's **volume and mute** for the whole ALSA device — playback and capture. While PipeWire was already running it worked (hw controls were already open), but a cold boot brought the hardware `Master` up at 0% + muted and `Capture`/`Dmic0` muted, and PipeWire — now in soft-mixer mode — never unmutes them or sets up the capture route. Per PipeWire docs soft-mixer "leaves the hardware mixer untouched," which on this card means nothing opens the analog path on boot.
+**Investigation:**
+1. `cat /proc/asound/cards` + `wpctl status` — card present, sink/source nodes present → not a driver/topology failure.
+2. `dmesg | grep cs35l41` — both amps bound fine, R0 calibration applied → smart-amp init was healthy, ruled out the racy CS35L41 probe (cf. commit 3a530bd "audio race").
+3. `amixer -c sofhdadsp sget Master` → `0% [-65.25dB] [off]`; `Capture`/`Dmic0` also `[off]`. Manually unmuting Master restored playback, but manually unmuting `Dmic0`/`Capture` did NOT restore mic — it still recorded silence, because the DMIC capture **route** (not just gain) needs PipeWire/UCM to set it up, which soft-mixer suppresses.
+4. Concluded the soft-mixer rule is the root cause and its benefit (never even confirmed audible — the loudness ceiling it chased turned out to be CS35L41 firmware behavior, unrelated) does not justify the regression.
+**Fix:** Removed the `51-cs35l41-soft-mixer` Wireplumber block from `system/hosts/verse/default.nix`. PipeWire resumes managing the hardware mixer and unmutes/routes playback + capture on boot as before. Kept the 1000% pulsemixer cap (harmless). Runtime: `amixer -c sofhdadsp sset Master 100% unmute` restores playback immediately; mic needs the pipewire restart from the rebuild to re-establish the route.
+**Commit:** `<pending>`
+
 ## 2026-05-20 — wireshark-cli-hash-mismatch-recurrence-eksno
 
 **Symptom:** `./update.sh` aborted with the same `wireshark-cli-4.6.5` hash mismatch (`got: sha256-Zvrwxjp4LK2J3QnxmPxKKrU01YHQvPyp54UWzeGNCjA=`) seen on 2026-05-05, blocking an unrelated audio change.

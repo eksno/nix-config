@@ -109,10 +109,13 @@
 
     playerctl # managing eww music
     (pulsemixer.overrideAttrs (old: {
-      # Raise the hardcoded 150% cap to 1000%. Combined with the Wireplumber
-      # soft-mixer rule on the speaker card (see system/hosts/verse/default.nix),
-      # all volume above unity is pure software gain — useful for very quiet
-      # source material. Above ~120% on normal masters this WILL clip.
+      # Raise the hardcoded 150% cap to 1000%. Headroom for very quiet source
+      # material (old YouTube uploads etc.); PipeWire applies the extra as
+      # software gain. Above ~120% on normal masters this WILL clip.
+      # NOTE: a Wireplumber api.alsa.soft-mixer rule was tried here to pin the
+      # hardware Speaker attenuator at 0 dB, but it left the hardware Master/
+      # Capture muted on cold boot (PipeWire stops managing hw mute under
+      # soft-mixer) — killed speaker AND mic. Reverted. See FIXES.md.
       patches = (old.patches or [ ]) ++ [ ../../../../patches/pulsemixer-max-volume-1000.patch ];
     })) # TUI audio device and volume control
     alsa-utils # alsamixer / amixer / alsactl — direct ALSA controls (CS35L41 knobs)
