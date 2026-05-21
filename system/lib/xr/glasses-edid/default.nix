@@ -44,9 +44,12 @@ in
   # see memory/xr-rayneo-connector-name-varies.md. The kernel only
   # applies the override on the matching connector, so listing both is
   # safe — never both connectors will be the glasses simultaneously.
-  boot.kernelParams = [
-    "drm.edid_firmware=DP-1:edid/rayneo-air4pro-glasses.bin,DP-2:edid/rayneo-air4pro-glasses.bin"
-  ];
+  # TEST 2026-05-21: kernel param disabled to rule out the firmware override
+  # confusing higher layers with a synthetic "connected" status while the real
+  # DP link can't come up (altmode wedge). Restore after EC altmode test.
+  # boot.kernelParams = [
+  #   "drm.edid_firmware=DP-1:edid/rayneo-air4pro-glasses.bin,DP-2:edid/rayneo-air4pro-glasses.bin"
+  # ];
 
   # Stable USB access for the Rayneo regardless of when the device
   # enumerates relative to logind. We deliberately keep MODE="0660"
