@@ -2,8 +2,82 @@
 type: project
 title: lewis EC firmware refuses to register CAMs for partners that DO advertise DP altmode (deeper than xr-lewis-altmode-discovery-stuck)
 created: 2026-05-08
-status: WEDGED again 2026-05-09 (recovery on 2026-05-08 was transient; survived reboot, replug cycles, and ASUS 40s+AC EC reset). Next escalation: BIOS UX3405MA.301 → 311.
+status: WEDGED still 2026-05-21. BIOS UX3405MA.301 → 311 flashed successfully on 2026-05-21 — wedge fingerprint IDENTICAL on first plug post-flash. The "BIOS reflash recovers it" claim from the three-agent dive is now provisionally falsified for this bug on this model.
 ---
+
+## STATUS UPDATE 2026-05-21 — BIOS 301→311 flash did NOT recover
+
+Jorge flashed the official ASUS UX3405MAAS.311 capsule via "ASUS
+Firmware Update → via Storage Device(s)". `cat /sys/class/dmi/id/bios_version`
+confirms `UX3405MA.311`, date `06/06/2025`. No errors during flash,
+auto-reboot succeeded.
+
+**On the FIRST plug of the glasses post-flash, the wedge fingerprint
+was identical to pre-flash:**
+
+```
+/sys/class/typec/port1-partner/accessory_mode: none
+/sys/class/typec/port1-partner/number_of_alternate_modes: 0
+(no port1-partner.0/ altmode subdir)
+/sys/class/drm/card1-DP-2/edid: 0 bytes  (the "connected" status is
+                                          the EDID firmware override lying)
+```
+
+Kernel journal on plug shows **only USB HID enumeration** — zero
+typec / UCSI / DP altmode events:
+
+```
+usb 3-2: new full-speed USB device number 5 using xhci_hcd
+usb 3-2: New USB device found, idVendor=1bbb, idProduct=af50
+usb 3-2: Product: RayNeo AR Glasses
+hid-generic 0003:1BBB:AF50.0003: hiddev96,hidraw2: USB HID v1.11 Device [RayNeo AR Glasses]
+```
+
+This is **the same dead silence as before the BIOS update.** The
+EC isn't even attempting altmode negotiation.
+
+**What this means.** The three-agent dive's conclusion that
+"BIOS update is the only documented recovery path with mechanism
++ precedent" was **the strongest available hypothesis**, citing the
+[Slimbook EVO15-A8 case](https://gist.github.com/gnespolino/81abd597153fd19aa2a039f66b8359a3)
+as precedent — but that hypothesis is now **provisionally
+falsified** for this exact bug on this hardware. Either:
+
+1. UX3405MA.311's EC firmware blob doesn't differ in altmode policy
+   from .301 (ASUS may have fixed something else; their changelogs
+   on the support page are not specific about altmode).
+2. The lockout state is in a flash region BIOS update doesn't reach
+   on this model (ASUS bundles EC firmware in the BIOS capsule per
+   `fwupdmgr`, but the EC flash policy region may be a separate OTP
+   region).
+3. The wedge needs a specific recovery sequence post-flash (multiple
+   reboots, suspend cycles, specific timing) that we haven't tried.
+
+**Remaining cheap recovery probes** (still untested post-flash):
+
+1. Suspend → wait for `-70` UCSI errors in dmesg → fresh replug.
+   See `xr-ec-altmode-suspend-replug-untested.md`. Cost ~30 sec.
+2. Try the OTHER USB-C port (we don't know which port Jorge plugged
+   into post-flash). 30 sec.
+3. Flip USB-C cable orientation. 5 sec.
+4. Live USB Fedora 42 (kernel 6.12.x) — diagnostic only, would tell
+   us if the wedge follows the kernel or the hardware. ~30 min.
+
+**Stronger escalations** (untested):
+
+- TBT4-certified USB-C cable (rules out cable-classification stricter
+  on .311 EC firmware vs phone-tested cable).
+- Battery disconnect pinhole if this model has one.
+- ASUS RMA / service center — at this point the EC firmware is
+  arguably defective vs. ASUS spec, not just stale.
+
+**Apply.** Before recommending BIOS flash as "the" escalation for
+this fingerprint on similar ASUS hardware in the future, qualify it
+as "Slimbook precedent, but lewis 2026-05-21 BIOS .311 did NOT
+recover — may need additional steps or may not work at all." See
+the new `asus-zenbook-bios-flash-quirks.md` for the procedure-side
+quirks (Zenbook has no Tool tab, utility is "ASUS Firmware Update"
+not EZ Flash, use USB-A not USB-C for the stick, etc.).
 
 ## STATUS UPDATE 2026-05-08 evening
 
@@ -173,8 +247,11 @@ Evidence:
 
 **Honest bottom line.** No combination of ACPI methods, WMI commands,
 sysfs writes, kernel module reloads, or supported UCSI commands can
-clear the wedge. BIOS update (or EC firmware reflash via EZ Flash) is
-the only path with documented mechanism + community precedent.
+clear the wedge. BIOS update was the strongest single-shot escalation
+on paper (mechanism + Slimbook precedent) — but **lewis 2026-05-21
+BIOS .311 flash did NOT recover the wedge on first plug**. See the
+2026-05-21 status update at the top of this file. The fix path is
+genuinely open right now.
 
 Cheap probes worth running before flashing (untested as of writing):
 
@@ -192,10 +269,9 @@ Cheap probes worth running before flashing (untested as of writing):
    their same-distro live USB; nobody has tested a different-kernel
    live USB yet for this fingerprint. Cost ~30 min.
 
-If 1-3 fail: BIOS update to 311 is the recommended next step. The
-.CAP file is already downloaded and verified at
-`.scratch/bios-311/UX3405MAAS.311` (gitignored; re-download from
-ASUS if missing).
+~~If 1-3 fail: BIOS update to 311 is the recommended next step.~~
+**Done 2026-05-21 — BIOS 311 flash succeeded, wedge unchanged.**
+See top-of-file status update for what's still on the table.
 
 ## Worked once today (2026-05-07 at ~14:12)
 

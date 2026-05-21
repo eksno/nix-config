@@ -1,6 +1,47 @@
 # XR system state
 
-Last updated: 2026-05-08 (post diagnostic dungeon)
+Last updated: 2026-05-21 (post BIOS 301→311 flash attempt)
+
+## 2026-05-21 — BIOS 311 flash attempted, EC altmode wedge UNCHANGED
+
+After ~1-2 weeks of non-XR usage, Jorge returned wanting "just use the
+glasses as a basic display, no head-tracking". DP altmode was still
+wedged with the same fingerprint as 2026-05-09 (accessory_mode=none,
+no altmode subdir, EDID 0 bytes despite firmware-override status=connected).
+
+We escalated to the BIOS flash that was the recommended next step in
+`memory/xr-lewis-ec-refuses-altmode.md`:
+
+- **Procedure note**: ASUS Zenbook UX3405MA does NOT have a `Tool` tab
+  (motherboard-only per ASUS FAQ 1054166). The local USB flash utility
+  is called **"ASUS Firmware Update"** (not EZ Flash), under no
+  specific tab. Inside it, choose **"via Storage Device(s)"** (local)
+  not "via Internet" (cloud). Stick must be in **USB-A port** (Meteor
+  Lake Zenbooks have a pre-boot USB-C enumeration quirk). New
+  reference memory: `memory/asus-zenbook-bios-flash-quirks.md`.
+- **Flash succeeded cleanly**: `cat /sys/class/dmi/id/bios_version` →
+  `UX3405MA.311`, date `06/06/2025`.
+- **Result on first plug post-flash**: identical wedge fingerprint.
+  `port1-partner/accessory_mode=none`, `number_of_alternate_modes=0`,
+  no `port1-partner.0/` altmode subdir, `card1-DP-2/edid=0 bytes`.
+  Kernel journal on plug shows ONLY USB HID enumeration — zero
+  typec/UCSI/DP events. Same dead silence as before.
+
+**Implication.** The "BIOS reflash is the documented recovery path"
+hypothesis (Slimbook EVO15-A8 precedent) is **provisionally falsified
+for this exact bug on this hardware**. Either UX3405MA.311's EC blob
+doesn't differ in altmode policy from .301, the lockout lives in a
+flash region the BIOS capsule doesn't reach, or recovery needs a
+specific post-flash sequence not yet tried. See
+`memory/xr-lewis-ec-refuses-altmode.md` 2026-05-21 section for full
+detail and remaining cheap probes (suspend-replug timing, other
+USB-C port, cable orientation, TBT4-certified cable, Live USB Fedora
+diagnostic).
+
+Phase 4 visual verification and Phase 3.10 remain BLOCKED. xr-driver
+sideview mode is still usable (USB+HID only, no DP altmode required).
+
+## 2026-05-08 morning session — DP altmode firmware wedge diagnosed
 
 What is currently deployed on `lewis` (and wired for `verse`), what is
 verified working, and what is broken or deferred. Update this whenever

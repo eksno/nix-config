@@ -1174,3 +1174,60 @@ exhausting first: suspend→`-70` UCSI errors→fresh replug timing
 (`memory/xr-ec-altmode-suspend-replug-untested.md`), plug glasses
 during BIOS POST then boot. After those, BIOS update is the
 recommended next step.
+
+## BIOS update is NOT a guaranteed fix for the EC altmode wedge (2026-05-21)
+
+Update to the entry above. Jorge flashed official ASUS
+`UX3405MAAS.311` via "ASUS Firmware Update → via Storage Device(s)"
+on 2026-05-21. Flash completed cleanly (`bios_version: UX3405MA.311`,
+date `06/06/2025`). On the FIRST plug of the glasses post-flash, the
+wedge fingerprint was **identical** to pre-flash: `accessory_mode=
+none`, zero altmodes registered, kernel journal shows only USB HID
+enumeration with zero typec/UCSI events.
+
+So the "Slimbook precedent → BIOS reflash recovers the wedge" claim
+that drove the escalation is **provisionally falsified for this
+specific bug on UX3405MA**. Possible reasons (none confirmed):
+
+- UX3405MA.311's EC firmware blob doesn't differ from .301 in altmode
+  policy (ASUS support page doesn't itemize altmode changes).
+- The lockout state lives in a separate flash region (OTP / SPI) that
+  ASUS's BIOS capsule does not rewrite, even though `fwupdmgr`
+  reports no separate EC firmware device.
+- Recovery may require a specific post-flash sequence (multiple
+  reboots, suspend cycles, specific replug timing) that we haven't
+  tried.
+
+**Apply.** Before recommending BIOS flash as "the answer" for this
+fingerprint on similar ASUS hardware: cite the BIOS-procedure
+specifics from `memory/asus-zenbook-bios-flash-quirks.md` if it's a
+Zenbook, but **qualify the outcome** — "Slimbook precedent + mechanism
+hypothesis, but lewis 2026-05-21 BIOS 311 did NOT recover the wedge
+on first plug." Order remaining cheap probes (suspend→`-70` timing,
+other USB-C port, cable orientation flip, TBT4-certified cable, Live
+USB Fedora diagnostic) before the next major escalation.
+
+## ASUS Zenbook BIOS UI differs from motherboard guides (2026-05-21)
+
+When writing a BIOS-flash walkthrough for an ASUS Zenbook, do NOT
+generic-fy from the more common motherboard guides:
+
+- Zenbook BIOS tabs are `Main / Advanced / Boot / Security / Save &
+  Exit`. **No `Tool` tab.** That tab is motherboard-only per ASUS
+  FAQ 1054166.
+- The local USB flash utility is named **"ASUS Firmware Update"**,
+  not "EZ Flash" or "EZ Flash 3 Utility" (those names appear in
+  motherboard contexts).
+- Inside `ASUS Firmware Update`, choose **"via Storage Device(s)"**
+  for local, "via Internet" for cloud.
+- Stick must be in **USB-A** port (Meteor Lake Zenbooks have a
+  pre-boot USB-C enumeration issue). Filename like `UX3405MAAS.311`
+  at FAT32 **root**, NOT renamed to `.CAP` (that's the motherboard
+  BIOSRenamer/Flashback workflow).
+- UX3405MA has **no Flashback button** — Flashback is desktop/
+  motherboard-only. No PCB-level recovery if a flash bricks.
+
+Captured separately as `memory/asus-zenbook-bios-flash-quirks.md`
+with sources. Lesson learned the hard way when Jorge was actively
+sitting in BIOS waiting and I wrote a "go to the Tool tab" guide
+from training-data memory.
