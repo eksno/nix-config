@@ -15,7 +15,7 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 3. `amixer -c sofhdadsp sget Master` → `0% [-65.25dB] [off]`; `Capture`/`Dmic0` also `[off]`. Manually unmuting Master restored playback, but manually unmuting `Dmic0`/`Capture` did NOT restore mic — it still recorded silence, because the DMIC capture **route** (not just gain) needs PipeWire/UCM to set it up, which soft-mixer suppresses.
 4. Concluded the soft-mixer rule is the root cause and its benefit (never even confirmed audible — the loudness ceiling it chased turned out to be CS35L41 firmware behavior, unrelated) does not justify the regression.
 **Fix:** Removed the `51-cs35l41-soft-mixer` Wireplumber block from `system/hosts/verse/default.nix`. PipeWire resumes managing the hardware mixer and unmutes/routes playback + capture on boot as before. Kept the 1000% pulsemixer cap (harmless). Runtime: `amixer -c sofhdadsp sset Master 100% unmute` restores playback immediately; mic needs the pipewire restart from the rebuild to re-establish the route.
-**Commit:** `<pending>`
+**Commit:** `2ce36c2`
 
 ## 2026-05-20 — wireshark-cli-hash-mismatch-recurrence-eksno
 
