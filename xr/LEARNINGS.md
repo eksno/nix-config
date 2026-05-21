@@ -1207,6 +1207,62 @@ on first plug." Order remaining cheap probes (suspend→`-70` timing,
 other USB-C port, cable orientation flip, TBT4-certified cable, Live
 USB Fedora diagnostic) before the next major escalation.
 
+## EC altmode wedge RECOVERED via kernel-cmdline drops post-BIOS-flash (2026-05-22)
+
+The two-week-long EC altmode wedge on lewis (UX3405MA, see
+`memory/xr-lewis-ec-refuses-altmode.md`) was recovered ~00:55 on
+2026-05-22 by the following sequence:
+
+1. Flash BIOS UX3405MA.301 → .311 (2026-05-21, didn't fix it alone).
+2. Drop `acpi.ec_no_wakeup=1` from `system/lib/device/intel/default.nix:21`.
+3. Drop `drm.edid_firmware=DP-1:edid/...,DP-2:edid/...` from
+   `system/lib/xr/glasses-edid/default.nix:47-49`.
+4. Rebuild + reboot to gen 62.
+
+After reboot, first plug of the glasses produced:
+
+- `card1-DP-2/status=connected`, `dpms=On`, real EDID (1920x1080@120)
+- Hyprland sees DP-2 as `Technical Concepts Ltd SmartGlasses` and
+  extends desktop to it
+- UCSI debugfs STILL reports `accessory_mode=none`, no altmode
+  subdir — i.e. the kernel UCSI cache hasn't updated, but i915 has
+  negotiated DP altmode via its own path
+
+**Causal isolation pending.** Three changes happened in one rebuild
+window; we can't yet say which was load-bearing. The leading
+hypothesis is the EDID firmware override removal:
+
+- The 2026-05-08 test dropped four power-saving cmdline params and
+  found "no effect" — explicitly ruling out runtime EC/USB/display
+  power management as the wedge cause. That test did NOT touch the
+  EDID firmware override.
+- Tonight's success added the EDID override removal on top of the
+  power-saving drops. The new variable is `drm.edid_firmware`.
+
+**Mechanism hypothesis (unconfirmed).** The synthetic EDID firmware
+override forced DP-1/DP-2 `status=connected` even with no real DP
+link. The i915 DP probe / link training sequence may have
+short-circuited on seeing a connector already reporting connected
+with a parsed EDID — skipping the altmode-request handshake that
+would normally tell the EC to accept DP altmode for this partner.
+Removing the override forces a real DP probe, which triggers the
+proper altmode entry sequence, which the EC honors.
+
+**Workflow tension going forward.** The EDID override existed to
+make DP-2 advertise `non_desktop=1` so wlroots would expose it via
+`wp-drm-lease-v1` for monado VR mode (see `xr-wlroots-leasing-rules.md`).
+With the override off, the glasses are a regular extension monitor
+— great for "use them as a basic display" but breaks the monado
+direct-DRM-lease path. **Re-enabling the override may re-wedge the
+EC altmode** if the hypothesis above is correct. Until isolation
+tests are done, the basic-display config and the VR config are
+mutually exclusive on lewis.
+
+**Apply.** Next time a UX3405MA-class EC altmode wedge needs
+recovery: BIOS update + try dropping `drm.edid_firmware=...` and
+`acpi.ec_no_wakeup=1` together. The 2026-05-08 "rules out power
+management" conclusion is no longer reliable.
+
 ## ASUS Zenbook BIOS UI differs from motherboard guides (2026-05-21)
 
 When writing a BIOS-flash walkthrough for an ASUS Zenbook, do NOT

@@ -1,6 +1,47 @@
 # XR system state
 
-Last updated: 2026-05-21 (post BIOS 301→311 flash attempt)
+Last updated: 2026-05-22 ~01:00 (EC altmode wedge RECOVERED)
+
+## 2026-05-22 ~00:55 — EC altmode wedge RECOVERED
+
+After two weeks of the EC altmode wedge being immovable across cold
+cycles, cable swaps, port swaps, suspend cycles, UCSI debugfs
+commands, BIOS Restore Defaults, and a BIOS 301→311 flash, the
+wedge cleared on a rebuild (commit `543ea9b`, gen 62) that dropped
+two kernel cmdline params:
+
+1. `acpi.ec_no_wakeup=1` from `system/lib/device/intel/default.nix:21`
+2. `drm.edid_firmware=DP-1:edid/...,DP-2:edid/...` from
+   `system/lib/xr/glasses-edid/default.nix:47-49`
+
+**Working state right now**:
+
+- `card1-DP-2/status: connected` (with real EDID, not firmware-override lie)
+- `hyprctl monitors`: DP-2 = "Technical Concepts Ltd SmartGlasses",
+  1920x1080@120, position 2304x0 (extension right of eDP-1)
+- Glasses showing actual desktop content; UCSI debugfs still reports
+  `accessory_mode=none` (UCSI lies — see existing LEARNINGS entry)
+
+**Causally undetermined which lever mattered** — BIOS .311 alone
+didn't fix it; need BIOS + cmdline drops; isolation between the two
+cmdline drops not yet done. Leading hypothesis: the EDID firmware
+override was the real blocker (the 2026-05-08 power-saving param
+drop test did NOT touch the override, ruled out power management,
+and stayed wedged). Mechanism: synthetic EDID forcing connector
+status=connected may short-circuit i915's real DP probe → no
+altmode-entry handshake → EC stays in "no DP altmode for this
+partner" state.
+
+**Workflow tension**: with the EDID override OFF, the glasses are a
+regular extension monitor (basic-display mode works). With the
+override back ON, monado direct-DRM-lease (VR mode) works but
+altmode may re-wedge. Mutually exclusive until isolation tests.
+
+**Phase 3.10 + Phase 4 visual verification status**: NOT yet
+re-tested. Visual rendering through monado/wayvr requires the EDID
+override (or a wlroots/Hyprland patch to expose desktop-class
+connectors via `wp-drm-lease-v1`). The current "basic display"
+state doesn't exercise that path.
 
 ## 2026-05-21 — BIOS 311 flash attempted, EC altmode wedge UNCHANGED
 

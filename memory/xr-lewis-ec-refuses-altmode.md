@@ -2,10 +2,123 @@
 type: project
 title: lewis EC firmware refuses to register CAMs for partners that DO advertise DP altmode (deeper than xr-lewis-altmode-discovery-stuck)
 created: 2026-05-08
-status: WEDGED still 2026-05-21. BIOS UX3405MA.301 → 311 flashed successfully on 2026-05-21 — wedge fingerprint IDENTICAL on first plug post-flash. The "BIOS reflash recovers it" claim from the three-agent dive is now provisionally falsified for this bug on this model.
+status: **RECOVERED 2026-05-22 ~00:55.** Glasses now show up as a real `DP-2` monitor in Hyprland (1920x1080@120, EDID "Technical Concepts Ltd SmartGlasses"), DP-2 status=connected with non-zero EDID. Recovery sequence: BIOS UX3405MA.301→311 flash (2026-05-21) + drop `acpi.ec_no_wakeup=1` from `system/lib/device/intel/default.nix` + drop `drm.edid_firmware=DP-1,DP-2:...` from `system/lib/xr/glasses-edid/default.nix` + reboot to gen 62. **Causally important point**: UCSI debugfs STILL reports the wedge fingerprint (`accessory_mode=none`, no altmode subdir) even while DP altmode is clearly active — matches the existing `xr-ec-altmode-suspend-replug-untested.md` / "UCSI lies" LEARNINGS pattern. The three-agent claim "lockout lives in EC firmware flash, only recovery is BIOS reflash" was at best incomplete: a kernel-cmdline / BIOS combination matters.
 ---
 
-## STATUS UPDATE 2026-05-21 — BIOS 301→311 flash did NOT recover
+## STATUS UPDATE 2026-05-22 ~00:55 — RECOVERED
+
+After exhausting cheap probes post-BIOS-flash (port swap, cable
+orientation, suspend-replug, xr-driver mask), Jorge dropped TWO kernel
+cmdline params via NixOS rebuild + reboot (gen 62):
+
+1. **`acpi.ec_no_wakeup=1`** removed from
+   `system/lib/device/intel/default.nix:21` (commented).
+2. **`drm.edid_firmware=DP-1:edid/rayneo-air4pro-glasses.bin,DP-2:edid/rayneo-air4pro-glasses.bin`**
+   removed from `system/lib/xr/glasses-edid/default.nix:47-49`
+   (commented).
+
+Commit: `543ea9b` (`test(xr/altmode): drop acpi.ec_no_wakeup + EDID firmware override`).
+
+**First plug post-reboot: glasses worked.**
+
+Working-state snapshot:
+
+```
+$ cat /sys/class/dmi/id/bios_version
+UX3405MA.311
+$ cat /proc/cmdline | tr ' ' '\n' | grep -iE "ec_no_wakeup|edid"
+(empty — both dropped)
+
+$ hyprctl monitors all | grep -A4 DP-2
+Monitor DP-2 (ID 1):
+    1920x1080@120.01300 at 2304x0
+    description: Technical Concepts Ltd SmartGlasses 0x00000011
+    make: Technical Concepts Ltd
+    model: SmartGlasses
+
+$ cat /sys/class/drm/card1-DP-2/status
+connected
+$ cat /sys/class/drm/card1-DP-2/dpms
+On
+```
+
+Hyprland treats DP-2 as a regular external monitor extending eDP-1
+to the right at 2304x0. Real EDID is being read (the
+"Technical Concepts Ltd SmartGlasses" description comes from the
+glasses' actual EDID, not from the gitignored override blob).
+
+### CRITICAL — what UCSI says vs. ground truth
+
+UCSI / typec subsystem STILL reports the wedge fingerprint while
+DP altmode is clearly active:
+
+```
+$ cat /sys/class/typec/port1-partner/accessory_mode
+none
+$ ls /sys/class/typec/port*-partner.* 2>/dev/null
+(no altmode subdirs)
+```
+
+This matches the existing `LEARNINGS.md` entry "UCSI debugfs is NOT
+a reliable signal for actual altmode state" — i915 negotiates DP
+altmode independently of what UCSI's cached state shows. **Source
+of truth for "are the glasses working as a display" is
+`hyprctl monitors -j` or `card1-DP-2/{status,edid,dpms}`, not UCSI.**
+
+### What we DON'T know yet (causal isolation pending)
+
+We can't say which of the three changes was load-bearing without
+more tests:
+
+- (a) BIOS UX3405MA.301 → .311 alone
+- (b) Drop `acpi.ec_no_wakeup=1`
+- (c) Drop `drm.edid_firmware=...` (EDID firmware override)
+- Or some combination requires multiple together
+
+The 2026-05-08 test "rules out runtime EC/USB/display power
+management as the wedge cause" dropped four power-saving params but
+did NOT touch the EDID firmware override. So (c) is the new variable
+this session, and the leading suspect for "the actual blocker".
+
+Mechanism hypothesis (unconfirmed): the synthetic EDID firmware
+override forces `status=connected` on DP-1/DP-2 even when there's no
+real DP link. The i915 DP probe / link training sequence might
+short-circuit when it sees a connector already reporting connected
+with a parsed EDID — skipping the altmode-request handshake that
+would normally tell the EC to enable DP altmode for this partner.
+Removing the override forces i915 to run the full DP probe, which
+includes requesting altmode entry, which the EC then accepts.
+
+### Suggested isolation tests (optional, only if Jorge wants
+to understand which lever mattered)
+
+1. Re-enable `drm.edid_firmware=...` only (keep `acpi.ec_no_wakeup=1`
+   off) → rebuild + reboot → test. If glasses break: EDID override
+   was the real culprit. If they still work: not load-bearing alone.
+2. Re-enable `acpi.ec_no_wakeup=1` only (keep override off) →
+   rebuild + reboot → test. Symmetric to (1).
+3. If both individually fine: order/interaction may matter (less
+   likely).
+
+These tests are NOT required — the system works now. They're for
+the curious.
+
+### Implication for monado / VR path
+
+The EDID firmware override was the mechanism that made
+`wp-drm-lease-v1` advertise DP-2 to monado for VR mode. With the
+override off, the glasses are a regular monitor (desktop-class),
+and monado's direct DRM lease path won't see them as leasable. Any
+future XR/VR work that needs direct mode would need to re-enable
+the override — but per the hypothesis above, doing so may re-wedge
+the EC altmode.
+
+This is a real workflow tension: **basic display mode (works now,
+override off) vs. VR mode (needs override, may break altmode).**
+Worth thinking through before deciding to keep the override
+permanently disabled.
+
+## STATUS UPDATE 2026-05-21 — BIOS 301→311 flash did NOT recover (now superseded by 2026-05-22 recovery above)
 
 Jorge flashed the official ASUS UX3405MAAS.311 capsule via "ASUS
 Firmware Update → via Storage Device(s)". `cat /sys/class/dmi/id/bios_version`
