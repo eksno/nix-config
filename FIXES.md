@@ -4,6 +4,20 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-05-22 — corne-bluetooth-connect-disconnect-loop-after-idle
+
+**Symptom:** Corne (ZMK) BLE keyboard repeatedly flips Connected → Disconnected → Connected every ~2s. Triggered after the laptop sits idle for a while; once it starts, only a full forget + re-pair from scratch recovers it.
+**Affected:** host `verse`, user `eksno` (also applies to `lewis` — shared module). `system/lib/power-mode/default.nix:1026` (`powerManagement.powertop.enable`), `system/hosts/verse/bluetooth.nix:10` (`btusb enable_autosuspend=0`).
+**Root cause:** `powerManagement.powertop.enable = true` runs `powertop --auto-tune` as a boot oneshot, which writes `power/control=auto` to **every** USB device — including the Intel BT controller (`8087:0033`, USB class e0/01/01) — overriding the per-host `btusb enable_autosuspend=0` modprobe option. The radio then autosuspended after ~1s idle (`autosuspend_delay_ms=1000`, `power/wakeup=disabled`). When the keyboard re-advertised after idle, the suspended/desynced controller couldn't complete encryption, so bluetoothd's HID-over-GATT reads (PnP ID, HID Information, Report Reference descriptors) all failed with ATT 0x0E "Request attribute has encountered an unlikely error" → HoG never attached → link dropped and retried in a tight loop. 5-whys: loop ← HID GATT reads fail ← encryption/link desync on reconnect ← BT controller autosuspended on idle ← USB `power/control=auto` ← powertop --auto-tune set it despite `enable_autosuspend=0` ← blanket battery optimization never excluded the radio.
+**Investigation:**
+1. `journalctl -u bluetooth` showed the 2s cycle: `rap_accept RAP unable to attach` (benign BlueZ 5.86 ranging noise) + `read_pnpid_cb`/`info_read_cb`/`report_reference_cb` all failing with ATT 0x0E for `C8:5B:C1:B5:9B:F3`.
+2. `bluetoothctl info` confirmed Paired/Bonded/Trusted yes, random static address, Modalias `v1D50` (OpenMoko VID = ZMK), appearance 0x03c1 (HID keyboard). Bond + GATT cache present in `/var/lib/bluetooth/2C:33:58:44:27:4D/`.
+3. `btusb enable_autosuspend` module param read `N` — so the existing modprobe fix *was* loaded, ruling it out as sufficient. **This was the key dead end that pointed upstream:** the param was correct yet the device still showed `power/control=auto`.
+4. Walked sysfs from `hci0` to the USB device `usb3/3-10`: `power/control=auto`, `autosuspend_delay_ms=1000`, `wakeup=disabled` — i.e. autosuspending after 1s regardless of the module param.
+5. Grepped for what sets USB autosuspend → `powerManagement.powertop.enable = true`. `powertop --auto-tune` writes `auto` to all USB devices at boot, clobbering the module param. User context ("happens after idle / BT sleeps") matched exactly.
+**Fix:** In `system/lib/power-mode/default.nix`, added a `bt-no-autosuspend` script (matches USB BT controllers by device class e0/01/01, writes `power/control=on`) wired into a `systemd.services.bluetooth-no-autosuspend` oneshot ordered `after = [ "powertop.service" ]` (wins the boot race) and into `powerManagement.resumeCommands` (re-applies on resume). Live relief applied same session via `tee .../power/control`. Stale bond cleared once with `bluetoothctl remove` + re-pair to recover the already-desynced link.
+**Commit:** `33fc458`
+
 ## 2026-05-21 — wireplumber-soft-mixer-mutes-speaker-and-mic-on-cold-boot
 
 **Symptom:** After a reboot, built-in speaker AND mic both completely dead. Card enumerates, PipeWire/Wireplumber running, Speaker sink + Mic source present in `wpctl`, CS35L41 amps bound cleanly (calibration applied, firmware loaded) — yet no playback and mic records pure digital silence (rms=0).

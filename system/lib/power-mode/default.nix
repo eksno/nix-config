@@ -1021,9 +1021,41 @@ let
     fi
   '';
 
+  # powertop --auto-tune (enabled below) writes power/control=auto to *every* USB
+  # device, including the Bluetooth controller, overriding the
+  # `btusb enable_autosuspend=0` modprobe option set per-host. The radio then
+  # autosuspends after ~1s of idle; on the next BLE reconnect the bond/link state
+  # desyncs and HID-over-GATT attribute reads fail (ATT 0x0E) in a tight
+  # connect/disconnect loop that only a full forget+re-pair clears. Re-pin every
+  # USB Bluetooth controller (class e0/subclass 01/protocol 01) to `on` so it
+  # never autosuspends. Matched by class so it is host- and dongle-agnostic.
+  bt-no-autosuspend = pkgs.writeShellScript "bt-no-autosuspend" ''
+    for dev in /sys/bus/usb/devices/*; do
+      [ -r "$dev/bDeviceClass" ] || continue
+      [ "$(cat "$dev/bDeviceClass")" = "e0" ] || continue
+      [ "$(cat "$dev/bDeviceSubClass" 2>/dev/null)" = "01" ] || continue
+      [ "$(cat "$dev/bDeviceProtocol" 2>/dev/null)" = "01" ] || continue
+      echo on > "$dev/power/control" 2>/dev/null || true
+    done
+  '';
+
 in
 {
   powerManagement.powertop.enable = true;
+
+  # Counteract powertop's blanket USB autosuspend on the Bluetooth radio.
+  # Ordered after powertop.service so it wins the boot race; also re-applied on
+  # resume since suspend/resume re-enumerates USB power state. See bt-no-autosuspend.
+  systemd.services.bluetooth-no-autosuspend = {
+    description = "Keep Bluetooth controllers out of USB autosuspend (counteracts powertop)";
+    after = [ "powertop.service" ];
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = "${bt-no-autosuspend}";
+    };
+  };
+  powerManagement.resumeCommands = "${bt-no-autosuspend}";
 
   # Allow power-mode to run as root without password for wheel users
   # SETENV needed so sudo doesn't strip env in some contexts
