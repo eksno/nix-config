@@ -1044,17 +1044,16 @@ in
   powerManagement.powertop.enable = true;
 
   # Counteract powertop's blanket USB autosuspend on the Bluetooth radio.
-  # Ordered after powertop.service so it wins the boot race; also re-applied on
-  # resume since suspend/resume re-enumerates USB power state. See bt-no-autosuspend.
-  systemd.services.bluetooth-no-autosuspend = {
-    description = "Keep Bluetooth controllers out of USB autosuspend (counteracts powertop)";
-    after = [ "powertop.service" ];
-    wantedBy = [ "multi-user.target" ];
-    serviceConfig = {
-      Type = "oneshot";
-      ExecStart = "${bt-no-autosuspend}";
-    };
-  };
+  # A *separate* oneshot ordered `after powertop.service` + `wantedBy
+  # multi-user.target` deadlocks: NixOS's powertop.service is itself
+  # `After=multi-user.target`, so that forms an ordering cycle
+  # (bt-svc -> powertop -> multi-user.target -> bt-svc) and systemd silently
+  # deletes our job to break it — the re-pin never runs and the loop returns.
+  # Instead hang the re-pin off powertop's own oneshot as ExecStartPost: it runs
+  # immediately after `--auto-tune` completes, introduces no new unit anchored to
+  # multi-user.target, so a cycle is impossible. Also re-applied on resume since
+  # suspend/resume re-enumerates USB power state. See bt-no-autosuspend.
+  systemd.services.powertop.serviceConfig.ExecStartPost = "${bt-no-autosuspend}";
   powerManagement.resumeCommands = "${bt-no-autosuspend}";
 
   # Allow power-mode to run as root without password for wheel users

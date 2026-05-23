@@ -4,6 +4,20 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-05-23 — corne-reconnect-loop-recurrence-bt-service-ordering-cycle
+
+**Symptom:** Corne BLE keyboard back in the Connected↔Disconnected loop again, ~2 weeks after the 2026-05-22 fix (`46cae11`/`33fc458`) supposedly resolved it. Same `read_pnpid_cb` ATT 0x0E failures.
+**Affected:** host `verse`, user `eksno`. `system/lib/power-mode/default.nix:1046` (the `bluetooth-no-autosuspend` service, now replaced by a `powertop.service` `ExecStartPost`).
+**Root cause:** The 2026-05-22 fix was logically correct but **never ran**. It created `systemd.services.bluetooth-no-autosuspend` ordered `after = [ "powertop.service" ]` + `wantedBy = [ "multi-user.target" ]`. But NixOS's own `powertop.service` is `After=multi-user.target`, so the three units formed an ordering cycle: `bluetooth-no-autosuspend → powertop → multi-user.target → bluetooth-no-autosuspend`. systemd silently **deleted the bluetooth-no-autosuspend job** to break the cycle (`Found ordering cycle … Job … deleted`), so the BT radio re-pin never executed. powertop's `--auto-tune` set `power/control=auto` on the controller unopposed, it autosuspended after 1s idle, and the BLE link desynced on reconnect exactly as before. 5-whys: loop ← radio re-pin never applied ← service job deleted ← ordering cycle ← anchored a unit both `after powertop` and `wantedBy multi-user.target` while powertop is itself `after multi-user.target`.
+**Investigation:**
+1. `systemctl status bluetooth-no-autosuspend` → `inactive (dead)` with the boot-log line `multi-user.target: Found ordering cycle … Job bluetooth-no-autosuspend.service/start deleted to break ordering cycle`. That was the smoking gun — the unit existed but its job was dropped every boot.
+2. Confirmed live damage: BT controller `usb 3-10` (`8087:…`, class e0) at `power/control=auto`, `autosuspend_delay_ms=1000` — the bad state the service was meant to prevent.
+3. `systemctl cat powertop.service` → `After=multi-user.target`, `Type=oneshot`, `RemainAfterExit=yes`. That `After=multi-user.target` is the third edge that closes the cycle; not obvious without reading the NixOS-generated unit.
+4. Device-recovery side: `bluetoothctl info` showed Corne (`C8:5B:C1:B5:9B:F3`) `Trusted: yes` but `Paired: no / Bonded: no` despite a bond dir on disk — a one-sided/desynced bond driving the Trusted auto-connect loop. `pair` stalled at "Attempting to pair" until **bluetoothd was restarted** to clear stuck Adv-Monitor churn; then `trust` + `pair` (session held open, not piped `quit`) bonded cleanly and `event18 → "Corne Keyboard"` appeared. Dead end worth noting: piping `pair` immediately followed by `quit` aborts the in-flight pairing — the session must stay open ~10–15s.
+**Fix:** Replaced the separate cyclic unit with `systemd.services.powertop.serviceConfig.ExecStartPost = "${bt-no-autosuspend}";`. It runs immediately after `--auto-tune` within powertop's own oneshot and introduces no new unit anchored to `multi-user.target`, so a cycle is structurally impossible. `powerManagement.resumeCommands` re-pin kept for resume. Verified post-rebuild: new generation active, no failed units, `powertop.service` shows the `ExecStartPost`, no ordering-cycle log.
+**Collateral (process lesson, not a code bug):** Applying this via `./update.sh` was disruptive — `update.sh` runs `nix flake update` first, which bumped nixpkgs unstable to `…20260521.f83fc3c`; the resulting `switch` restarted systemd + the graphical stack, tore down the Hyprland/uwsm session (`user@1000.service` deactivated, `switch-to-configuration` exited 101, Discord coredumped), and logged the user out with loss of open app state. For a small `system/` change, prefer a plain `nixos-rebuild switch` without a flake bump, and warn before any switch that can restart the display manager.
+**Commit:** `1f942fb`
+
 ## 2026-05-22 — corne-bluetooth-connect-disconnect-loop-after-idle
 
 **Symptom:** Corne (ZMK) BLE keyboard repeatedly flips Connected → Disconnected → Connected every ~2s. Triggered after the laptop sits idle for a while; once it starts, only a full forget + re-pair from scratch recovers it.
@@ -217,7 +231,7 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 2. Read `system/lib/dotfiles.nix` tmux block → confirmed the activation script only `ln -sf`s the two known files. No glob, no scripts dir.
 3. Considered switching tmux back to a full directory symlink. Rejected: TPM still needs to write into `plugins/`, which is the whole reason file-level symlinks were chosen. Cleanest fix is one extra `ln -sfn` for `scripts/` since it's a read-only dir of executables.
 **Fix:** Added `ln -sfn "$_src/scripts" "$cfg/tmux/scripts"` to the tmux block in `system/lib/dotfiles.nix`. After `./update.sh`, `~/.config/tmux/scripts → nix-config/dotfiles/default/tmux/scripts` and resurrect can find `restore-mosh.sh`.
-**Commit:** `<pending>`
+**Commit:** `1f942fb`
 
 ## 2026-04-25 — norwegian-binds-ydotool-unicode-dropped
 
