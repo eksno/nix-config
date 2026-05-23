@@ -16,7 +16,7 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 4. Dead-end suspicion: thought it was the Bash-tool sandbox giving my test process a separate PID namespace. Re-ran with sandbox disabled — **identical** error, ruling that out. The denial was real and system-wide (Settings portal denied too).
 5. Checked the access mechanism: `cat /proc/sys/kernel/yama/ptrace_scope` → `1`. `/proc` mounted normally (no hidepid). Opening `/proc/<pid>/root` requires `PTRACE_MODE_READ_FSCREDS`; under yama scope 1 that's allowed only for ancestors. Portal ≠ ancestor of apps → denied. Mechanism matches the error string exactly.
 **Fix:** Set `boot.kernel.sysctl."kernel.yama.ptrace_scope" = 0` in the shared desktop module (`system/lib/desktop/default.nix`) so the portal can verify callers again. Restores pre-bump behavior. Apply with `./update.sh`. (`sudo sysctl kernel.yama.ptrace_scope=0` to test live before rebuild.)
-**Commit:** `<sha>`
+**Commit:** `747a3e1`
 
 ## 2026-05-23 — hyprland-0.55-deprecated-config-options
 
