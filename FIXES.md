@@ -4,19 +4,22 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
-## 2026-05-23 — file-picker-window-never-opens-portal-ptrace
+## 2026-05-23 — file-picker-window-never-opens (portal landlock-domained as systemd service)
 
-**Symptom:** "File attachments don't open a window with my folders anymore." Clicking attach/open-file in apps (browser, etc.) produces no file-chooser window at all.
-**Affected:** host `lewis`, user `jorge` (Hyprland). `system/lib/desktop/default.nix:53` (added `boot.kernel.sysctl."kernel.yama.ptrace_scope" = 0`).
-**Root cause:** The `fea4e19` nixpkgs bump pulled **xdg-desktop-portal 1.20.4**, which verifies every D-Bus caller by opening `/proc/<caller-pid>/root`. With `kernel.yama.ptrace_scope = 1` (effective default), a process may only inspect its own descendants — and the portal daemon is not an ancestor of the calling apps. So the open is denied with `org.freedesktop.DBus.Error.AccessDenied: Portal operation not allowed: Unable to open /proc/<pid>/root`, and the portal refuses ALL interfaces (FileChooser, Settings, …). Hence no dialog.
+**Symptom:** "File attachments don't open a window with my folders anymore." Clicking attach/open-file in any app produces no file-chooser window at all.
+**Affected:** host `lewis`, user `jorge` (Hyprland). `system/lib/desktop/default.nix` (`security.lsm = lib.mkForce [ "yama" "bpf" ]`, dropping `landlock`).
+**Root cause:** The `fea4e19` bump pulled **systemd 260.1** + **xdg-desktop-portal 1.20.4**, with the nixpkgs default `security.lsm = [ "landlock" "yama" "bpf" ]`. systemd 260 places every **service** in a **Landlock domain**. Landlock's `ptrace_access_check` hook then forbids a domained process from `PTRACE_MODE_READ`-accessing any process outside its domain (i.e. any non-descendant). xdg-desktop-portal 1.20.4 verifies each D-Bus caller by `open("/proc/<caller-pid>/root", O_DIRECTORY)` — which is `PTRACE_MODE_READ_FSCREDS`-gated — and the caller (Chrome, etc.) is not a descendant of the portal. So the open returns `EACCES`, the portal answers `org.freedesktop.DBus.Error.AccessDenied: … Unable to open /proc/<pid>/root` to ALL interfaces (FileChooser, Settings, …), and no dialog ever appears.
 **Investigation:**
-1. `fastfetch` → lewis/jorge, Hyprland 0.55.2. All portal backends (frontend, gtk, hyprland, document, permission) confirmed running via `ps`; FileChooser interface present on D-Bus introspect. So it wasn't a missing/dead backend.
-2. Startup journal was clean except a telling boot line: `xdg-desktop-portal: Realtime error: Could not get pidns for pid N: Could not fstatat ns/pid: Not a directory` — first hint the portal couldn't read caller `/proc`.
-3. `busctl --user call … FileChooser OpenFile` → `Access denied`. Reproduced with `zenity --file-selection`: `Failed to read portal settings: AccessDenied: Unable to open /proc/<pid>/root`, and **no window mapped** (verified via `hyprctl clients`).
-4. Dead-end suspicion: thought it was the Bash-tool sandbox giving my test process a separate PID namespace. Re-ran with sandbox disabled — **identical** error, ruling that out. The denial was real and system-wide (Settings portal denied too).
-5. Checked the access mechanism: `cat /proc/sys/kernel/yama/ptrace_scope` → `1`. `/proc` mounted normally (no hidepid). Opening `/proc/<pid>/root` requires `PTRACE_MODE_READ_FSCREDS`; under yama scope 1 that's allowed only for ancestors. Portal ≠ ancestor of apps → denied. Mechanism matches the error string exactly.
-**Fix:** Set `boot.kernel.sysctl."kernel.yama.ptrace_scope" = 0` in the shared desktop module (`system/lib/desktop/default.nix`) so the portal can verify callers again. Restores pre-bump behavior. Apply with `./update.sh`. (`sudo sysctl kernel.yama.ptrace_scope=0` to test live before rebuild.)
-**Commit:** `747a3e1`
+1. `fastfetch` → lewis/jorge, Hyprland 0.55.2. All portal backends running; FileChooser present on D-Bus. Not a missing backend.
+2. `busctl FileChooser OpenFile` and `zenity --file-selection` both → `AccessDenied: Unable to open /proc/<pid>/root`, no window mapped.
+3. **Dead end #1 (the first commit, reverted):** blamed `kernel.yama.ptrace_scope`. Set it to 0 via `boot.kernel.sysctl` and rebuilt — **still broken**. Wrong because `/proc/<pid>/root` open is `PTRACE_MODE_READ`, and **yama only restricts `PTRACE_MODE_ATTACH`**, never READ. ptrace_scope was a red herring.
+4. **Dead end #2:** suspected the Claude Bash-tool sandbox (separate PID ns). Disproved: my bash, the portal, and Chrome were all in the *same* pid/mnt/user namespaces; tests valid.
+5. Key asymmetry: my interactive shell (uid 1000, caps 0) CAN `open(/proc/<chrome>/root, O_DIRECTORY)`, but the portal (same uid, same caps, scope 0, same ns) gets EACCES on the identical call. So not yama, not target-dumpable, not namespaces, not caps.
+6. Bisected with `systemd-run --user`: a **`--scope`** opens non-descendant `/proc/root` fine; a **`--service`** gets EACCES; a service opening its **own child** succeeds. Descendant-only `PTRACE_MODE_READ` at scope-0 is the fingerprint of **Landlock domain scoping** (`lsm=landlock` active; `bpf-restrict-fs` BPF-LSM also attached but it's FS-type based, not ptrace).
+7. **Decisive proof:** `systemctl --user stop xdg-desktop-portal.service`, then ran the portal binary directly from my (non-domained) shell → `busctl FileChooser OpenFile` **succeeded** (returned a request handle). Same binary, only difference = service-domain vs scope.
+8. Found the knob: nixpkgs `nixos/modules/security/default.nix` defaults `security.lsm = [ "landlock" "yama" "bpf" ]`. No documented per-service Landlock opt-out in systemd 260 man pages; the domain is applied to *all* services (a bare transient service was domained too).
+**Fix:** `security.lsm = lib.mkForce [ "yama" "bpf" ]` in the shared desktop module (drop `landlock`). Needs `./update.sh` **and a reboot** (kernel cmdline `lsm=` change). Tradeoff: apps that opt into Landlock (some browser/flatpak sandboxes) lose that defense-in-depth layer; they still have seccomp + namespace sandboxing. To verify post-reboot: `busctl --user call org.freedesktop.portal.Desktop /org/freedesktop/portal/desktop org.freedesktop.portal.FileChooser OpenFile "ssa{sv}" "" t 0` should return a handle, not `Access denied`.
+**Commit:** `<sha>`
 
 ## 2026-05-23 — hyprland-0.55-deprecated-config-options
 

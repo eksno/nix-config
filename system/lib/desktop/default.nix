@@ -1,6 +1,7 @@
 {
   config,
   catppuccin,
+  lib,
   pkgs,
   ...
 }:
@@ -49,11 +50,17 @@
 
   xdg.portal.config.common.default = "*";
 
-  # xdg-desktop-portal 1.20+ verifies each caller by opening /proc/<pid>/root.
-  # With yama ptrace_scope=1 the portal (not an ancestor of the calling app) is
-  # denied, so it refuses ALL requests incl. FileChooser → file-open dialogs
-  # never appear. Scope 0 restores normal desktop behavior. See FIXES.md.
-  boot.kernel.sysctl."kernel.yama.ptrace_scope" = 0;
+  # Drop Landlock from the LSM stack (nixpkgs default: landlock,yama,bpf).
+  # systemd 260 places every *service* in a Landlock domain; Landlock's ptrace
+  # scoping then blocks a service from reading non-descendant /proc/<pid>/root.
+  # xdg-desktop-portal 1.20.4 needs exactly that to verify D-Bus callers, so as
+  # a service it returns AccessDenied for ALL requests (FileChooser, Settings…)
+  # → file-open dialogs never appear. The portal works fine outside a service
+  # domain (verified). Removing landlock restores it. See FIXES.md.
+  security.lsm = lib.mkForce [
+    "yama"
+    "bpf"
+  ];
 
   # Theming
   catppuccin.flavor = "mocha";
