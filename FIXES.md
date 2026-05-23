@@ -19,7 +19,7 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 7. **Decisive proof:** `systemctl --user stop xdg-desktop-portal.service`, then ran the portal binary directly from my (non-domained) shell → `busctl FileChooser OpenFile` **succeeded** (returned a request handle). Same binary, only difference = service-domain vs scope.
 8. Found the knob: nixpkgs `nixos/modules/security/default.nix` defaults `security.lsm = [ "landlock" "yama" "bpf" ]`. No documented per-service Landlock opt-out in systemd 260 man pages; the domain is applied to *all* services (a bare transient service was domained too).
 **Fix:** `security.lsm = lib.mkForce [ "yama" "bpf" ]` in the shared desktop module (drop `landlock`). Needs `./update.sh` **and a reboot** (kernel cmdline `lsm=` change). Tradeoff: apps that opt into Landlock (some browser/flatpak sandboxes) lose that defense-in-depth layer; they still have seccomp + namespace sandboxing. To verify post-reboot: `busctl --user call org.freedesktop.portal.Desktop /org/freedesktop/portal/desktop org.freedesktop.portal.FileChooser OpenFile "ssa{sv}" "" t 0` should return a handle, not `Access denied`.
-**Commit:** `<sha>`
+**Commit:** `48f08fb`
 
 ## 2026-05-23 — hyprland-0.55-deprecated-config-options
 
