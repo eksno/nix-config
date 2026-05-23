@@ -4,6 +4,31 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-05-23 — hyprland-0.55-deprecated-config-options
+
+**Symptom:** After a long-delayed `./update.sh`, Hyprland greeted with the error overlay. `hyprctl configerrors` reported: `Invalid dispatcher: togglesplit` (qwerty.conf:9), then `dwindle:pseudotile does not exist` (dwindle.conf:2) and `misc:vfr does not exist` (misc.conf:5).
+**Affected:** host `lewis`, user `jorge`. `dotfiles/default/hypr/shared/workflow/default/binds/qwerty.conf:9`, `dotfiles/default/hypr/shared/utility/dwindle.conf:2`, `dotfiles/default/hypr/shared/utility/misc.conf:5`.
+**Root cause:** The flake.lock bump pulled Hyprland 0.54.3 → 0.55.2, which made three breaking config changes: (1) the `togglesplit` dispatcher moved under `layoutmsg`, (2) `dwindle:pseudotile` was removed entirely — pseudotiling is now only the `pseudo` dispatcher (Super+P), no global toggle, (3) `misc:vfr` moved to `debug:vfr` (defaults on; "do not turn off unless debugging").
+**Investigation:**
+1. `hyprctl version` → confirmed 0.55.2 (was 0.54.3 before the rebuild).
+2. Grep'd hyprland.log → real error was `ERR: Invalid dispatcher: togglesplit`; the per-file "line N" errors are just re-raised at each include site.
+3. `hyprctl dispatch togglesplit` → Invalid; `hyprctl dispatch layoutmsg togglesplit` → ran (valid).
+4. `hyprctl getoption dwindle:pseudotile` / `misc:vfr` → both "no such option". `hyprctl descriptions` confirmed `debug:vfr` is the new home for vfr and dwindle has no pseudotile key.
+**Fix:** `bind = ..., togglesplit,` → `bind = ..., layoutmsg, togglesplit` in qwerty.conf (Jorge's keymap only — other users' keymaps left untouched per Jorge's request, they'll need the same fix when rebuilt). Dropped the `pseudotile = true` and `vfr = true` lines (defaults preserve prior behavior). Verified `hyprctl configerrors` is empty after reload.
+**Commit:** `<sha>`
+
+## 2026-05-23 — update-booted-into-gnome-instead-of-hyprland
+
+**Symptom:** After a long-delayed `./update.sh`, the machine autologged into a GNOME session instead of Hyprland. Jorge rolled back to the previous generation to recover.
+**Affected:** host `lewis`, user `jorge`. `system/users/jorge/dev/default.nix:8-9`, `system/lib/xr/breezy-session/default.nix`.
+**Root cause:** Not the update *adding* GNOME — GNOME had been in the config since 2026-05-05 (commit `41aabee`, the `breezy-session` module: `services.desktopManager.gnome.enable = true` for world-locked XR surfaces). This was the first rebuild after that commit, so it was the first time GNOME's session files landed in the SDDM SessionDir. SDDM autologin (`Session=hyprland-uwsm.desktop`) resolved to the GNOME session instead — exact mechanism never confirmed (candidates: GDM force-disable undone by nixpkgs churn, session-file sort order, or uwsm session-name change in the nixpkgs slice).
+**Investigation:**
+1. fastfetch confirmed the rolled-back gen is on Hyprland; `/run/current-system/sw/share/wayland-sessions/` listed only `hyprland*.desktop` (no gnome), confirming the rollback predates the breezy-session build.
+2. `git log -- system/lib/xr/breezy-session/` → module added 2026-05-05; this was the first rebuild since.
+3. `/etc/sddm.conf.d/00-nixos.conf` still had the correct `Session=hyprland-uwsm.desktop` autologin — config wasn't wrong, the session selection behavior changed.
+**Fix:** Removed `../../../lib/xr/breezy-gnome` and `../../../lib/xr/breezy-session` imports from `system/users/jorge/dev/default.nix`; added `../../../lib/xr/breezy-recenter` directly so the Hyprland Super+R recenter binding keeps working (it was only pulled in transitively via breezy-session). GNOME removed entirely — Jorge isn't using the breezy-gnome XR path. Verified via `nixos-rebuild build` that the closure's wayland-sessions contains only hyprland sessions before switching.
+**Commit:** `<sha>`
+
 ## 2026-05-08 — hyprland-layerrule-ignorealpha-rejected-as-invalid-field
 
 **Symptom:** Three cascading config errors after adding a layerrule for the eww keyboard cheatsheet: `invalid field type ignorealpha` at `layerrules.conf:13`, propagated up through `users/jorge/default.conf:4` and `hyprland.conf:1` (each just re-reports the inner failure).
