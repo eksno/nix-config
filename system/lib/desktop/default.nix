@@ -49,6 +49,12 @@
 
   xdg.portal.config.common.default = "*";
 
+  # xdg-desktop-portal 1.20+ verifies each caller by opening /proc/<pid>/root.
+  # With yama ptrace_scope=1 the portal (not an ancestor of the calling app) is
+  # denied, so it refuses ALL requests incl. FileChooser → file-open dialogs
+  # never appear. Scope 0 restores normal desktop behavior. See FIXES.md.
+  boot.kernel.sysctl."kernel.yama.ptrace_scope" = 0;
+
   # Theming
   catppuccin.flavor = "mocha";
   catppuccin.enable = true;

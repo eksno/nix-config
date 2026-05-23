@@ -4,6 +4,20 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-05-23 — file-picker-window-never-opens-portal-ptrace
+
+**Symptom:** "File attachments don't open a window with my folders anymore." Clicking attach/open-file in apps (browser, etc.) produces no file-chooser window at all.
+**Affected:** host `lewis`, user `jorge` (Hyprland). `system/lib/desktop/default.nix:53` (added `boot.kernel.sysctl."kernel.yama.ptrace_scope" = 0`).
+**Root cause:** The `fea4e19` nixpkgs bump pulled **xdg-desktop-portal 1.20.4**, which verifies every D-Bus caller by opening `/proc/<caller-pid>/root`. With `kernel.yama.ptrace_scope = 1` (effective default), a process may only inspect its own descendants — and the portal daemon is not an ancestor of the calling apps. So the open is denied with `org.freedesktop.DBus.Error.AccessDenied: Portal operation not allowed: Unable to open /proc/<pid>/root`, and the portal refuses ALL interfaces (FileChooser, Settings, …). Hence no dialog.
+**Investigation:**
+1. `fastfetch` → lewis/jorge, Hyprland 0.55.2. All portal backends (frontend, gtk, hyprland, document, permission) confirmed running via `ps`; FileChooser interface present on D-Bus introspect. So it wasn't a missing/dead backend.
+2. Startup journal was clean except a telling boot line: `xdg-desktop-portal: Realtime error: Could not get pidns for pid N: Could not fstatat ns/pid: Not a directory` — first hint the portal couldn't read caller `/proc`.
+3. `busctl --user call … FileChooser OpenFile` → `Access denied`. Reproduced with `zenity --file-selection`: `Failed to read portal settings: AccessDenied: Unable to open /proc/<pid>/root`, and **no window mapped** (verified via `hyprctl clients`).
+4. Dead-end suspicion: thought it was the Bash-tool sandbox giving my test process a separate PID namespace. Re-ran with sandbox disabled — **identical** error, ruling that out. The denial was real and system-wide (Settings portal denied too).
+5. Checked the access mechanism: `cat /proc/sys/kernel/yama/ptrace_scope` → `1`. `/proc` mounted normally (no hidepid). Opening `/proc/<pid>/root` requires `PTRACE_MODE_READ_FSCREDS`; under yama scope 1 that's allowed only for ancestors. Portal ≠ ancestor of apps → denied. Mechanism matches the error string exactly.
+**Fix:** Set `boot.kernel.sysctl."kernel.yama.ptrace_scope" = 0` in the shared desktop module (`system/lib/desktop/default.nix`) so the portal can verify callers again. Restores pre-bump behavior. Apply with `./update.sh`. (`sudo sysctl kernel.yama.ptrace_scope=0` to test live before rebuild.)
+**Commit:** `<sha>`
+
 ## 2026-05-23 — hyprland-0.55-deprecated-config-options
 
 **Symptom:** After a long-delayed `./update.sh`, Hyprland greeted with the error overlay. `hyprctl configerrors` reported: `Invalid dispatcher: togglesplit` (qwerty.conf:9), then `dwindle:pseudotile does not exist` (dwindle.conf:2) and `misc:vfr does not exist` (misc.conf:5).
