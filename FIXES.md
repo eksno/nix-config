@@ -15,7 +15,7 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 3. `hyprctl dispatch togglesplit` → Invalid; `hyprctl dispatch layoutmsg togglesplit` → ran (valid).
 4. `hyprctl getoption dwindle:pseudotile` / `misc:vfr` → both "no such option". `hyprctl descriptions` confirmed `debug:vfr` is the new home for vfr and dwindle has no pseudotile key.
 **Fix:** `bind = ..., togglesplit,` → `bind = ..., layoutmsg, togglesplit` in qwerty.conf (Jorge's keymap only — other users' keymaps left untouched per Jorge's request, they'll need the same fix when rebuilt). Dropped the `pseudotile = true` and `vfr = true` lines (defaults preserve prior behavior). Verified `hyprctl configerrors` is empty after reload.
-**Commit:** `<sha>`
+**Commit:** `c18fba8`
 
 ## 2026-05-23 — update-booted-into-gnome-instead-of-hyprland
 
@@ -27,7 +27,7 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 2. `git log -- system/lib/xr/breezy-session/` → module added 2026-05-05; this was the first rebuild since.
 3. `/etc/sddm.conf.d/00-nixos.conf` still had the correct `Session=hyprland-uwsm.desktop` autologin — config wasn't wrong, the session selection behavior changed.
 **Fix:** Removed `../../../lib/xr/breezy-gnome` and `../../../lib/xr/breezy-session` imports from `system/users/jorge/dev/default.nix`; added `../../../lib/xr/breezy-recenter` directly so the Hyprland Super+R recenter binding keeps working (it was only pulled in transitively via breezy-session). GNOME removed entirely — Jorge isn't using the breezy-gnome XR path. Verified via `nixos-rebuild build` that the closure's wayland-sessions contains only hyprland sessions before switching.
-**Commit:** `<sha>`
+**Commit:** `2981e3e`
 
 ## 2026-05-08 — hyprland-layerrule-ignorealpha-rejected-as-invalid-field
 
