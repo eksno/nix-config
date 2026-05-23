@@ -16,7 +16,7 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 4. Device-recovery side: `bluetoothctl info` showed Corne (`C8:5B:C1:B5:9B:F3`) `Trusted: yes` but `Paired: no / Bonded: no` despite a bond dir on disk — a one-sided/desynced bond driving the Trusted auto-connect loop. `pair` stalled at "Attempting to pair" until **bluetoothd was restarted** to clear stuck Adv-Monitor churn; then `trust` + `pair` (session held open, not piped `quit`) bonded cleanly and `event18 → "Corne Keyboard"` appeared. Dead end worth noting: piping `pair` immediately followed by `quit` aborts the in-flight pairing — the session must stay open ~10–15s.
 **Fix:** Replaced the separate cyclic unit with `systemd.services.powertop.serviceConfig.ExecStartPost = "${bt-no-autosuspend}";`. It runs immediately after `--auto-tune` within powertop's own oneshot and introduces no new unit anchored to `multi-user.target`, so a cycle is structurally impossible. `powerManagement.resumeCommands` re-pin kept for resume. Verified post-rebuild: new generation active, no failed units, `powertop.service` shows the `ExecStartPost`, no ordering-cycle log.
 **Collateral (process lesson, not a code bug):** Applying this via `./update.sh` was disruptive — `update.sh` runs `nix flake update` first, which bumped nixpkgs unstable to `…20260521.f83fc3c`; the resulting `switch` restarted systemd + the graphical stack, tore down the Hyprland/uwsm session (`user@1000.service` deactivated, `switch-to-configuration` exited 101, Discord coredumped), and logged the user out with loss of open app state. For a small `system/` change, prefer a plain `nixos-rebuild switch` without a flake bump, and warn before any switch that can restart the display manager.
-**Commit:** `1f942fb`
+**Commit:** `36a6102`
 
 ## 2026-05-22 — corne-bluetooth-connect-disconnect-loop-after-idle
 
@@ -231,7 +231,7 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 2. Read `system/lib/dotfiles.nix` tmux block → confirmed the activation script only `ln -sf`s the two known files. No glob, no scripts dir.
 3. Considered switching tmux back to a full directory symlink. Rejected: TPM still needs to write into `plugins/`, which is the whole reason file-level symlinks were chosen. Cleanest fix is one extra `ln -sfn` for `scripts/` since it's a read-only dir of executables.
 **Fix:** Added `ln -sfn "$_src/scripts" "$cfg/tmux/scripts"` to the tmux block in `system/lib/dotfiles.nix`. After `./update.sh`, `~/.config/tmux/scripts → nix-config/dotfiles/default/tmux/scripts` and resurrect can find `restore-mosh.sh`.
-**Commit:** `1f942fb`
+**Commit:** `36a6102`
 
 ## 2026-04-25 — norwegian-binds-ydotool-unicode-dropped
 
