@@ -4,6 +4,17 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-05-24 — glasses-mirror-doesnt-persist-across-replug
+
+**Symptom:** After setting up clean glasses-as-source mirroring (laptop mirrors the Rayneo so the glasses show their native 1920x1080 with no bars), the mirror was gone the next day when the glasses were re-plugged — back to a standalone extension monitor.
+**Affected:** host `lewis`, user `jorge`. `dotfiles/default/hypr/users/jorge/default/monitor.conf`, `dotfiles/default/hypr/users/jorge/default/breezy.conf`, new `dotfiles/default/hypr/shared/scripts/glasses-mirror-watcher.sh`.
+**Root cause:** Two layers. (1) The working mirror had only been applied at runtime via `hyprctl keyword monitor` — never written to config, so any reload/replug/reboot reverted it. (2) The static `monitor.conf` rules couldn't express the desired topology anyway: Hyprland is last-match-wins, and a `monitor=...,mirror,<target>` rule whose target is ABSENT clobbers the output to standalone rather than falling through to an earlier rule. So `eDP-1 ... mirror, HDMI-A-1` (VG258, usually absent) always won over the glasses-as-source rule and forced eDP standalone. The file's comment claiming fall-through was wrong.
+**Investigation:**
+1. Live state on replug: glasses came up as DP-2 this session (DP-1 the day before — connector name varies), both monitors `mirrorOf=none`. Confirms non-persistence.
+2. Reproduced the clobber: applied glasses-as-source live (`eDP-1 mirrorOf=1`, verified clean by Jorge), then applied an absent-target rule (`mirror,HDMI-A-1`) on top — eDP immediately dropped to `mirrorOf=none`. Proved absent mirror-target → standalone, not fall-through.
+**Fix:** Replaced the dead `breezy-monitor-watcher.sh` (which reaped the now-removed breezy-sideview) with `glasses-mirror-watcher.sh`: a socket2 listener that applies the correct topology at session start and on every `monitoradded`/`monitorremoved` event. Matches the glasses by EDID description (`desc:`), so the DP-1/DP-2 variance doesn't matter. Topology: VG258 present → VG258 source, eDP+glasses mirror it; else glasses present → glasses source, eDP mirrors glasses; else → eDP native. Stripped the broken static mirror rules from `monitor.conf` (left only the `,preferred,auto,1` fallback + an eDP baseline), and pointed `breezy.conf`'s `exec-once` at the new watcher.
+**Commit:** `<sha>`
+
 ## 2026-05-23 — file-picker-window-never-opens (portal landlock-domained as systemd service)
 
 **Symptom:** "File attachments don't open a window with my folders anymore." Clicking attach/open-file in any app produces no file-chooser window at all.
