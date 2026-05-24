@@ -13,7 +13,7 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 1. Live state on replug: glasses came up as DP-2 this session (DP-1 the day before — connector name varies), both monitors `mirrorOf=none`. Confirms non-persistence.
 2. Reproduced the clobber: applied glasses-as-source live (`eDP-1 mirrorOf=1`, verified clean by Jorge), then applied an absent-target rule (`mirror,HDMI-A-1`) on top — eDP immediately dropped to `mirrorOf=none`. Proved absent mirror-target → standalone, not fall-through.
 **Fix:** Replaced the dead `breezy-monitor-watcher.sh` (which reaped the now-removed breezy-sideview) with `glasses-mirror-watcher.sh`: a socket2 listener that applies the correct topology at session start and on every `monitoradded`/`monitorremoved` event. Matches the glasses by EDID description (`desc:`), so the DP-1/DP-2 variance doesn't matter. Topology: VG258 present → VG258 source, eDP+glasses mirror it; else glasses present → glasses source, eDP mirrors glasses; else → eDP native. Stripped the broken static mirror rules from `monitor.conf` (left only the `,preferred,auto,1` fallback + an eDP baseline), and pointed `breezy.conf`'s `exec-once` at the new watcher.
-**Commit:** `<sha>`
+**Commit:** `531cf96`
 
 ## 2026-05-23 — file-picker-window-never-opens (portal landlock-domained as systemd service)
 
