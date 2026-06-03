@@ -4,6 +4,21 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-06-03 — phonetic-keybind-dead-after-version-bump (SIGUSR1 trigger removed in 0.6.10)
+
+**Symptom:** Jorge's speech-to-text hotkey `CTRL+ALT+R` stopped working after a flake bump (which also pulled the `phonetic` input forward to 0.6.10). Pressing it did nothing.
+**Affected:** host `lewis`, user `jorge`. `dotfiles/default/hypr/users/jorge/default.conf:9`. (`system/users/.../eksno/default.conf:8` has the same stale bind — not yet fixed, different user/host.)
+**Root cause:** The keybind ran `kill -USR1 "$(cat ~/.cache/phonetic/pid)"`. phonetic 0.6.10 **removed the SIGUSR1-via-pidfile trigger** — the daemon no longer installs a USR1 handler, so the signal is silently ignored. The new trigger interface is `phonetic --trigger <profile>` (the daemon runs `--headless` as a user service and its own log advertises this: "Global hotkeys are unavailable here — trigger a profile with: phonetic --trigger <profile-id>").
+**Investigation:**
+1. `systemctl --user status phonetic.service` → active/running, healthy (PID 1422789). Not a dead-daemon problem.
+2. Suspected stale pidfile after the rebuild restarted the daemon. `cat ~/.cache/phonetic/pid` = `1422789` = live PID. **Dead end** — pidfile was correct.
+3. Suspected the merge clobbered the bind (the Startino theme merge `3e208bc` did touch jorge's `default.conf`). `grep phonetic` → bind line still present, only recolored. Not it.
+4. `phonetic --help` (0.6.10) documents only `--trigger PROFILE`; no signal mechanism mentioned. "This is how global hotkeys work on Wayland."
+5. **Confirmed SIGUSR1 dead (evidence, not assertion):** `kill -USR1 $(cat ~/.cache/phonetic/pid)` then `journalctl --user -u phonetic --since "5 seconds ago"` → "No entries". Daemon did not react.
+6. `phonetic --list-profiles` → one profile, name `Migrated`, trigger command `phonetic --trigger Migrated`.
+**Fix:** Rebind to `bind = CTRL ALT, r, exec, phonetic --trigger Migrated` in `dotfiles/default/hypr/users/jorge/default.conf`, then `hyprctl reload`. Verified end-to-end: trigger → daemon logs "Recording with profile 'Migrated'...", second trigger stops, transcribe returns HTTP 200 (`voxtral-small-24b`), result copied to clipboard. (Dotfile is symlinked → no rebuild needed, just reload.)
+**Commit:** `b4f19e2`
+
 ## 2026-05-28 — file-picker-window-never-opens (hyprland CAP_SYS_NICE poisons descendants)
 
 **Symptom:** "File attachments don't open a window with my folders anymore." Same symptom Jorge first reported 2026-05-23. The two earlier fixes (`747a3e1` ptrace_scope=0, `48f08fb` drop landlock LSM) **did NOT resolve it** — even after reboot, `busctl --user call ... org.freedesktop.portal.FileChooser OpenFile …` kept returning `org.freedesktop.DBus.Error.AccessDenied: Portal operation not allowed: Unable to open /proc/<pid>/root`. This is the real fix.
