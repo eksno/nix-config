@@ -17,7 +17,9 @@
         inherit system;
         config = {
           allowUnfree = true;
-          permittedInsecurePackages = [ ];
+          # electron 39.8.10 is EOL upstream but still pinned by obsidian /
+          # bitwarden-desktop / discord etc. — allow it so those apps build.
+          permittedInsecurePackages = [ "electron-39.8.10" ];
           packageOverrides = pkgs: {
             intel-vaapi-driver = pkgs.intel-vaapi-driver.override { enableHybridCodec = true; };
           };
