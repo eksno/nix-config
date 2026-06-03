@@ -27,7 +27,7 @@
   },
   "backlight": {
     "device": "intel_backlight",
-    "format": "<span color='#f9e2af'>{icon}</span> {percent}%",
+    "format": "{icon} {percent}%",
     "format-icons": [
       "󰃗",
       "󰃗",
@@ -44,8 +44,8 @@
     "on-scroll-down": "bash -c 'MIN=$(( $(brightnessctl max) / 20 )); brightnessctl set 5%-; [ $(brightnessctl get) -lt $MIN ] && brightnessctl set $MIN'"
   },
   "pulseaudio": {
-    "format": "<span color='#cba6f7'>{icon}</span> {volume}%",
-    "format-muted": "<span color='#cba6f7'></span> muted",
+    "format": "{icon} {volume}%",
+    "format-muted": " muted",
     "tooltip": false,
     "format-icons": {
       "headphone": "",

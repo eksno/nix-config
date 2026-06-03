@@ -144,6 +144,44 @@ Kernel applies the override only on the matching connector, so listing both is s
 **Fix:** Added `rm -f "$XDG_RUNTIME_DIR/monado_comp_ipc"` next to the existing `rm -f` for `monado.pid` in `system/lib/xr/breezy-hyprland/launcher.nix`.
 **Commit:** `f74154b`
 
+## 2026-05-06 — waybar-icon-percentage-color-mismatch
+
+**Symptom:** In waybar, the audio icon and the percentage rendered in different colors — icon was Catppuccin purple, value was Startino pink. Same pattern would have hit backlight if anyone had looked closely.
+**Affected:** `dotfiles/default/waybar/config:30,47,48`. Any waybar module using inline pango `<span color='#...'>` overrides.
+**Root cause:** The pulseaudio and backlight modules' `format` strings embedded hardcoded Catppuccin Mocha hexes inline (`<span color='#cba6f7'>{icon}</span>` for mauve, `#f9e2af` for yellow). The CSS sets the module color via `@mauve`/`@yellow`, but inline pango spans take precedence on the wrapped character only. Result: the icon stayed at the Catppuccin hex (purple/yellow) while the bare percentage outside the span rendered in the CSS variable. Visible on Neptune because Startino collapses `mauve` → pink — icon ended up purple, value ended up pink.
+**Investigation:**
+1. Suspected the rosewater/clash session (just landed) had broken something — checked. Rosewater was a separate concern; this was independent.
+2. `grep -n "color='#" dotfiles/default/waybar/config` surfaced three inline overrides: `#f9e2af` (backlight icon), `#cba6f7` (pulseaudio icon), and the mute-state span. All Catppuccin Mocha hexes baked into the JSON.
+3. Fix: drop the spans entirely. CSS already styles the whole module via `#pulseaudio { color: @mauve; }`, so removing inline overrides yields uniform color *and* lets palette changes propagate downstream automatically.
+**Fix:** `format` simplified to `"{icon} {percent}%"` / `"{icon} {volume}%"`; format-muted simplified the same way. No CSS changes needed.
+**Commit:** `415515f`
+
+## 2026-05-06 — tmux-catppuccin-reset-also-nukes-window-customizations
+
+**Symptom:** After adding `set -g @catppuccin_reset "true"` to fix the flavor-switch (see entry below), tmux lost the rounded window-status style and the `" #W"` window-name format — windows rendered with default catppuccin styling instead of the `@catppuccin_window_status_style "rounded"` and `@catppuccin_window_*_text` customizations set in `tmux.conf`.
+**Affected:** `dotfiles/default/tmux/tmux.conf`. Anyone using `@catppuccin_reset` to switch flavors while also customizing window/status modules.
+**Root cause:** The `%if @catppuccin_reset == true` block in `catppuccin_options_tmux.conf` unsets the entire `@thm_*` palette **and** `@catppuccin_window_status_style`, `@catppuccin_window_*_text`, all `@catppuccin_window_flags_*`, and the status separators. So `@catppuccin_reset` is a sledgehammer that clears user customizations along with stale palette values.
+**Investigation:**
+1. Re-read `catppuccin_options_tmux.conf:20-78` carefully — the `%if` block contains `set -Ugq` for the full `@thm_*` palette **plus** `@catppuccin_window_status_style`, `@catppuccin_window_text_color`, `@catppuccin_window_default_text`, etc. Roughly 30 unsets total, only a third of which are palette.
+2. Considered re-applying user customizations after `run catppuccin.tmux` — would need to be done before catppuccin_tmux.conf finishes (it reads them during render-string construction). Ugly.
+3. Considered running the plugin twice (reset, then re-run with customizations re-set) — also ugly.
+4. Realized the cleanest fix is a surgical palette-only reset: just `set -gu @thm_*` for the 26 palette vars before the `run` line. Catppuccin's `%if` block runs only when `@catppuccin_reset` is set, so leaving it unset preserves the user customizations entirely.
+**Fix:** Replace `set -g @catppuccin_reset "true"` in `tmux.conf` with 26 explicit `set -gu @thm_*` lines covering only the palette. Verified after reload: `@catppuccin_window_status_style rounded`, `@catppuccin_window_default_text " #W"`, and `@thm_bg "#171919"` (Neptune) all coexist correctly.
+**Commit:** `0c51848`
+
+## 2026-05-06 — tmux-catppuccin-flavor-switch-needs-reset
+
+**Symptom:** After switching `@catppuccin_flavor` from `"mocha"` to `"neptune"` (Startino flavor file symlinked into the plugin's `themes/` dir) and reloading via `tmux source-file ~/.config/tmux/tmux.conf`, the status bar kept rendering with mocha colors. `tmux show-options -g | grep @thm_bg` returned `#1e1e2e` (mocha) instead of `#171919` (neptune).
+**Affected:** any flavor switch on the `catppuccin/tmux` plugin. `dotfiles/default/tmux/tmux.conf`.
+**Root cause:** Startino's flavor file (and Catppuccin's own ones) sets `@thm_*` with `set -ogq` — the `-o` flag means "only set if not already set." Mocha's values from the previous load were still in tmux's option memory, so every `set -ogq @thm_bg "#171919"` was a silent no-op. A fresh tmux server would have worked; an in-place reload of the same server would not.
+**Investigation:**
+1. Confirmed the symlink was correct: `~/.config/tmux/plugins/tmux/themes/catppuccin_neptune_tmux.conf` → `~/themes/ports/tmux/dist/catppuccin_neptune_tmux.conf`, file readable, contained `set -ogq @thm_bg "#171919"`.
+2. Read `catppuccin_tmux.conf:1` — confirmed it sources the flavor file via `source -F "#{d:current_file}/themes/catppuccin_#{@catppuccin_flavor}_tmux.conf"`. So the right file *was* being sourced.
+3. `tmux show-options -g` showed `@catppuccin_flavor neptune` but `@thm_bg "#1e1e2e"` — proving the source ran but the writes had no effect.
+4. Read `catppuccin_options_tmux.conf` — found a `%if @catppuccin_reset == true` block that does `set -Ugq @thm_*` (unset) for the entire palette. Catppuccin's own flavor-switching docs (the comment block in that file showing dark/light theme hooks) set `@catppuccin_reset "true"` before re-running the plugin for exactly this reason.
+**Fix:** Add `set -g @catppuccin_reset "true"` immediately before the `run ~/.config/tmux/plugins/tmux/catppuccin.tmux` line in `tmux.conf`. Catppuccin's options conf clears the reset flag (`set -Ug @catppuccin_reset` at the bottom of the `%if` block) so it doesn't accumulate.
+**Commit:** `22fd835`
+
 ## 2026-05-05 — xr-driver-crashloop-from-sddm-owned-shm-state
 
 **Symptom:** After logging into the new GNOME-on-Wayland session for the first time, `xr-driver` was stuck in `auto-restart` (exit 1, ~190 restart attempts). `/dev/shm/xr_driver_state` existed but was owned `sddm:sddm`, blocking jorge's driver from overwriting it. Driver log showed a segfault in `fprintf` between "Using hardware id" and "Starting up XR driver".
