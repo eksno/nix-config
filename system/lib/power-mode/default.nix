@@ -1064,9 +1064,11 @@ in
     };
   };
 
+  # Auto-bump on battery % disabled — Jorge wants power level to stay where he
+  # sets it manually. Service+timer definitions kept so they can be re-enabled
+  # by adding `wantedBy = [ "timers.target" ];` back if desired.
   systemd.user.timers.battery-watchdog = {
     description = "Poll battery level every 1s";
-    wantedBy = [ "timers.target" ];
     timerConfig = {
       OnBootSec = "1s";
       OnUnitActiveSec = "1s";
