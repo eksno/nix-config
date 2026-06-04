@@ -4,6 +4,19 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-06-04 — waybar-bluetooth-module-blank-set-e-pipefail
+
+**Symptom:** waybar's bluetooth module shows nothing even while a Bluetooth device (Corne keyboard) is actively connected and in use.
+**Affected:** host `verse`, user `eksno`. `dotfiles/default/waybar/scripts/bluetooth.sh:7`, `dotfiles/default/waybar/config:68` (`custom/bluetooth`).
+**Root cause:** The script ran `set -euo pipefail`. The battery line `battery=$(busctl … org.bluez.Battery1 Percentage 2>/dev/null | awk …)` exits non-zero (propagated by `pipefail`) whenever the connected device doesn't expose a `Battery1` interface. At boot the Corne connects before its BLE battery service is exposed (same late-service timing as the reconnect-loop fixes), so the script hit that line, `set -e` killed it, and `custom/bluetooth` had no `interval`/`restart-interval` — so waybar never respawned it and the module stayed blank for the whole session. The same fragility also crashes the script when zero devices are paired (`grep` exits 1 → pipefail → exit).
+**Investigation:**
+1. Ran `bluetooth.sh` by hand → emitted correct JSON (`Cor 44%`). So script *logic* was fine; bug was runtime.
+2. `pgrep -af waybar` → waybar (PID 2710) alive with `network.sh` and `battery.sh` children running, but **no `bluetooth.sh` child** → the bluetooth exec had exited and was never restarted.
+3. `busctl … dev_80…E7… org.bluez.Battery1 Percentage` → exit 1 (no Battery1 iface). Reproduced the crash: `bash -c 'set -euo pipefail; battery=$(busctl … Battery1 … | awk …)'` → exit 1, never reached the next line. Confirmed root cause.
+4. Dead end ruled out early: suspected stale/non-symlinked `~/.config/waybar` (an `ls -la` showed regular files), but `readlink` confirmed it *is* a symlink to the repo and `diff` showed the config identical — not config drift.
+**Fix:** `bluetooth.sh:7` `set -euo pipefail` → `set -uo pipefail` (drop `-e`; it's a resilient poll loop where optional-interface queries legitimately fail). Added `"restart-interval": 5` to `custom/bluetooth` in `config` as a respawn safety-net. Dotfiles are symlinked so changes were live immediately; `pkill -SIGUSR2 waybar` reloaded waybar and the module came back (`Cor 44%`, child PID parented by waybar). No nixos-rebuild required.
+**Commit:** `<sha>`
+
 ## 2026-05-23 — corne-reconnect-loop-recurrence-bt-service-ordering-cycle
 
 **Symptom:** Corne BLE keyboard back in the Connected↔Disconnected loop again, ~2 weeks after the 2026-05-22 fix (`46cae11`/`33fc458`) supposedly resolved it. Same `read_pnpid_cb` ATT 0x0E failures.

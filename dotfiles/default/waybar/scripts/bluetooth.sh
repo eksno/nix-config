@@ -4,7 +4,12 @@
 # Tooltip: full alias / MAC / battery for each connected device.
 # Queries BlueZ via D-Bus (busctl) — bluetoothctl's piped output is unreliable.
 
-set -euo pipefail
+# NOT `set -e`: this is a resilient polling loop. BlueZ D-Bus queries for
+# optional interfaces (e.g. Battery1) legitimately exit non-zero, and `grep`
+# exits 1 when no devices are paired. Under `set -e`+pipefail those propagate
+# and kill the script permanently (waybar won't respawn a dead continuous
+# module), leaving the module blank for the rest of the session.
+set -uo pipefail
 
 # nf-fa-bluetooth-b (U+F294)
 ICON_BT=$'\xef\x8a\x94'
