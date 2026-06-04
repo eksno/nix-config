@@ -15,7 +15,7 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 3. `busctl … dev_80…E7… org.bluez.Battery1 Percentage` → exit 1 (no Battery1 iface). Reproduced the crash: `bash -c 'set -euo pipefail; battery=$(busctl … Battery1 … | awk …)'` → exit 1, never reached the next line. Confirmed root cause.
 4. Dead end ruled out early: suspected stale/non-symlinked `~/.config/waybar` (an `ls -la` showed regular files), but `readlink` confirmed it *is* a symlink to the repo and `diff` showed the config identical — not config drift.
 **Fix:** `bluetooth.sh:7` `set -euo pipefail` → `set -uo pipefail` (drop `-e`; it's a resilient poll loop where optional-interface queries legitimately fail). Added `"restart-interval": 5` to `custom/bluetooth` in `config` as a respawn safety-net. Dotfiles are symlinked so changes were live immediately; `pkill -SIGUSR2 waybar` reloaded waybar and the module came back (`Cor 44%`, child PID parented by waybar). No nixos-rebuild required.
-**Commit:** `<sha>`
+**Commit:** `85eeef9`
 
 ## 2026-05-23 — corne-reconnect-loop-recurrence-bt-service-ordering-cycle
 
