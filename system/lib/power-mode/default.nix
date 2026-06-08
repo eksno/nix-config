@@ -398,7 +398,7 @@ let
     # Self-contained: sets ALL levers to absolute values for that level.
     # Does NOT set brightness — caller handles that (calibrate vs stretch differ).
     # P-core hotplug: offline P-cores to eliminate leakage current (~1-3W savings)
-    # cpu0 can never be offlined by the kernel, so we skip it
+    # cpu0 can never be offlined by the kernel, so we skip it. Only at level 9.
     offline_pcores() {
       for cpu in /sys/devices/system/cpu/cpu[0-9]*/online; do
         local num
@@ -420,7 +420,14 @@ let
 
     apply_round() {
       local round=$1
-      local pct=$((round * 100 / 9))
+      # Re-LERP: the dial's max-save endpoint (round 9) now reaches only what
+      # the OLD level 8 did. Pushing the continuous levers to the absolute floor
+      # at level 9 caused race-to-idle losses (the slower CPU stayed busy long
+      # enough that total energy went UP), so the efficiency loss outweighed the
+      # time gained. Compress the interpolation so round 9 maps to old-round-8's
+      # depth (~88%, not 100%): effective = round*8/9, pct = effective*100/9
+      #   => pct = round * 800 / 81
+      local pct=$((round * 800 / 81))
 
       # Bring all cores online first so freq/governor writes hit every core
       online_all_cores
@@ -445,13 +452,15 @@ let
       local gov="performance" tv=0 ev="performance" pf="performance"
       local sv="base" av="default" wps="off" ppm="on"
 
-      [ "$round" -ge 1 ] && ev="balance_performance" && wps="on" && ppm="auto"
-      [ "$round" -ge 2 ] && gov="powersave" && av="powersave" && pf="balanced"
-      [ "$round" -ge 3 ] && ev="balance_power" && pf="quiet"
-      [ "$round" -ge 4 ] && tv=1 && sv="power_saving"
-      [ "$round" -ge 5 ] && av="powersupersave"
-      [ "$round" -ge 7 ] && ev="power"
-      [ "$round" -ge 8 ] && ev="255"  # Max power saving EPP (more aggressive than "power"=192)
+      # Thresholds rescaled by the same re-LERP (old T now fires at ceil(T*9/8)),
+      # so round 9 reproduces the old level-8 discrete state exactly.
+      [ "$round" -ge 2 ] && ev="balance_performance" && wps="on" && ppm="auto"
+      [ "$round" -ge 3 ] && gov="powersave" && av="powersave" && pf="balanced"
+      [ "$round" -ge 4 ] && ev="balance_power" && pf="quiet"
+      [ "$round" -ge 5 ] && tv=1 && sv="power_saving"
+      [ "$round" -ge 6 ] && av="powersupersave"
+      [ "$round" -ge 8 ] && ev="power"
+      [ "$round" -ge 9 ] && ev="255"  # Max power saving EPP (more aggressive than "power"=192)
 
       set_governor "$gov"
       set_turbo "$tv"
@@ -462,9 +471,9 @@ let
       set_wifi_powersave "$wps"
       set_pci_pm "$ppm"
 
-      # At level >= 8, offline P-cores to eliminate leakage (~1-3W savings)
-      # E-cores and LP E-cores handle idle/light workloads fine
-      if [ "$round" -ge 8 ]; then
+      # At level 9 (the re-LERPed max), offline P-cores to eliminate leakage
+      # (~1-3W savings). E-cores and LP E-cores handle idle/light workloads fine
+      if [ "$round" -ge 9 ]; then
         offline_pcores
       fi
     }
@@ -724,9 +733,10 @@ let
       # Post-process: -0.5W idle bonus + monotonic enforcement (each ≤ prev - 1W)
       local adjusted
       adjusted=$(echo "$cal_results" | ${pkgs.gawk}/bin/awk -F: '/^[0-9]/ {
-        # Cumulative idle-only discrete levers per round (~0.2W each):
-        # R1:+EPP  R2:+gov,ASPM  R3:+EPP,profile  R4:+SLPC  R5:+ASPM  R7:+EPP
-        split("0,1,3,5,6,7,7,8,8,8", lc, ",")
+        # Cumulative idle-only discrete levers per round (~0.2W each), tracking
+        # the re-LERPed thresholds:
+        # R2:+EPP  R3:+gov,ASPM  R4:+EPP,profile  R5:+SLPC  R6:+ASPM  R8:+EPP
+        split("0,0,1,3,5,6,7,7,8,8", lc, ",")
         raw = $2 - lc[$1 + 1] * 0.2
         if (!started) { adj = raw; started = 1 }
         else {
@@ -852,10 +862,10 @@ let
       echo ""
       echo -e "  ''${BOLD}Levels (0-9):''${RESET}"
       echo "    0    Full speed, turbo on, 28W"
-      echo "    2    Moderate savings, turbo on, 20W"
-      echo "    4    Turbo off, 10W"
-      echo "    8    P-cores offline, EPP max savings"
-      echo "    9    Maximum power saving"
+      echo "    3    Moderate savings, turbo on, ~22W"
+      echo "    5    Turbo off, ~15W"
+      echo "    8    Deep savings, ~7W"
+      echo "    9    Maximum: P-cores offline, EPP max, ~4W"
       echo "    1-9  Any level for fine-grained control"
       echo ""
       echo -e "  ''${BOLD}Stretch mode:''${RESET}"
