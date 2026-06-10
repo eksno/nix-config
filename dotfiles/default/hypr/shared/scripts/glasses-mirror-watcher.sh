@@ -14,9 +14,16 @@
 # scaling and zero bars. The 16:9 image on the 16:10 laptop panel looks off,
 # but you're wearing the glasses, not staring at the laptop.
 #
-#   VG258 (HDMI-A-1) present  -> VG258 is source; eDP-1 + glasses mirror it.
-#   glasses present (no VG258) -> glasses are source; eDP-1 mirrors glasses.
-#   neither                    -> eDP-1 native.
+#   VG258 + glasses present    -> VG258 source @60; eDP-1 + glasses mirror it.
+#   VG258 present (no glasses)  -> VG258 source @119.98; eDP-1 mirrors it.
+#   glasses present (no VG258)  -> glasses are source; eDP-1 mirrors glasses.
+#   neither                     -> eDP-1 native.
+#
+# Refresh split: 120 Hz across eDP-1 + HDMI + glasses (the 3-way chain) exceeds
+# the Intel CDCLK budget and trips Hyprland's page-flip watchdog, so the VG258 is
+# capped to 60 Hz ONLY when the glasses are also in the chain. Two-way eDP-1 +
+# HDMI @120 is within budget (verified working, FIXES.md 2026-05-05), so the
+# VG258 runs at its native 119.98 Hz whenever the glasses are absent.
 
 set -uo pipefail
 
@@ -30,23 +37,37 @@ socket="$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock"
 glasses_desc="desc:Technical Concepts Ltd SmartGlasses"
 glasses_re="SmartGlasses"
 
+# Bind the external profile to THIS exact monitor by EDID make+model+serial,
+# not the bare HDMI-A-1 connector — so the topology can't misfire on some other
+# HDMI display and stays correct if the connector name ever shifts.
+vg258_desc="desc:ASUSTek COMPUTER INC VG258 JCLMQS018649"
+vg258_re="VG258 JCLMQS018649"
+
 apply_topology() {
     local mons vg258 glasses
     mons="$(hyprctl monitors all -j 2>/dev/null)" || return 0
     [[ -n "$mons" ]] || return 0
 
-    vg258="$(jq -r 'any(.[]; .name == "HDMI-A-1")' <<<"$mons" 2>/dev/null)"
+    vg258="$(jq -r --arg re "$vg258_re" 'any(.[]; .description | test($re))' <<<"$mons" 2>/dev/null)"
     glasses="$(jq -r --arg re "$glasses_re" 'any(.[]; .description | test($re))' <<<"$mons" 2>/dev/null)"
 
     if [[ "$vg258" == "true" ]]; then
-        # VG258 is the canonical 1920x1080 source. 60 Hz cap: 120 Hz across
-        # eDP-1 + HDMI-A-1 + glasses exceeds the Intel CDCLK budget and trips
-        # Hyprland's page-flip watchdog (see monitor.conf history).
-        hyprctl --batch "\
-keyword monitor HDMI-A-1,1920x1080@60,0x0,1 ; \
-keyword monitor eDP-1,2880x1800@120,0x0,1.25,mirror,HDMI-A-1" >/dev/null 2>&1
         if [[ "$glasses" == "true" ]]; then
-            hyprctl keyword monitor "$glasses_desc,1920x1080@120,auto,1,mirror,HDMI-A-1" >/dev/null 2>&1
+            # Three-way chain: VG258 is the canonical 1920x1080 source; eDP-1 and
+            # the glasses both mirror it. 60 Hz cap is mandatory — 120 Hz across
+            # all three exceeds the Intel CDCLK budget and trips Hyprland's
+            # page-flip watchdog (see header + FIXES.md 2026-05-24).
+            hyprctl --batch "\
+keyword monitor $vg258_desc,1920x1080@60,0x0,1 ; \
+keyword monitor eDP-1,2880x1800@120,0x0,1.25,mirror,$vg258_desc ; \
+keyword monitor $glasses_desc,1920x1080@120,auto,1,mirror,$vg258_desc" >/dev/null 2>&1
+        else
+            # VG258 standalone (no glasses): run it at its native 119.98 Hz.
+            # Two-way eDP-1 + HDMI @120 stays within the CDCLK budget; only the
+            # three-way case above needs the 60 Hz cap.
+            hyprctl --batch "\
+keyword monitor $vg258_desc,1920x1080@119.98,0x0,1 ; \
+keyword monitor eDP-1,2880x1800@120,0x0,1.25,mirror,$vg258_desc" >/dev/null 2>&1
         fi
     elif [[ "$glasses" == "true" ]]; then
         # Glasses are the canonical source; laptop mirrors them. Clean, no bars
