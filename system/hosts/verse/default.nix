@@ -6,6 +6,7 @@
     ./boot.nix
     ./networking.nix
     ./bluetooth.nix
+    ./corne-bt-recovery.nix
 
     ../../lib/device/intel
   ];
