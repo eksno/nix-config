@@ -17,6 +17,9 @@
       "Bash(chmod:*)",
       "Bash(patchelf:*)",
       "Bash(nix-shell:*)"
+    ],
+    "additionalDirectories": [
+      "/home/eksno/repos/eksno/zmk-dvorak-36"
     ]
   }
 }

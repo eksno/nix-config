@@ -24,7 +24,7 @@
         inherit system;
         config = {
           allowUnfree = true;
-          permittedInsecurePackages = [ ];
+          permittedInsecurePackages = [ "electron-39.8.10" ];
           packageOverrides = pkgs: {
             intel-vaapi-driver = pkgs.intel-vaapi-driver.override { enableHybridCodec = true; };
           };

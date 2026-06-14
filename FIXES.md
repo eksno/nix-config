@@ -4,6 +4,20 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-06-14 — corne-keyless-trusted-bond-flap-after-firmware-flash
+
+**Symptom:** Mako buried under ~19 stacked "Corne / Connected" + "Corne / Disconnected" notifications (blueman-applet), "(14 more)". Keyboard not usable.
+**Affected:** host `verse`, user `eksno`. Corne `C8:5B:C1:B5:9B:F3`, host adapter `2C:33:58:44:27:4D`. Not a repo-file bug — host BlueZ bond state + ZMK firmware in `~/repos/eksno/zmk-dvorak-36`.
+**Root cause:** The host held the Corne as `Trusted=yes` but with **zero bond keys** — `/var/lib/bluetooth/2C:33:58:44:27:4D/C8:5B:C1:B5:9B:F3/info` contained only `[General]` (no `[PeripheralLongTermKey]`/`[SlaveLongTermKey]`/`[DeviceID]`), so `bluetoothctl info` showed `Paired: no / Bonded: no / Trusted: yes`. Because it was Trusted, BlueZ auto-connected on every advertisement, but with no LTK the link was unencrypted, so HID-over-GATT reads (PnP ID, HID Information, Report Reference) failed with ATT 0x0E "Request attribute has encountered an unlikely error" → HoG never attached → drop → retry every ~30s, blueman firing a notification per transition. The trigger is **flashing ZMK firmware**, which wipes the keyboard-side bond while the host keeps its (now-stale, keyless) Trusted entry — a one-sided/desynced bond. This is NOT the 2026-05-22/05-23 autosuspend cause: `power/control=on` was correctly applied to the BT controller this time.
+**Investigation:**
+1. Image looked like waybar but `bluetooth.sh` builds a fresh per-poll snapshot and never emits the word "Disconnected" → ruled out waybar; `makoctl history` + `app-name` showed the source was **blueman**.
+2. `bluetoothctl devices` listed only ONE Corne, not 19 → the stack was accumulated event notifications, not duplicate devices.
+3. `bluetoothctl info` → `Trusted: yes` but `Paired: no / Bonded: no`, RSSI -64 (in range). `sudo grep '^\[' .../info` → `[General]` only, vs a healthy device's `[General][DeviceID][LinkKey]` — the definitive keyless-bond proof.
+4. 12s live `journalctl -f` caught zero Corne events (only unrelated "Auto-switch power profile" spam) — not actively flapping at that moment; the loop fires only when the keyboard advertises.
+5. Dead end: first re-pair attempt via a bash `coproc` fed `pair` but produced empty output and left the device `Connected: yes / Paired: no` — an unencrypted connect that immediately hit the 0x0E loop again. The coproc didn't hold the SMP session reliably.
+**Fix:** One-time recovery (no repo change). `bluetoothctl remove C8:5B:C1:B5:9B:F3` to drop the keyless Trusted entry, `sudo systemctl restart bluetooth` to clear stuck Adv-Monitor churn, then re-pair with the bluetoothctl session genuinely held open via a FIFO (write-end kept open with `exec 3>`, not a piped heredoc that EOFs mid-pairing). On the keyboard side, `&bt BT_CLR` (num layer, `config/corne.keymap:139`) clears the keyboard's profile bond so it re-advertises as pairable. Result: `Paired/Bonded/Trusted/Connected: yes`, `info` now has `[PeripheralLongTermKey][SlaveLongTermKey][DeviceID]`, `Corne Keyboard` input device attached, battery 100%. **Both sides must be cleared after a flash** — removing only one leaves the desync. Recovery script saved at `.scratch/corne-repair.sh`.
+**Commit:** `8213292`
+
 ## 2026-06-04 — waybar-bluetooth-module-blank-set-e-pipefail
 
 **Symptom:** waybar's bluetooth module shows nothing even while a Bluetooth device (Corne keyboard) is actively connected and in use.
