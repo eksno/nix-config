@@ -278,9 +278,33 @@ let
       fi
     fi
   '';
+
+  # Suspend/resume hooks. The desync trigger is the BLE link tearing down on
+  # laptop suspend (mornings) or keyboard idle. Disconnect the Corne cleanly
+  # before sleep (so it isn't dropped mid-transaction), and nudge a
+  # non-destructive reconnect on resume. Both stamp /var/lib/corne-bt/events.log
+  # so desyncs/battery drain can be correlated with wake events. Nothing here
+  # removes a bond — recovery stays the watcher/corne-recover's job.
+  suspendHook = pkgs.writeShellScript "corne-pre-suspend" ''
+    export PATH=${lib.makeBinPath (with pkgs; [ bluez coreutils ])}:$PATH
+    mkdir -p /var/lib/corne-bt
+    echo "$(date '+%Y-%m-%d %H:%M:%S') | SUSPEND (clean-disconnect Corne)" >>/var/lib/corne-bt/events.log
+    bluetoothctl disconnect ${mac} >/dev/null 2>&1 || true
+  '';
+  resumeHook = pkgs.writeShellScript "corne-post-resume" ''
+    export PATH=${lib.makeBinPath (with pkgs; [ bluez coreutils ])}:$PATH
+    mkdir -p /var/lib/corne-bt
+    echo "$(date '+%Y-%m-%d %H:%M:%S') | RESUME (nudge reconnect)" >>/var/lib/corne-bt/events.log
+    sleep 4   # let the BT controller re-initialise before reconnecting
+    bluetoothctl connect ${mac} >/dev/null 2>&1 || true
+  '';
 in
 {
   environment.systemPackages = [ corneFix batteryView ];
+
+  # `lines` type → these merge with power-mode's resumeCommands, not clobber it.
+  powerManagement.powerDownCommands = "${suspendHook}";
+  powerManagement.resumeCommands = "${resumeHook}";
 
   systemd.services.corne-recover = {
     description = "Recover Corne BLE keyboard from bond-key desync (auto/safe)";
