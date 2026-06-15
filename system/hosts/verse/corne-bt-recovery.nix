@@ -221,9 +221,66 @@ let
     echo
     echo "Event history: /var/lib/corne-bt/events.log"
   '';
+
+  # Battery-health logger: while the Corne is connected, sample the reported
+  # BLE battery % every 2 min into /var/lib/corne-bt/battery.log. A healthy Corne
+  # half loses a few % per DAY; a failing cell craters %/hour and browns out the
+  # radio under TX load (the suspected cause of the recurring bond desync).
+  batteryDev = "/org/bluez/hci0/dev_C8_5B_C1_B5_9B_F3";
+  batteryLog = pkgs.writeShellScriptBin "corne-battery-log" ''
+    set -uo pipefail
+    export PATH=${lib.makeBinPath (with pkgs; [ systemd coreutils gawk ])}:$PATH
+    DEV="${batteryDev}"
+    STATE=/var/lib/corne-bt
+    LOG="$STATE/battery.log"
+    mkdir -p "$STATE"
+    while true; do
+      conn=$(busctl --system get-property org.bluez "$DEV" \
+        org.bluez.Device1 Connected 2>/dev/null | awk '{print $2}')
+      if [ "$conn" = "true" ]; then
+        pct=$(busctl --system get-property org.bluez "$DEV" \
+          org.bluez.Battery1 Percentage 2>/dev/null | awk '{print $2}')
+        [ -z "$pct" ] && pct="?"
+        echo "$(date '+%Y-%m-%d %H:%M:%S') | $pct | connected" >>"$LOG"
+      else
+        echo "$(date '+%Y-%m-%d %H:%M:%S') | - | disconnected" >>"$LOG"
+      fi
+      sleep 120
+    done
+  '';
+
+  # corne-battery: show recent samples + estimate drain rate.
+  batteryView = pkgs.writeShellScriptBin "corne-battery" ''
+    set -uo pipefail
+    export PATH=${lib.makeBinPath (with pkgs; [ coreutils gnugrep gawk findutils ])}:$PATH
+    LOG=/var/lib/corne-bt/battery.log
+    if [ ! -f "$LOG" ]; then
+      echo "No battery log yet ($LOG)."
+      echo "It records while the Corne is connected over Bluetooth."
+      exit 0
+    fi
+    echo "Recent samples (timestamp | battery% | link):"
+    tail -n 25 "$LOG"
+    echo
+    first=$(grep -E '\| [0-9]+ \| connected' "$LOG" | head -1)
+    last=$(grep  -E '\| [0-9]+ \| connected' "$LOG" | tail -1)
+    if [ -n "$first" ] && [ -n "$last" ] && [ "$first" != "$last" ]; then
+      ft=$(echo "$first" | cut -d'|' -f1 | xargs); fp=$(echo "$first" | cut -d'|' -f2 | xargs)
+      lt=$(echo "$last"  | cut -d'|' -f1 | xargs); lp=$(echo "$last"  | cut -d'|' -f2 | xargs)
+      fe=$(date -d "$ft" +%s 2>/dev/null || echo 0)
+      le=$(date -d "$lt" +%s 2>/dev/null || echo 0)
+      echo "Span: $fp% ($ft)  →  $lp% ($lt)"
+      if [ "$le" -gt "$fe" ] && [ "$fp" -gt "$lp" ]; then
+        awk -v d="$((fp - lp))" -v s="$((le - fe))" 'BEGIN{
+          printf "Drain: %.1f%%/hour over %.1fh.  (Healthy: a few %%/DAY. >2-3%%/hour = failing cell.)\n", d/(s/3600), s/3600 }'
+      else
+        echo "(no net drain in window yet — was it charging / freshly bonded?)"
+      fi
+    fi
+  '';
 in
 {
-  environment.systemPackages = [ corneFix ];
+  environment.systemPackages = [ corneFix batteryView ];
 
   systemd.services.corne-recover = {
     description = "Recover Corne BLE keyboard from bond-key desync (auto/safe)";
@@ -246,6 +303,19 @@ in
       ExecStart = "${watch}/bin/corne-watch";
       Restart = "always";
       RestartSec = 5;
+    };
+  };
+
+  systemd.services.corne-battery-log = {
+    description = "Log Corne BLE battery % over time (battery-health diagnosis)";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "bluetooth.service" ];
+    wants = [ "bluetooth.service" ];
+    serviceConfig = {
+      ExecStart = "${batteryLog}/bin/corne-battery-log";
+      Restart = "always";
+      RestartSec = 10;
+      StateDirectory = "corne-bt";
     };
   };
 }
