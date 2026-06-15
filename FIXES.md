@@ -4,6 +4,19 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-06-15 — corne-recover-destroyed-a-valid-bond (self-heal too aggressive)
+
+**Symptom:** Running `corne-fix` (manual trigger of the day-old self-healing service) FAILED and left the Corne with **no host-side bond at all** (`bluetoothctl info` → `DEVICE NOT KNOWN`, bond dir gone). The pre-action snapshot in the log showed the bond had been **fully valid** (`Bonded: yes`, sections `[General] [PeripheralLongTermKey] [SlaveLongTermKey] [DeviceID]`), just `Connected: no`.
+**Affected:** host `verse`, user `eksno`. `system/hosts/verse/corne-bt-recovery.nix` (the `corne-recover` script shipped in `c048d1f`).
+**Root cause:** The first-cut `corne-recover` removed the bond and tried to re-pair **unconditionally** — its only guard skipped when `Bonded: yes && ServicesResolved: yes`. So for a keyboard that was merely asleep/out-of-range (valid bond, `Connected: no`, no `ServicesResolved`), it `bluetoothctl remove`d the good bond, then found the keyboard wasn't advertising ("asleep?"), failed to re-pair, and left zero host bond. It conflated three distinct failure shapes: (A) keyless host bond + keyboard advertising pairable → remove+re-pair is safe; (B) **both** sides bonded but keys mismatch → host-only re-pair canNOT fix it (needs `&bt BT_CLR` on the keyboard); (C) keyboard simply asleep, bond perfectly valid → must do nothing. It treated B and C like A and destroyed the bond.
+**Investigation:**
+1. The failure log's own snapshot was the tell: `Bonded: yes` + all key sections present, yet the script removed it. A keyless desync (the case it was built for) would have shown `[General]` only.
+2. `events.log` had exactly one row (`DETECT bonded=yes … hidfails5m=7` → `FAILED`), confirming the **watcher had not** been silently firing — this was the manual run alone, so no repeated auto-damage.
+3. Post-failure `bluetoothctl info` → `DEVICE NOT KNOWN`; bond dir absent → the valid bond was gone.
+4. Re-pair after the keyboard came back in range connected but would **not** bond (`Paired: no / Bonded: no / Connected: yes`, no input device) — proving case B: the keyboard still held its own bond, so a host-side fresh pair can't complete until `&bt BT_CLR` clears the keyboard side. (`hidfails5m=7` also showed there *had* been a real desync episode, not purely case C — but the recovery must be safe for C regardless.)
+**Fix:** Rewrote `corne-recover` to gate every destructive step (`c048d1f` superseded by this commit): (1) skip if healthy; (2) try a **non-destructive** `connect` first (fixes transients, bond preserved); (3) **presence gate** — scan, and if the keyboard isn't advertising/in range, do NOTHING and leave the bond intact (this is what would have prevented the damage); (4) only then remove+re-pair, and in **auto** mode only when the host bond is already **keyless** (case A, nothing to lose) — a full bond failing in auto mode (case B) is left intact with a "press BT_CLR" notification instead of being destroyed. Manual `corne-fix` now runs `corne-recover --force` (user is present to press BT_CLR) and removes a full bond only when the keyboard is confirmed present. So the watcher can never nuke a healthy bond. Immediate recovery this session: re-paired after the user pressed `&bt BT_CLR`.
+**Commit:** `91b8a65`
+
 ## 2026-06-14 — corne-keyless-trusted-bond-desync-recurring (self-healing)
 
 **Symptom:** Mako buried under ~19 stacked "Corne / Connected" + "Corne / Disconnected" notifications (blueman-applet), "(14 more)". Keyboard not usable.

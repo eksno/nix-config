@@ -1,21 +1,29 @@
 { config, pkgs, lib, ... }:
 # Self-healing for the Corne (ZMK) BLE keyboard's recurring bond-key desync.
 #
-# Background: roughly every 2-3 days the Corne and this host end up with
-# mismatched LE long-term keys. The host keeps the device `Trusted=yes` but its
-# bond file goes keyless (`[General]` only, no `[PeripheralLongTermKey]`), so
-# BlueZ auto-connects on every advertisement, fails HID-over-GATT with ATT 0x0e
-# ("read_pnpid_cb Error"), drops, and retries forever — a connect/disconnect
-# loop. The documented ZMK/BlueZ remedy is a manual remove + re-pair, which
-# costs ~30 min each time. There is no reliable Linux-side *prevention* (see
-# FIXES.md 2026-06-14), so instead we make the failure self-heal in seconds.
+# Background: roughly every 2-3 days the Corne and this host end up unable to
+# establish an encrypted link. BlueZ auto-connects, HID-over-GATT fails with
+# ATT 0x0e ("read_pnpid_cb Error"), drops, retries — a connect/disconnect loop.
+# The documented ZMK/BlueZ remedy is a manual remove + re-pair (~30 min). There
+# is no reliable Linux-side *prevention* (FIXES.md 2026-06-14), so we self-heal.
+#
+# SAFETY (learned the hard way — see FIXES.md 2026-06-15): recovery must NEVER
+# destroy a bond blindly. The failure has three shapes:
+#   A) host bond keyless (no LTK) + keyboard advertising pairable → remove +
+#      re-pair works host-side, hands-free.
+#   B) BOTH sides bonded but keys mismatch → host-only re-pair canNOT fix it;
+#      the keyboard must clear its own bond with `&bt BT_CLR` first. Removing the
+#      host bond here doesn't help and isn't done automatically.
+#   C) keyboard simply asleep/out-of-range (bond perfectly valid) → do NOTHING.
+# So corne-recover gates every destructive step on: healthy? → gentle reconnect
+# (non-destructive) → present at all? → only then, and only for keyless bonds
+# (or an explicit manual --force), remove + re-pair.
 #
 # - corne-watch.service : tails the bluetooth journal for the desync signature
-#                         and triggers recovery (debounced, rate-limited).
-# - corne-recover.service: one-shot host-side remove + held-open re-pair, with
-#                          semantic desktop notifications and a persistent event
-#                          tally at /var/lib/corne-bt/events.log for diagnosis.
-# - corne-fix           : manual command to trigger recovery on demand.
+#                         and triggers corne-recover (auto/safe mode).
+# - corne-recover.service: the self-heal (auto mode: keyless-only remove).
+# - corne-fix           : manual `corne-recover --force` (you're present to
+#                         press BT_CLR), with live output.
 let
   mac = "C8:5B:C1:B5:9B:F3";
 
@@ -32,8 +40,11 @@ let
     EVENTS="$STATE/events.log"
     mkdir -p "$STATE"
 
+    MODE="auto"
+    [ "''${1:-}" = "--force" ] && MODE="force"
+
     ts()    { date '+%Y-%m-%d %H:%M:%S'; }
-    log()   { echo "[corne-recover] $*"; }            # -> journal
+    log()   { echo "[corne-recover] $*"; }            # -> journal / terminal
     event() { echo "$(ts) | $*" >>"$EVENTS"; }        # -> persistent tally
 
     # Notify every logged-in graphical user (root service -> user session bus).
@@ -48,40 +59,83 @@ let
     }
 
     ADAPTER=$(bluetoothctl list 2>/dev/null | awk '/Controller/{print $2; exit}')
-    info=$(bluetoothctl info "$MAC" 2>/dev/null)
 
-    # Guard: if already healthy, do nothing (avoids needless re-pair if the
-    # watcher fired on a transient that self-resolved).
-    if grep -q "Bonded: yes" <<<"$info" && grep -q "ServicesResolved: yes" <<<"$info"; then
-      log "Corne already healthy (bonded + services resolved); nothing to do."
-      event "SKIP already-healthy"
+    read_info() { bluetoothctl info "$MAC" 2>/dev/null; }
+    healthy()   { local i; i=$(read_info); grep -q "Connected: yes" <<<"$i" && grep -q "ServicesResolved: yes" <<<"$i"; }
+    bond_has_ltk() {
+      local f="/var/lib/bluetooth/$ADAPTER/$MAC/info"
+      [ -f "$f" ] && grep -qE '^\[(PeripheralLongTermKey|SlaveLongTermKey|LongTermKey)\]' "$f"
+    }
+    # Presence = the keyboard is advertising / in range right now (fresh RSSI
+    # after a scan). This is the gate that prevents destroying a valid bond just
+    # because the keyboard is asleep.
+    present() {
+      bluetoothctl --timeout 10 scan on >/dev/null 2>&1
+      read_info | grep -qE '^[[:space:]]*RSSI:'
+    }
+
+    info=$(read_info)
+    log "=== corne-recover ($MODE) ==="
+    log "state: $(grep -E 'Paired|Bonded|Trusted|Connected' <<<"$info" | tr '\n' ' ')"
+
+    # 1. Already healthy → nothing to do.
+    if healthy; then
+      log "Corne healthy (connected + services resolved); nothing to do."
+      event "SKIP healthy"
       exit 0
     fi
 
-    # --- Diagnostic snapshot BEFORE recovery (for future debugging) ---
-    log "=== DESYNC DETECTED — snapshot ==="
-    log "state: $(grep -E 'Paired|Bonded|Trusted|Connected' <<<"$info" | tr '\n' ' ')"
-    sections="(no bond file)"
-    bondfile="/var/lib/bluetooth/$ADAPTER/$MAC/info"
-    if [ -f "$bondfile" ]; then
-      sections=$(grep -oE '^\[[A-Za-z]+\]' "$bondfile" | tr '\n' ' ')
+    # 2. Gentle, NON-destructive reconnect first (fixes transients without
+    #    touching the bond). Only meaningful if a bond exists.
+    if grep -q "Bonded: yes" <<<"$info"; then
+      log "gentle reconnect attempt (non-destructive)…"
+      timeout 15 bluetoothctl connect "$MAC" >/dev/null 2>&1 || true
+      if healthy; then
+        log "recovered via plain reconnect — bond preserved."
+        event "RECOVERED gentle-connect"
+        notify_user "✓ Corne reconnected" "Link restored without re-pairing."
+        exit 0
+      fi
     fi
-    log "bond file sections: $sections"
+
+    # 3. PRESENCE GATE — never destroy a bond when the keyboard isn't in range.
+    #    (Asleep/off keyboard with a valid bond = case C: leave it alone.)
+    if ! present; then
+      log "Corne not advertising / out of range — leaving bond intact, nothing to do."
+      event "NOOP not-present (bond preserved)"
+      [ "$MODE" = "force" ] && notify_user "Corne not in range" \
+        "Asleep or off — nothing to recover; bond left intact." low
+      exit 0
+    fi
+
+    # 4. Present but unhealthy = a genuine desync. Decide how aggressive to be.
+    keyless=no; bond_has_ltk || keyless=yes
     hidfails=$(journalctl -u bluetooth --since "-5min" -o cat 2>/dev/null \
       | grep -c 'read_pnpid_cb\|HID Information read failed\|Report Reference descriptor failed' || true)
-    log "HID-read failures (last 5min): $hidfails"
-    event "DETECT bonded=$(grep -q 'Bonded: yes' <<<"$info" && echo yes || echo no) sections=[$sections] hidfails5m=$hidfails"
+    log "desync confirmed (present + unhealthy); host bond keyless=$keyless, HID-read failures(5m)=$hidfails"
+    event "DETECT present=yes keyless=$keyless mode=$MODE hidfails5m=$hidfails"
 
-    notify_user "⚠ Corne BT desync detected" "Bond keys mismatched — auto-recovering…" critical
+    if [ "$keyless" = "no" ] && [ "$MODE" = "auto" ]; then
+      # Case B: full host bond intact but link failing → both sides bonded with
+      # mismatched keys. Host-side remove canNOT fix this without `&bt BT_CLR` on
+      # the keyboard, and the bond may still be salvageable — do NOT auto-destroy.
+      log "full host bond intact but link failing → needs keyboard BT_CLR; not auto-removing."
+      event "DEFER mode-B needs-BT_CLR (bond preserved, no auto-remove)"
+      notify_user "⚠ Corne desync (bond intact)" \
+        "Press BT_CLR (num layer) on the keyboard, then run: corne-fix" critical
+      exit 0
+    fi
 
-    # --- Recovery: remove + held-open re-pair (FIFO keeps the SMP session
-    #     alive; a piped heredoc EOFs mid-pairing and leaves it unbonded). ---
+    # Case A (keyless host bond → nothing to lose) OR manual --force (user is
+    # present and will press BT_CLR): remove + held-open re-pair. The FIFO keeps
+    # the SMP session alive; a piped heredoc EOFs mid-pairing and leaves it
+    # unbonded.
     do_repair() {
       bluetoothctl remove "$MAC" >/dev/null 2>&1
       sleep 1
       bluetoothctl --timeout 12 scan on >/dev/null 2>&1
       if ! bluetoothctl devices 2>/dev/null | grep -qi "$MAC"; then
-        log "device not advertising after remove (keyboard asleep?)"
+        log "device stopped advertising before pair"
         return 2
       fi
       local fifo; fifo=$(mktemp -u /tmp/cornefifo.XXXXXX); mkfifo "$fifo"
@@ -102,11 +156,13 @@ let
       bluetoothctl info "$MAC" 2>/dev/null | grep -q "Bonded: yes"
     }
 
-    log "attempt 1: host-only re-pair (no bluetoothd restart)"
+    notify_user "⚠ Corne desync detected" "Re-pairing… (keyless=$keyless, mode=$MODE)" critical
+
+    log "attempt 1: remove + re-pair (no bluetoothd restart)"
     if do_repair; then
       log "recovered on attempt 1"
-      event "RECOVERED attempt=1 host-only"
-      notify_user "✓ Corne recovered" "Re-paired (no restart needed)."
+      event "RECOVERED attempt=1 keyless=$keyless mode=$MODE"
+      notify_user "✓ Corne recovered" "Re-paired and bonded."
       exit 0
     fi
 
@@ -115,23 +171,25 @@ let
     sleep 5
     if do_repair; then
       log "recovered on attempt 2 (after bluetoothd restart)"
-      event "RECOVERED attempt=2 after-restart"
+      event "RECOVERED attempt=2 after-restart keyless=$keyless mode=$MODE"
       notify_user "✓ Corne recovered" "Re-paired after bluetoothd restart."
       exit 0
     fi
 
-    log "recovery FAILED — keyboard likely asleep or needs BT_CLR"
-    event "FAILED both-attempts"
+    # Re-pair couldn't bond → keyboard still holds its own bond (case B without a
+    # BT_CLR). Tell the user; the host bond is already gone but it was broken.
+    log "recovery FAILED — keyboard would not bond (press BT_CLR then retry)"
+    event "FAILED needs-BT_CLR keyless=$keyless mode=$MODE"
     notify_user "✗ Corne recovery failed" \
-      "Wake the keyboard, press BT_CLR (num layer), then run: corne-fix" critical
+      "Keyboard would not bond. Press BT_CLR (num layer), then run: corne-fix" critical
     exit 1
   '';
 
-  # Watch the bluetooth journal for the desync signature and trigger recovery.
-  # Matches ONLY read_pnpid_cb errors (one per failed connect cycle), so a
-  # threshold of 2 within the window means a genuine repeating loop, not a
-  # single transient at boot. On this host only the Corne is a BLE HID device,
-  # so these lines are unambiguous.
+  # Watch the bluetooth journal for the desync signature and trigger recovery
+  # in AUTO mode (which only removes keyless bonds — see corne-recover). Matches
+  # ONLY read_pnpid_cb errors (one per failed connect cycle), so 2 within the
+  # window means a genuine repeating loop, not a single transient. On this host
+  # only the Corne is a BLE HID device, so these lines are unambiguous.
   watch = pkgs.writeShellScriptBin "corne-watch" ''
     set -uo pipefail
     export PATH=${lib.makeBinPath (with pkgs; [ systemd coreutils util-linux ])}:$PATH
@@ -146,7 +204,7 @@ let
           for t in "''${buf[@]}"; do [ $((now - t)) -le "$WINDOW" ] && new+=("$t"); done
           buf=("''${new[@]}")
           if [ "''${#buf[@]}" -ge "$THRESH" ]; then
-            logger -t corne-watch "desync signature: ''${#buf[@]} HID-read failures within ''${WINDOW}s — triggering corne-recover"
+            logger -t corne-watch "desync signature: ''${#buf[@]} HID-read failures within ''${WINDOW}s — triggering corne-recover (auto)"
             systemctl start corne-recover.service || true
             buf=()
             sleep "$COOLDOWN"
@@ -158,10 +216,8 @@ let
 
   corneFix = pkgs.writeShellScriptBin "corne-fix" ''
     set -uo pipefail
-    echo "Triggering Corne BLE recovery…"
-    sudo ${pkgs.systemd}/bin/systemctl start corne-recover.service || true
-    echo "--- recovery log (this boot) ---"
-    ${pkgs.systemd}/bin/journalctl -b -u corne-recover -n 60 --no-pager
+    echo "Triggering Corne BLE recovery (manual / --force)…"
+    sudo ${recover}/bin/corne-recover --force
     echo
     echo "Event history: /var/lib/corne-bt/events.log"
   '';
@@ -170,7 +226,7 @@ in
   environment.systemPackages = [ corneFix ];
 
   systemd.services.corne-recover = {
-    description = "Recover Corne BLE keyboard from bond-key desync";
+    description = "Recover Corne BLE keyboard from bond-key desync (auto/safe)";
     serviceConfig = {
       Type = "oneshot";
       ExecStart = "${recover}/bin/corne-recover";
