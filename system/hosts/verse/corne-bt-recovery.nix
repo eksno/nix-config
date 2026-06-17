@@ -122,7 +122,7 @@ let
       log "full host bond intact but link failing → needs keyboard BT_CLR; not auto-removing."
       event "DEFER mode-B needs-BT_CLR (bond preserved, no auto-remove)"
       notify_user "⚠ Corne desync (bond intact)" \
-        "Press BT_CLR (num layer) on the keyboard, then run: corne-fix" critical
+        "Press BT_CLR (hold GUI thumb + ' key), then run: corne-fix" critical
       exit 0
     fi
 
@@ -181,7 +181,7 @@ let
     log "recovery FAILED — keyboard would not bond (press BT_CLR then retry)"
     event "FAILED needs-BT_CLR keyless=$keyless mode=$MODE"
     notify_user "✗ Corne recovery failed" \
-      "Keyboard would not bond. Press BT_CLR (num layer), then run: corne-fix" critical
+      "Keyboard would not bond. Press BT_CLR (hold GUI thumb + ' key), then run: corne-fix" critical
     exit 1
   '';
 
