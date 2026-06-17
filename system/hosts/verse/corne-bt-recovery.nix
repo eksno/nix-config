@@ -108,34 +108,14 @@ let
       exit 0
     fi
 
-    # 4. Present but unhealthy = a genuine desync. Decide how aggressive to be.
-    keyless=no; bond_has_ltk || keyless=yes
-    hidfails=$(journalctl -u bluetooth --since "-5min" -o cat 2>/dev/null \
-      | grep -c 'read_pnpid_cb\|HID Information read failed\|Report Reference descriptor failed' || true)
-    log "desync confirmed (present + unhealthy); host bond keyless=$keyless, HID-read failures(5m)=$hidfails"
-    event "DETECT present=yes keyless=$keyless mode=$MODE hidfails5m=$hidfails"
-
-    if [ "$keyless" = "no" ] && [ "$MODE" = "auto" ]; then
-      # Case B: full host bond intact but link failing → both sides bonded with
-      # mismatched keys. Host-side remove canNOT fix this without `&bt BT_CLR` on
-      # the keyboard, and the bond may still be salvageable — do NOT auto-destroy.
-      log "full host bond intact but link failing → needs keyboard BT_CLR; not auto-removing."
-      event "DEFER mode-B needs-BT_CLR (bond preserved, no auto-remove)"
-      notify_user "⚠ Corne desync (bond intact)" \
-        "Press BT_CLR (hold GUI thumb + ' key), then run: corne-fix" critical
-      exit 0
-    fi
-
-    # Case A (keyless host bond → nothing to lose) OR manual --force (user is
-    # present and will press BT_CLR): remove + held-open re-pair. The FIFO keeps
-    # the SMP session alive; a piped heredoc EOFs mid-pairing and leaves it
-    # unbonded.
+    # do_repair: remove the (broken) host bond + held-open re-pair. Returns:
+    #   0 = bonded OK,  1 = keyboard present but won't bond (still holds a stale
+    #   bond → needs BT_CLR),  2 = keyboard not advertising (asleep / away).
     do_repair() {
       bluetoothctl remove "$MAC" >/dev/null 2>&1
       sleep 1
       bluetoothctl --timeout 12 scan on >/dev/null 2>&1
       if ! bluetoothctl devices 2>/dev/null | grep -qi "$MAC"; then
-        log "device stopped advertising before pair"
         return 2
       fi
       local fifo; fifo=$(mktemp -u /tmp/cornefifo.XXXXXX); mkfifo "$fifo"
@@ -156,32 +136,70 @@ let
       bluetoothctl info "$MAC" 2>/dev/null | grep -q "Bonded: yes"
     }
 
-    notify_user "⚠ Corne desync detected" "Re-pairing… (keyless=$keyless, mode=$MODE)" critical
+    # Correlation instrumentation: seconds since the last resume/suspend (logged
+    # by the power hooks) and the last known battery — recorded with every desync
+    # so a future investigation can spot the trigger (suspend? deep sleep? low
+    # battery?) instead of guessing.
+    context() {
+      local now resume suspend batt sr="?" ss="?"
+      now=$(date +%s)
+      resume=$(grep "RESUME" "$EVENTS" 2>/dev/null | tail -1 | cut -d'|' -f1 | xargs || true)
+      suspend=$(grep "SUSPEND" "$EVENTS" 2>/dev/null | tail -1 | cut -d'|' -f1 | xargs || true)
+      batt=$(grep -E '\| [0-9]+ \| connected' "$STATE/battery.log" 2>/dev/null | tail -1 | cut -d'|' -f2 | xargs || true)
+      [ -n "$resume" ]  && sr=$(( now - $(date -d "$resume"  +%s 2>/dev/null || echo "$now") ))
+      [ -n "$suspend" ] && ss=$(( now - $(date -d "$suspend" +%s 2>/dev/null || echo "$now") ))
+      echo "sinceResume=''${sr}s sinceSuspend=''${ss}s lastBatt=''${batt:-?}"
+    }
 
-    log "attempt 1: remove + re-pair (no bluetoothd restart)"
-    if do_repair; then
-      log "recovered on attempt 1"
-      event "RECOVERED attempt=1 keyless=$keyless mode=$MODE"
-      notify_user "✓ Corne recovered" "Re-paired and bonded."
-      exit 0
-    fi
+    # 4. Present but unhealthy = a genuine desync.
+    keyless=no; bond_has_ltk || keyless=yes
+    hidfails=$(journalctl -u bluetooth --since "-5min" -o cat 2>/dev/null \
+      | grep -c 'read_pnpid_cb\|HID Information read failed\|Report Reference descriptor failed' || true)
+    log "desync confirmed; keyless=$keyless HID-read-fails(5m)=$hidfails"
+    event "DETECT present=yes keyless=$keyless mode=$MODE hidfails5m=$hidfails $(context)"
 
-    log "attempt 1 failed; restarting bluetoothd and retrying"
-    systemctl restart bluetooth
-    sleep 5
-    if do_repair; then
-      log "recovered on attempt 2 (after bluetoothd restart)"
-      event "RECOVERED attempt=2 after-restart keyless=$keyless mode=$MODE"
-      notify_user "✓ Corne recovered" "Re-paired after bluetoothd restart."
-      exit 0
-    fi
-
-    # Re-pair couldn't bond → keyboard still holds its own bond (case B without a
-    # BT_CLR). Tell the user; the host bond is already gone but it was broken.
-    log "recovery FAILED — keyboard would not bond (press BT_CLR then retry)"
-    event "FAILED needs-BT_CLR keyless=$keyless mode=$MODE"
-    notify_user "✗ Corne recovery failed" \
-      "Keyboard would not bond. Press BT_CLR (hold GUI thumb + ' key), then run: corne-fix" critical
+    # Recover, and if the keyboard still holds a stale bond (only a physical
+    # BT_CLR clears it), notify and KEEP POLLING — the instant the user taps it,
+    # the next pair attempt bonds and we finish hands-free. Bail if the keyboard
+    # goes away (asleep / user not around) so we don't spin pointlessly.
+    notify_user "⚠ Corne desync — recovering" \
+      "If it doesn't reconnect on its own, tap BT_CLR (hold GUI thumb + ') — I'll finish the re-pair automatically." critical
+    event "WAIT_BTCLR start keyless=$keyless mode=$MODE"
+    absent=0
+    for i in $(seq 1 12); do
+      do_repair; rc=$?
+      if [ "$rc" -eq 0 ]; then
+        log "bonded on attempt $i"
+        event "RECOVERED attempt=$i keyless=$keyless mode=$MODE $(context)"
+        notify_user "✓ Corne recovered" "Bonded and connected."
+        exit 0
+      fi
+      if [ "$rc" -eq 2 ]; then
+        absent=$((absent + 1))
+        event "WAIT_BTCLR attempt=$i absent=$absent"
+        if [ "$absent" -ge 3 ]; then
+          log "keyboard absent 3x — bailing (asleep / away)"
+          event "BAIL keyboard-absent after=$i"
+          notify_user "Corne recovery paused" \
+            "Keyboard went away. Wake it, tap BT_CLR (GUI thumb + '), then run: corne-fix." low
+          exit 1
+        fi
+      else
+        absent=0
+        event "WAIT_BTCLR attempt=$i needs-BT_CLR"
+        # One-time bluetoothd restart after the first failure clears stuck
+        # Adv-Monitor churn that can otherwise block pairing even post-BT_CLR.
+        if [ "$i" -eq 1 ]; then
+          log "restarting bluetoothd once to clear stuck Adv-Monitor churn"
+          systemctl restart bluetooth; sleep 5
+        fi
+      fi
+      sleep 5
+    done
+    log "wait-for-BT_CLR timed out"
+    event "TIMEOUT wait-for-btclr $(context)"
+    notify_user "✗ Corne still not bonded" \
+      "Tap BT_CLR (hold GUI thumb + '), then run: corne-fix." critical
     exit 1
   '';
 
