@@ -52,8 +52,16 @@ while true; do
         org.bluez.GattCharacteristic1 UUID 2>/dev/null | extract_string)
       case "$uuid" in
         00002a19*)
+          # busctl prints "ay <count> <byte>..." — take the byte only when
+          # count>=1 (an empty "ay 0" must NOT parse as 0). The cached Value is
+          # empty right after a reconnect (until the first notification), so fall
+          # back to an active ReadValue, which also warms the cache for next poll.
           v=$(busctl --system get-property org.bluez "$ch" \
-            org.bluez.GattCharacteristic1 Value 2>/dev/null | awk '{print $NF}')
+            org.bluez.GattCharacteristic1 Value 2>/dev/null \
+            | awk '$1=="ay" && $2>=1 {print $3}')
+          [ -z "$v" ] && v=$(busctl --system call org.bluez "$ch" \
+            org.bluez.GattCharacteristic1 ReadValue a{sv} 0 2>/dev/null \
+            | awk '$1=="ay" && $2>=1 {print $3}')
           [ -n "$v" ] && batts="$batts $v"
           ;;
       esac
