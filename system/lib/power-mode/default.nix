@@ -1049,6 +1049,25 @@ let
     done
   '';
 
+  # Same powertop fallout, different victim: USB-audio gadgets with flaky
+  # firmware (e.g. the Hollyland "Wireless microphone" 3547:0007) cannot survive
+  # their *parent root hub* autosuspending. powertop --auto-tune sets the root
+  # hub's power/control=auto (delay 0); the device then full-disconnects and
+  # re-enumerates every 2-4 min (malformed descriptor, "cannot set freq 48000 to
+  # ep 0x81"), so any capture stream dies. The device's own power/control was
+  # already `on` — pinning the *bus* is what stops it. Find every attached USB
+  # audio device (bInterfaceClass 01) and pin both it and its root hub to `on`.
+  # Class-matched so it is device- and port-agnostic. See bt-no-autosuspend.
+  usb-audio-keep-bus-awake = pkgs.writeShellScript "usb-audio-keep-bus-awake" ''
+    for ifc in /sys/bus/usb/devices/*:*/bInterfaceClass; do
+      [ "$(cat "$ifc" 2>/dev/null)" = "01" ] || continue
+      dev="$(basename "$(dirname "$(dirname "$ifc")")")"   # e.g. "3-2"
+      bus="''${dev%%-*}"                                    # e.g. "3" -> usb3
+      echo on > "/sys/bus/usb/devices/$dev/power/control" 2>/dev/null || true
+      echo on > "/sys/bus/usb/devices/usb$bus/power/control" 2>/dev/null || true
+    done
+  '';
+
 in
 {
   powerManagement.powertop.enable = true;
@@ -1063,8 +1082,22 @@ in
   # immediately after `--auto-tune` completes, introduces no new unit anchored to
   # multi-user.target, so a cycle is impossible. Also re-applied on resume since
   # suspend/resume re-enumerates USB power state. See bt-no-autosuspend.
-  systemd.services.powertop.serviceConfig.ExecStartPost = "${bt-no-autosuspend}";
-  powerManagement.resumeCommands = "${bt-no-autosuspend}";
+  systemd.services.powertop.serviceConfig.ExecStartPost = [
+    "${bt-no-autosuspend}"
+    "${usb-audio-keep-bus-awake}"
+  ];
+  powerManagement.resumeCommands = ''
+    ${bt-no-autosuspend}
+    ${usb-audio-keep-bus-awake}
+  '';
+
+  # ExecStartPost only covers devices present when powertop runs (boot) and
+  # resume. For a USB-audio device hot-plugged later, powertop has already set
+  # its root hub to `auto` and never re-runs — so re-pin the bus on hotplug too.
+  # Matched on the audio interface so it stays device-agnostic.
+  services.udev.extraRules = ''
+    ACTION=="add", SUBSYSTEM=="usb", DEVTYPE=="usb_interface", ENV{INTERFACE}=="1/*", RUN+="${usb-audio-keep-bus-awake}"
+  '';
 
   # Allow power-mode to run as root without password for wheel users
   # SETENV needed so sudo doesn't strip env in some contexts

@@ -4,6 +4,21 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-06-20 — hollyland-usb-mic-flaps-under-root-hub-autosuspend
+
+**Symptom:** "Audio not working." A Hollyland "Wireless microphone" USB receiver disconnected and re-enumerated every 2–4 min (28× in one boot). Apps using "System Default" mic saw the source vanish mid-use; Mic Test went flat. Both input *and* output felt broken because each flap also forced a PipeWire restart.
+**Affected:** host `verse`, user `eksno`. Device Hollyland `3547:0007` on `usb 3-2` (root hub `usb3`). Fix: `system/lib/power-mode/default.nix` (new `usb-audio-keep-bus-awake` script + powertop `ExecStartPost`/`resumeCommands`/udev wiring).
+**Root cause:** `powertop --auto-tune` (enabled in power-mode) sets the **root hub** `usb3` `power/control=auto` (delay 0). The device's flaky firmware (malformed descriptor: "config 1 has an invalid interface number: 7 but max is 3") cannot survive its *parent hub* autosuspending, so it self-resets. The device's *own* `power/control` was already `on` — pinning the device alone was not enough; the **bus** had to be pinned. Same class of bug as the Bluetooth-radio entry below.
+**Investigation:**
+1. Verified the whole playback stack healthy: default sink = Speaker, unmuted, 120%; CS35L41 amps loaded firmware+calibration fine; ALSA mixers all on; `pw-play` through PipeWire exited 0. `speaker-test` (raw ALSA) also worked — misleading, it bypasses PipeWire. So output was never broken.
+2. `pactl` not installed on this box — used `wpctl`/`pw-*`/sysfs throughout. `lsusb` also non-functional; read `/sys/bus/usb/devices/*` directly instead.
+3. Recorded 4s from the mic with `pw-record --target` and measured peak in Python (note: `audioop` removed in 3.13 — parsed samples via `array` instead): peak 14.7% FS → **the mic and its paired transmitter work fine**; the only problem was the flapping.
+4. Dead end: first hypothesis was device-level USB autosuspend (`usbcore.autosuspend=1` from `device/intel`). Ruled out — device `power/control` was already `on` and `runtime_status` stayed `active` through a 20s watch.
+5. Checked the upstream power chain: xHCI controller `on`, but root hub `usb3` = `auto`, delay 0. Pinned `usb3` to `on` at runtime → **zero flaps for a full 8-min monitor** (prior cadence 2–4 min). Other 3 root hubs left `auto/suspended` (negligible power cost).
+6. One disconnect was preceded by `usb 3-2: 3:1: cannot set freq 48000 to ep 0x81` — kept `snd-usb-audio quirk_flags=0x3547:0x0007:0x200000` (`QUIRK_FLAG_FIXED_RATE`) as a documented fallback if the bus-pin ever proves insufficient; not needed once the hub was pinned.
+**Fix:** Added `usb-audio-keep-bus-awake` to `power-mode`: scans attached USB devices for an audio interface (`bInterfaceClass 01`) and pins both the device and its root hub to `power/control=on`. Wired into powertop `ExecStartPost` (wins the boot race after `--auto-tune`), `powerManagement.resumeCommands` (resume), and a `services.udev` rule matching `ENV{INTERFACE}=="1/*"` (hotplug after boot). Class-matched, so device- and port-agnostic. Runtime pin already applied live; rebuild needed to persist across reboot.
+**Commit:** `5971e7e` (fill in after committing)
+
 ## 2026-06-20 — corne-desyncs-were-accidental-BT_CLR (the "spontaneous desync" was self-inflicted)
 
 **Symptom:** The Corne would work fine for ~30 min, then disconnect and refuse to reconnect — `connect` brings the link up and it drops in ~0.5s ("connected then disconnected"). Recurred all evening; sometimes a forget + rescan + re-pair recovered it, sometimes not. Matches the "recurring desync every 2-3 days" of the 2026-06-14 entry below.
