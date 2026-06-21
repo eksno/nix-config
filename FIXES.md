@@ -4,6 +4,17 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-06-21 — zmk-studio-build-fails-pkg_resources (nanopb codegen on NixOS)
+
+**Symptom:** Enabling ZMK Studio (`CONFIG_ZMK_STUDIO=y` + `-S studio-rpc-usb-uart`) made the `west`/nix build fail at `Generating nanopb/generator/proto/nanopb_pb2.py` with `ModuleNotFoundError: No module named 'pkg_resources'`.
+**Affected:** keymap repo `~/repos/eksno/zmk-dvorak-36` (`flake.nix`, `build.sh`) — NOT nix-config, but a NixOS-environment gotcha worth recording here. Also added `dialout` to `system/users/eksno/default.nix` for Studio's USB serial.
+**Root cause:** Studio pulls in nanopb protobuf codegen; its `modules/lib/nanopb/generator/protoc` wrapper (`#!/usr/bin/env python3`) imports `pkg_resources` (setuptools) and `google.protobuf`. The zmk-nix dev-shell's *env* python (`python3-3.13.13-env`) HAS both, but CMake's nanopb step resolved a python that didn't (bare interpreter / PYTHONPATH-less invocation), so the import failed only during the build — running `protoc --version` by hand in the same `nix develop` shell worked, which is the tell.
+**Investigation:**
+1. `nix develop --command python3 -c 'import pkg_resources, google.protobuf'` → both OK; nanopb `protoc` wrapper standalone → `libprotoc 31.1`, exit 0. Modules exist; only the *build* couldn't see them.
+2. No venv shadowing (`VIRTUAL_ENV` unset); `which python3`/`which west` both the `-env` python. Difference had to be CMake's interpreter resolution during ninja.
+**Fix:** Override the zmk-nix devShell in `flake.nix` to export `PYTHONPATH` with `python3Packages.setuptools` + `python3Packages.protobuf` site-packages, so whatever python3 the build invokes can import them (versions line up because zmk-nix `follows` the same nixpkgs). Studio firmware then builds (UF2 ~685K→742K) and `/dev/ttyACM0` (`root:dialout`) appears. `build.sh` gained left-only `-S studio-rpc-usb-uart -DCONFIG_ZMK_STUDIO=y`; keymap got a `&studio_unlock` combo (spaces layer, X+B).
+**Commit:** `6d9d708` (flake PYTHONPATH), `28fe6a7` (build.sh+keymap) in zmk repo; `cf147b7` (dialout) in nix-config.
+
 ## 2026-06-20 — hollyland-usb-mic-flaps-under-root-hub-autosuspend
 
 **Symptom:** "Audio not working." A Hollyland "Wireless microphone" USB receiver disconnected and re-enumerated every 2–4 min (28× in one boot). Apps using "System Default" mic saw the source vanish mid-use; Mic Test went flat. Both input *and* output felt broken because each flap also forced a PipeWire restart.
