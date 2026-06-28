@@ -1096,7 +1096,7 @@ in
   # its root hub to `auto` and never re-runs — so re-pin the bus on hotplug too.
   # Matched on the audio interface so it stays device-agnostic.
   services.udev.extraRules = ''
-    ACTION=="add", SUBSYSTEM=="usb", DEVTYPE=="usb_interface", ENV{INTERFACE}=="1/*", RUN+="${usb-audio-keep-bus-awake}"
+    ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_interface", ENV{INTERFACE}=="1/*", RUN+="${usb-audio-keep-bus-awake}"
   '';
 
   # Allow power-mode to run as root without password for wheel users

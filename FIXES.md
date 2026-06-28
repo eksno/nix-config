@@ -4,6 +4,18 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-06-28 — udev-rules-check-fails-invalid-DEVTYPE (systemd 260 strict verify)
+
+**Symptom:** `./update.sh` fails the system build at `udev-rules.drv`: `udevadm verify` reports `99-local.rules:1 Invalid key 'DEVTYPE'` → `udev rules check failed` (45 success / 1 fail), cascading into `etc.drv` → whole `nixos-system-verse` build failing. Surfaced while adding `moonlight-qt`, but unrelated to it.
+**Affected:** verse/eksno — `system/lib/power-mode/default.nix:1099` (`services.udev.extraRules`, the USB-audio bus-keepalive hotplug rule). The bumped `flake.lock` (nixpkgs e73de5b) pulled systemd 260.2.
+**Root cause:** `DEVTYPE` is not an official udev *match* key — the device type is exposed as the environment var `DEVTYPE`, matched via `ENV{DEVTYPE}`. Older `udevadm` silently tolerated bare `DEVTYPE=="..."`; systemd 260.2's stricter `udevadm verify` (run at build time by the udev-rules derivation) correctly rejects it as an invalid key. The rule had worked for the life of the prior systemd; the nixpkgs bump, not the rule edit, is what broke the build.
+**Investigation:**
+1. `./update.sh` exited 0 but the inner `nix build` failed — the wrapper's trailing `df`/`ok` mask nix's non-zero exit. Always grep the output for `error:` / `Build failed`, don't trust the exit code.
+2. First two retries failed on *different* transient DNS errors (`catppuccin.cachix.org` NAR timeout; `Could not resolve host: dl.google.com` for the chrome .deb). Confirmed network was the cause via `getent hosts` + `ping 1.1.1.1`, retried once DNS was stable — those cleared and the real, deterministic failure appeared underneath.
+3. `nix log .../udev-rules.drv | grep -i verify` → `99-local.rules:1 Invalid key 'DEVTYPE'`. `grep -rn DEVTYPE --include=*.nix` → the power-mode hotplug rule.
+**Fix:** `DEVTYPE=="usb_interface"` → `ENV{DEVTYPE}=="usb_interface"` in `system/lib/power-mode/default.nix:1099`. Equivalent match, valid on all systemd versions.
+**Commit:** `39713d8`
+
 ## 2026-06-21 — zmk-studio-build-fails-pkg_resources (nanopb codegen on NixOS)
 
 **Symptom:** Enabling ZMK Studio (`CONFIG_ZMK_STUDIO=y` + `-S studio-rpc-usb-uart`) made the `west`/nix build fail at `Generating nanopb/generator/proto/nanopb_pb2.py` with `ModuleNotFoundError: No module named 'pkg_resources'`.
