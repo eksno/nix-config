@@ -192,6 +192,11 @@
 
     # Game Engines
     godot
+
+    # Game streaming — Moonlight client. Connects to a remote Sunshine/GameStream
+    # host (e.g. cloud gaming PC). Client only; initiates outbound connections so
+    # no firewall ports need opening on this machine. Pair via the host's PIN flow.
+    moonlight-qt
   ];
 
   # Git configuration
