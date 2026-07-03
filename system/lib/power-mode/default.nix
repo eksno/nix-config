@@ -1068,6 +1068,26 @@ let
     done
   '';
 
+  # Same powertop fallout, applied to USB HID input devices. When the Corne is
+  # cabled (USB central, 1d50:615e) powertop --auto-tune sets its power/control
+  # =auto with autosuspend_delay_ms=1000, so the keyboard suspends after 1s idle.
+  # It also comes up power/wakeup=disabled, so it *cannot* USB-remote-wake — the
+  # next keypress on a suspended device isn't signalled until the host resumes it
+  # (~1s), which the user feels as "keyboard sleeps after a few seconds, ~1s to
+  # recover" and can drop the first keystrokes. Pin every USB HID interface's
+  # parent device to `on`; a pinned child also blocks its parent hub from
+  # autosuspending, so the device-level pin is sufficient. Matched on HID class
+  # 03 (the Corne HID interface is class 03 / protocol 00, NOT boot-keyboard
+  # protocol 01, so a protocol match would miss it) — device- and port-agnostic.
+  # See usb-audio-keep-bus-awake / bt-no-autosuspend.
+  usb-hid-keep-awake = pkgs.writeShellScript "usb-hid-keep-awake" ''
+    for ifc in /sys/bus/usb/devices/*:*/bInterfaceClass; do
+      [ "$(cat "$ifc" 2>/dev/null)" = "03" ] || continue
+      dev="$(basename "$(dirname "$(dirname "$ifc")")")"   # e.g. "3-4.1"
+      echo on > "/sys/bus/usb/devices/$dev/power/control" 2>/dev/null || true
+    done
+  '';
+
 in
 {
   powerManagement.powertop.enable = true;
@@ -1085,10 +1105,12 @@ in
   systemd.services.powertop.serviceConfig.ExecStartPost = [
     "${bt-no-autosuspend}"
     "${usb-audio-keep-bus-awake}"
+    "${usb-hid-keep-awake}"
   ];
   powerManagement.resumeCommands = ''
     ${bt-no-autosuspend}
     ${usb-audio-keep-bus-awake}
+    ${usb-hid-keep-awake}
   '';
 
   # ExecStartPost only covers devices present when powertop runs (boot) and
@@ -1097,6 +1119,7 @@ in
   # Matched on the audio interface so it stays device-agnostic.
   services.udev.extraRules = ''
     ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_interface", ENV{INTERFACE}=="1/*", RUN+="${usb-audio-keep-bus-awake}"
+    ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_interface", ENV{INTERFACE}=="3/*", RUN+="${usb-hid-keep-awake}"
   '';
 
   # Allow power-mode to run as root without password for wheel users
