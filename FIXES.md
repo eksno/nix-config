@@ -15,7 +15,7 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 3. Live-verified the fix: `echo on > 3-4.1/power/control` → device held `active` across a 9s idle watch (was `suspended` within 1s before). Confirmed pinning the device alone is sufficient — a pinned child keeps its parent hub awake too, so no bus/root-hub pin needed (unlike the audio case, where the device's own control was already `on` and the *bus* was the culprit).
 4. Interface check: the Corne HID interface is `bInterfaceClass=03` but `bInterfaceProtocol=00` (report-only), NOT boot-keyboard `01` — so the keepalive must match on HID class `03`, not keyboard protocol, or it would miss the device.
 **Fix:** Added `usb-hid-keep-awake` to power-mode: scans for USB HID interfaces (class 03) and pins each parent device's `power/control=on`. Wired identically to the audio keepalive — powertop `ExecStartPost` (wins the boot race after `--auto-tune`), `powerManagement.resumeCommands` (resume re-enumerates USB PM), and a `services.udev` hotplug rule `ENV{INTERFACE}=="3/*"` (cabling the keyboard after boot). Runtime pin already applied live; rebuild persists it across reboot.
-**Commit:** `74ae738`
+**Commit:** `edd73a2`
 
 ## 2026-06-28 — udev-rules-check-fails-invalid-DEVTYPE (systemd 260 strict verify)
 
@@ -439,7 +439,7 @@ Also note: `sudo -A` needs `SUDO_ASKPASS` in the caller's env. NixOS writes it v
 5. Found `uwsm[…]: Command '['systemctl', '--user', 'start', 'wayland-session-bindpid@<pid>.service']' returned non-zero exit status 5` immediately before session death on failed boots. Grep of `system/` for `uwsm` returned zero hits, confirming the units were missing from the user unit path.
 6. Also noticed `Autologin.Session = "Hyprland"` never matched a `.desktop` file — autologin has been silently broken the whole time, which is why the greeter (with its sticky last-session) was reached at all.
    **Fix:** In `system/lib/desktop/wayland/hyprland/default.nix`, set `programs.uwsm.enable = true;` (installs the uwsm user units so the uwsm session path works) and change `Autologin.Session = "Hyprland"` to `Autologin.Session = "hyprland.desktop"` (matches SDDM's lookup, restores autologin). Per-user `Autologin.User` was already set in each user's own config (`system/users/{eksno,jorge}/default.nix:29`).
-   **Commit:** `74ae738`
+   **Commit:** `edd73a2`
 
 **Investigation:**
 
