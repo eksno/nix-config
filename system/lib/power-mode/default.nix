@@ -1061,8 +1061,9 @@ let
   usb-audio-keep-bus-awake = pkgs.writeShellScript "usb-audio-keep-bus-awake" ''
     for ifc in /sys/bus/usb/devices/*:*/bInterfaceClass; do
       [ "$(cat "$ifc" 2>/dev/null)" = "01" ] || continue
-      dev="$(basename "$(dirname "$(dirname "$ifc")")")"   # e.g. "3-2"
-      bus="''${dev%%-*}"                                    # e.g. "3" -> usb3
+      ifn="$(basename "$(dirname "$ifc")")"   # interface dir, e.g. "3-2:1.0"
+      dev="''${ifn%%:*}"                       # device, e.g. "3-2"
+      bus="''${dev%%-*}"                       # e.g. "3" -> usb3
       echo on > "/sys/bus/usb/devices/$dev/power/control" 2>/dev/null || true
       echo on > "/sys/bus/usb/devices/usb$bus/power/control" 2>/dev/null || true
     done
@@ -1083,7 +1084,8 @@ let
   usb-hid-keep-awake = pkgs.writeShellScript "usb-hid-keep-awake" ''
     for ifc in /sys/bus/usb/devices/*:*/bInterfaceClass; do
       [ "$(cat "$ifc" 2>/dev/null)" = "03" ] || continue
-      dev="$(basename "$(dirname "$(dirname "$ifc")")")"   # e.g. "3-4.1"
+      ifn="$(basename "$(dirname "$ifc")")"   # interface dir, e.g. "3-4.1:1.2"
+      dev="''${ifn%%:*}"                       # device, e.g. "3-4.1"
       echo on > "/sys/bus/usb/devices/$dev/power/control" 2>/dev/null || true
     done
   '';
