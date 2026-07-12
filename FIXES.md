@@ -4,6 +4,18 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-07-12 — power-mode-charge-limit-local-outside-function
+
+**Symptom:** `power-mode charge-limit` (no argument) printed `line 907: local: can only be used in a function`, making it look like the charge limit was not being applied.
+**Affected:** verse/eksno, `system/lib/power-mode/default.nix:906`
+**Root cause:** The read-back branch of the `charge-limit` case declared `local cl`, but the `case` statement is at the script's top level, not inside a function. Bash only permits `local` within a function body, so it aborted before printing.
+**Investigation:**
+1. Grepped for `charge-limit` — found `set_charge_limit` / `get_charge_limit` (both fine) and the top-level dispatch `case`.
+2. Read the dispatch: the set path calls `set_charge_limit "$2"` directly and never uses `local`, so writes were never affected — only the display path was.
+3. Confirmed against hardware: `cat /sys/class/power_supply/BAT*/charge_control_end_threshold` returned `80`, proving the earlier `power-mode charge-limit 80` had in fact succeeded. The bug was cosmetic, not functional.
+**Fix:** Dropped the `local cl` declaration; `cl=$(get_charge_limit)` alone works at top level.
+**Commit:** `<sha>`
+
 ## 2026-07-03 — usb-corne-sleeps-after-3-5s-idle (HID autosuspend, no remote-wake)
 
 **Symptom:** When cabled over USB, if the user doesn't type for ~3-5s the Corne "sleeps"; the next keypress takes ~1s to register before typing resumes (and can drop the first keystrokes). Not a BLE desync — the keyboard stays enumerated the whole time.

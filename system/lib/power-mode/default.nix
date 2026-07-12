@@ -907,7 +907,6 @@ let
         if [ -n "''${2:-}" ]; then
           set_charge_limit "$2"
         else
-          local cl
           cl=$(get_charge_limit)
           if [ -n "$cl" ]; then
             echo -e "''${BOLD}Charge limit:''${RESET} ''${cl}%"
