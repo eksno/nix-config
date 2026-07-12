@@ -14,7 +14,7 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 2. Read the dispatch: the set path calls `set_charge_limit "$2"` directly and never uses `local`, so writes were never affected — only the display path was.
 3. Confirmed against hardware: `cat /sys/class/power_supply/BAT*/charge_control_end_threshold` returned `80`, proving the earlier `power-mode charge-limit 80` had in fact succeeded. The bug was cosmetic, not functional.
 **Fix:** Dropped the `local cl` declaration; `cl=$(get_charge_limit)` alone works at top level.
-**Commit:** `<sha>`
+**Commit:** `426d48b`
 
 ## 2026-07-03 — usb-corne-sleeps-after-3-5s-idle (HID autosuspend, no remote-wake)
 
