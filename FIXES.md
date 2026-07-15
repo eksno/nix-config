@@ -18,7 +18,7 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 6. Read the current keymap: BT controls are layer-3 (spaces) **cross-keyboard** combos; `&bt BT_CLR` = hold right-thumb + `'`+`Z` (needs both halves linked; `timeout-ms=75`, `require-prior-idle-ms=150`). The display doubles as feedback (the profile circle changes when the combo fires).
 **Fix:** User fired `&bt BT_CLR` (`'`+`Z` on spaces layer) to wipe the keyboard's profile-1 bond → it advertised fresh on `C8:5B` within the scan window. Re-paired host-side with a FIFO-held-open `bluetoothctl` session (per prior lesson: never pipe `quit` — it aborts mid-pair): `pair` (10s) → `trust` → `connect`. Result `Paired/Bonded/Trusted/Connected: yes`, HID (0x1812) resolved with **no ATT 0x0E** (both sides freshly bonded), `Corne Keyboard`/`Corne Mouse` input devices attached.
 **Lessons:** (a) When a Corne is silent on **both** USB and BLE, check the display/LED before assuming dead hardware — a running display means charge-only cable (USB) + bond issue (BLE), not power. (b) A charge-only cable also blocks the reflash/settings-reset escape hatch, so BT_CLR is the only recovery — and it needs **both halves linked** for the cross-keyboard combo. (c) This bond was fully *removed* (not keyless), so `corne-fix`/`corne-recover` logged only `NOOP not-present` — the watcher correctly did nothing; recovery required the keyboard-side clear + manual re-pair.
-**Commit:** `<sha>`
+**Commit:** `5bf0123`
 
 ## 2026-07-12 — power-mode-charge-limit-local-outside-function
 
