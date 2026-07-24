@@ -1021,6 +1021,64 @@ let
     fi
   '';
 
+  # Low-battery warnings at 15% and 5%. Deliberately separate from
+  # battery-watchdog: that one also switches power level and is intentionally
+  # disabled (see the timer comment below), so warnings live here where they
+  # can fire without touching the level the user set manually.
+  battery-notify = pkgs.writeShellScriptBin "battery-notify" ''
+    BAT=""
+    for b in /sys/class/power_supply/BAT*; do
+      [ -f "$b/capacity" ] && BAT="$b" && break
+    done
+    [ -z "$BAT" ] && exit 0
+
+    PERCENT=$(cat "$BAT/capacity")
+    STATUS=$(cat "$BAT/status")
+
+    STATE_DIR="''${XDG_RUNTIME_DIR:-/tmp}/battery-notify"
+    mkdir -p "$STATE_DIR"
+    LATCH="$STATE_DIR/notified"
+
+    # Plugged in (or full): drop the latch so the next discharge warns again
+    if [ "$STATUS" != "Discharging" ]; then
+      rm -f "$LATCH"
+      exit 0
+    fi
+
+    # Lowest threshold already warned about this discharge cycle
+    LAST=100
+    [ -f "$LATCH" ] && LAST=$(cat "$LATCH")
+
+    # Recovered well above that threshold: re-arm (3% hysteresis so a reading
+    # bouncing 15/16/15 doesn't re-notify)
+    if [ "$PERCENT" -gt $((LAST + 3)) ]; then
+      rm -f "$LATCH"
+      LAST=100
+    fi
+
+    # Body: charge left plus a rough estimate from instantaneous draw
+    estimate_body() {
+      local energy watts hours
+      energy=$(${pkgs.gawk}/bin/awk "BEGIN { printf \"%.2f\", $(cat "$BAT/energy_now" 2>/dev/null || echo 0) / 1000000 }")
+      watts=$(${pkgs.gawk}/bin/awk "BEGIN { printf \"%.1f\", $(cat "$BAT/power_now" 2>/dev/null || echo 0) / 1000000 }")
+      hours="?"
+      [ "$watts" != "0.0" ] && hours=$(${pkgs.gawk}/bin/awk "BEGIN { printf \"%.1f\", $energy / $watts }")
+      printf '%s%%  ·  %s Wh at %sW\n~%sh remaining' "$PERCENT" "$energy" "$watts" "$hours"
+    }
+
+    if [ "$PERCENT" -le 5 ] && [ "$LAST" -gt 5 ]; then
+      ${pkgs.libnotify}/bin/notify-send \
+        -u critical -t 0 -i battery-caution -a battery-notify \
+        "Battery critically low" "$(estimate_body)"
+      echo 5 > "$LATCH"
+    elif [ "$PERCENT" -le 15 ] && [ "$LAST" -gt 15 ]; then
+      ${pkgs.libnotify}/bin/notify-send \
+        -u normal -t 15000 -i battery-low -a battery-notify \
+        "Battery low" "$(estimate_body)"
+      echo 15 > "$LATCH"
+    fi
+  '';
+
 in
 {
   powerManagement.powertop.enable = true;
@@ -1049,6 +1107,7 @@ in
 
   environment.systemPackages = [
     power-mode
+    battery-notify
     pkgs.brightnessctl
   ];
 
@@ -1073,6 +1132,26 @@ in
       OnBootSec = "1s";
       OnUnitActiveSec = "1s";
       AccuracySec = "1s"; # Override default 1min batching
+    };
+  };
+
+  # Low-battery notifications: user service for D-Bus access to the notification
+  # daemon. Notification-only — never changes the power level.
+  systemd.user.services.battery-notify = {
+    description = "Notify when battery drops to 15% and 5%";
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = "${battery-notify}/bin/battery-notify";
+    };
+  };
+
+  systemd.user.timers.battery-notify = {
+    description = "Poll battery level for low-battery warnings";
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnBootSec = "30s";
+      OnUnitActiveSec = "30s";
+      AccuracySec = "5s"; # Override default 1min batching
     };
   };
 }
