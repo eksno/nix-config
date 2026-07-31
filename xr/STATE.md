@@ -1,6 +1,57 @@
 # XR system state
 
-Last updated: 2026-05-22 ~01:00 (EC altmode wedge RECOVERED)
+Last updated: 2026-07-30 (project reboot — re-baseline of the full stack)
+
+## 2026-07-30 — Project reboot: re-baseline after 2-month pause
+
+Effort restarted with a fresh lead-engineer session (brief at
+`.scratch/xr-reboot/BRIEF.md`). June–July the glasses were used only in
+basic-display mode (mirror/extend, hotplug watcher `531cf96`/`8efe6df`).
+Live state verified today: glasses unplugged, both DP connectors
+`disconnected`, eDP-1 only, kernel cmdline clean of BOTH
+`acpi.ec_no_wakeup` and `drm.edid_firmware` (post-recovery config).
+
+**Pinned stack after staged flake.lock bump** (running system is older —
+next rebuild is a stack-wide jump): mesa 26.1.5, hyprland 0.56.0
+(running: 0.55.4), wayvr 26.7.1 (was 26.2.1), monado 25.1.0 nixpkgs
+base + our MR-head src override.
+
+**Upstream re-baseline findings (researched 2026-07-30):**
+
+- **Monado MR !2737 (rayneo driver) was CLOSED unmerged 2026-07-15** —
+  author self-closed ALL his open MRs within 3 min (walked away from
+  upstreaming, not a targeted rejection). No rayneo driver in monado
+  main. The author's fork `lightofmysoul/monado` is ACTIVE (last push
+  2026-07-30, branches: `rayneo_drv` head `07fc6a65` = final MR head
+  2026-06-17, `galaxyxr`, `gfx_foveation`, `get_display_first` for
+  DRM-lease GPU selection). **That fork is now the effective upstream.**
+  Our pin `4b8d4a81` (2026-05-05) is one rebase behind `07fc6a65`;
+  both still fetchable.
+- **No upstream EBUSY/SURFACE_LOST retry landed in monado** — our
+  unbuilt retry patch remains necessary. Relevant main commits since
+  May: `983a8a51` (don't crash on zero Vulkan display modes),
+  `63a4a3ba` (release leased Vulkan display on teardown), `cfd56b67`
+  (avoid waiting on errored present) — only inherited if we ever bump
+  base.
+- **wayvr 26.2.1→26.7.1** (333 commits): screencopy capture busy-loop
+  → blocking wait fix (`3789662`, #537) sits EXACTLY on our May
+  capture-init segfault path; wgui atlas-grow glyph-relocation bug
+  genuinely FIXED upstream (`4b78e39`, text_renderer.rs rewritten) —
+  our May atlas misattribution partially rehabilitated, and our
+  `text-atlas-larger-initial-size.patch` may now be obsolete.
+  `wlr_dmabuf.rs` unchanged. PipeWire path rewritten.
+- **Mesa 25.1→26.1.5**: anv DMA-BUF import NULL-deref fixed in 26.1.3
+  (Xe2-specific; MTL iGPU is Xe-LPG — applicability unclear); active
+  churn in `wsi_common_display` 26.1.2–26.1.5; no EBUSY-specific fix.
+- **Hyprland 0.55**: several screencopy crash fixes; "set format back
+  after failing DS activation" + centralized scanout eligibility;
+  drm-lease and headless-output semantics unchanged.
+
+**Implication:** all three May blockers must be re-measured, not
+assumed: the capture segfault may be gone (two independent fixes on
+its path), EBUSY behavior may have shifted (Hyprland DS + Mesa wsi
+churn), and the EDID-override/EC-wedge isolation test is still the
+roadmap-deciding experiment (never done).
 
 ## 2026-05-22 ~00:55 — EC altmode wedge RECOVERED
 
