@@ -24,7 +24,21 @@
             intel-vaapi-driver = pkgs.intel-vaapi-driver.override { enableHybridCodec = true; };
           };
         };
-        overlays = [ ];
+        overlays = [
+          # scipy's hypothesis-fuzzed test_support_moments_sample is flaky
+          # (1 failure in 87k, float-tolerance); it breaks the whole system
+          # build via phonetic -> pynput -> ...lint checkInputs -> scipy
+          # (python 3.12 set, so no Hydra binary cache). Skip just that test.
+          (final: prev: {
+            pythonPackagesExtensions = (prev.pythonPackagesExtensions or [ ]) ++ [
+              (pyfinal: pyprev: {
+                scipy = pyprev.scipy.overridePythonAttrs (old: {
+                  disabledTests = (old.disabledTests or [ ]) ++ [ "test_support_moments_sample" ];
+                });
+              })
+            ];
+          })
+        ];
       };
     in
     {

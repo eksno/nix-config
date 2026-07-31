@@ -4,6 +4,18 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-07-30 — system-build-broken-by-flaky-scipy-test (phonetic transitive check dep)
+
+**Symptom:** `nix build .#nixosConfigurations.lewis...toplevel` failed after the flake.lock bump (nixpkgs 26.11.20260723). Errors surfaced as unrelated aggregate drvs (`fish-completions`, `mandb`, `user-units`, `dbus`, polkit units) all saying "1 dependency failed".
+**Affected:** host `lewis` (and any phonetic host), `flake.nix:27` overlays.
+**Root cause:** `python3.12-scipy-1.18.0` check phase fails ONE hypothesis-fuzzed test (`test_support_moments_sample`, float-tolerance flake, 1 of 87,692). scipy reaches the system only as a transitive check-time dep: phonetic → pynput → setuptools-lint → pylint → isort → pylama → vulture → pint → uncertainties → scipy. Phonetic uses the python 3.12 set (non-default), so nothing is in the Hydra binary cache and scipy builds+tests locally.
+**Investigation:**
+1. First failure hidden by `| tail` swallowing the pipe exit status — the build "succeeded" with exit 0 while printing errors. Lesson: don't pipe nix build through tail when the exit code matters.
+2. Victim drvs are aggregates; `nix log` on the scipy drv showed the single hypothesis failure; `nix why-depends --derivation` on the toplevel drv traced the phonetic chain.
+3. Note: the laptop hard-froze once during the scipy rebuild (87k tests, one pytest worker per core on 22 threads). Retry with `--max-jobs 2 --cores 8` completed fine.
+**Fix:** nixpkgs overlay in `flake.nix` adding a `pythonPackagesExtensions` entry that appends `test_support_moments_sample` to scipy's `disabledTests` (verified the pinned scipy expression uses `pytestCheckHook`). Full toplevel now builds.
+**Commit:** see this commit.
+
 ## 2026-06-03 — phonetic-keybind-dead-after-version-bump (SIGUSR1 trigger removed in 0.6.10)
 
 **Symptom:** Jorge's speech-to-text hotkey `CTRL+ALT+R` stopped working after a flake bump (which also pulled the `phonetic` input forward to 0.6.10). Pressing it did nothing.
