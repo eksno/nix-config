@@ -18,8 +18,10 @@
 #   SPACING=0.6 rad (~34°). Single-screen sessions fall back to the
 #   legacy (0, 0, -0.5) anchor.
 #
-# Patches apply against the v26.2.1 source nixpkgs pins. If the version
-# bumps, re-verify the patch context.
+# Patches apply against the v26.7.1 source nixpkgs pins. If the version
+# bumps, re-verify the patch context (26.2.1 -> 26.7.1 moved the wayland
+# screen-creation loop body and its call site; curved-arc-layout.patch
+# was regenerated for it).
 
 # Keep pname = "wayvr" so the vendor-staging derivation name doesn't
 # change (vendor staging takes ~20 min of network fetch on first run
