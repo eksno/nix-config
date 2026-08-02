@@ -4,6 +4,18 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-08-02 — systemctl-mask-fails-on-nixos-managed-units
+
+**Symptom:** `sudo systemctl mask --now nixos-upgrade.timer` fails with "File '/etc/systemd/system/nixos-upgrade.timer' already exists and is a symlink to /nix/store/...". Hit while building the verse hotspot data-saver dispatcher (`system/hosts/verse/data-saver.nix`), which originally masked the timer.
+**Affected:** verse/eksno (applies to all hosts), `system/hosts/verse/data-saver.nix:26`
+**Root cause:** On NixOS every unit in `/etc/systemd/system` is a nix-managed symlink into the store; `systemctl mask` refuses to overwrite it without `--force`. `--force` is a trap: it replaces the nix symlink with a `/dev/null` link, and a later `unmask` deletes that link leaving *no* unit file at all until the next rebuild.
+**Investigation:**
+1. Tried `mask --now` imperatively → refused with the symlink error (exit 2).
+2. Considered `mask --runtime` → useless: `/etc` outranks `/run` in unit precedence, so the real unit still wins.
+3. Considered `mask --force` → rejected for the unmask-deletes-the-unit trap above.
+**Fix:** Use plain `systemctl stop` on the timer + service instead of masking. Sufficient here because the NM dispatcher re-runs on every connect/disconnect, so a reboot on the hotspot re-stops them as soon as the connection comes up. If a real persistent mask is ever needed on NixOS, do it declaratively (`systemd.units."<unit>".enable = false` or `enable = lib.mkForce false` on the feature).
+**Commit:** `52bdd4c`
+
 ## 2026-07-15 — corne-dead-central-battery-plus-fully-removed-host-bond
 
 **Symptom:** Corne not connecting and not advertising over BLE; cabling it did nothing either. It only stays alive while the USB cable is plugged — pull even the charge-only cable and it dies instantly.
