@@ -5,6 +5,7 @@
     ./hardware-configuration.nix # Include the results of the hardware scan.
     ./boot.nix
     ./networking.nix
+    ./data-saver.nix
     ./bluetooth.nix
     ./corne-bt-recovery.nix
 
