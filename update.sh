@@ -44,10 +44,32 @@ if $do_nix; then
     fi
 fi
 
+# ---- Metered-connection guard (data saver) ----
+# On the "verse" phone hotspot (or any metered uplink), skip `nix flake update`:
+# repinning against unstable pulls multi-GB from cache.nixos.org. The rebuild
+# then reuses the existing lock and is nearly download-free.
+metered=false
+if [[ -e /run/data-saver ]]; then
+    metered=true
+elif command -v nmcli >/dev/null 2>&1; then
+    if nmcli -t -f NAME connection show --active 2>/dev/null | grep -qx "verse"; then
+        metered=true
+    else
+        while IFS= read -r dev; do
+            [[ -z "$dev" || "$dev" == "lo" ]] && continue
+            if nmcli -t -f GENERAL.METERED device show "$dev" 2>/dev/null | grep -q 'METERED:yes'; then
+                metered=true
+                break
+            fi
+        done < <(nmcli -t -f DEVICE connection show --active 2>/dev/null)
+    fi
+fi
+$metered && echo "⚠  Metered connection detected — skipping 'nix flake update' to save data."
+
 # ---- Nix rebuild (dotfiles are deployed via system.activationScripts.dotfiles) ----
 if $do_nix; then
     # Update flake.lock (make sure it's synced up, can fail but should be fine)
-    "${SUDO[@]}" nix flake update
+    $metered || "${SUDO[@]}" nix flake update
 
     # It won't find paths not staged, we git add .
     git add .
@@ -59,7 +81,7 @@ if $do_nix; then
     git add .
 
     # Update flake.lock (required again to update after package install)
-    nix flake update
+    $metered || nix flake update
 
     df -h /boot
 
