@@ -23,11 +23,13 @@
           [ "$(nmcli -g connection.metered connection show verse)" = "yes" ] \
             || nmcli connection modify verse connection.metered yes || true
 
-          # Daily nixos-upgrade pulls 1-3 GB from unstable per run. Mask, not
-          # just stop: a stop alone lets an elapsed timer fire the upgrade the
-          # moment network-online is reached after a reboot on the hotspot.
+          # Daily nixos-upgrade pulls 1-3 GB from unstable per run. Masking is
+          # not possible on NixOS (the unit in /etc/systemd/system is a
+          # nix-managed symlink systemctl refuses to shadow), so stop both the
+          # timer and any in-flight service; this script re-runs on every
+          # network event, so a reboot on the hotspot re-stops them on connect.
+          systemctl stop nixos-upgrade.timer 2>/dev/null || true
           systemctl stop nixos-upgrade.service 2>/dev/null || true
-          systemctl mask --now nixos-upgrade.timer 2>/dev/null || true
 
           # Tailscale's DERP keepalives burn data around the clock.
           systemctl stop tailscaled.service 2>/dev/null || true
@@ -35,7 +37,6 @@
           touch /run/data-saver
         else
           # -- Disengage: on any other (or no) network --
-          systemctl unmask nixos-upgrade.timer 2>/dev/null || true
           systemctl start nixos-upgrade.timer 2>/dev/null || true
           systemctl start tailscaled.service 2>/dev/null || true
           rm -f /run/data-saver
