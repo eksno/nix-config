@@ -17,7 +17,7 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 5. **Dead end:** a dangling `~/.config/eww` → `dotfiles/default/eww` symlink looked like a half-finished activation (cleared but not rewritten). It is not — it is dated 2026-04-19 and owned by `eksno`, while activation-managed links are root-owned and dated today. It is stale leftover from the pre-`dotfiles.nix` `symlink.sh` era pointing at a directory no longer in the repo. Unrelated; still worth cleaning up.
 **Fix:** Added a disk pressure guard near the top of `update.sh`. Before touching sudo or the rebuild it checks `/` and `/boot` (whichever is worse), and at ≥ `DISK_WARN_THRESHOLD` (default 85%) prints usage plus free space and offers to hand off to `gc.sh` — `(Y/n)`, default yes. `exec ./gc.sh` with `NIXCFG_SKIP_DISK_CHECK=1` exported, which guards the recursion since `gc.sh` ends by calling `update.sh` again. Non-TTY callers (Claude Code, scripts) warn and continue rather than blocking on `read`. Set `DISK_WARN_THRESHOLD=100` to silence.
 **Note:** even after the user's `gc.sh`, `/` sits at 94% — this guard will fire on the next run. That is intended, but the real headroom problem on this box is unsolved.
-**Commit:** `<pending>`
+**Commit:** `8929a38`
 
 ## 2026-08-13 — scipy-flaky-hypothesis-test-blocks-phonetic
 
