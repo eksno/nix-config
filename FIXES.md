@@ -4,6 +4,21 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-08-13 — full-disk-rebuild-breaks-hyprland-session
+
+**Symptom:** Immediately after a large `./update.sh` switch completed, the running Hyprland session threw a large on-screen error. Running `./gc.sh` cleared it.
+**Affected:** verse/eksno, `update.sh:29` (new disk pressure guard)
+**Root cause:** Root filesystem exhaustion. `/` went from 85% (422G used) to **99% (464G used, 6.0G free)** during the rebuild — the nixpkgs bump moved gcc 15.2 → 15.3, which rebuilds essentially the whole store, adding ~42G of new paths on top of the old generations. Aggravating factor: the switch replaced Hyprland **0.55.4 → 0.56.2** on disk and restarted `xdg-desktop-portal-hyprland` under the still-running 0.55.4 compositor, so the new portal was talking to the old compositor.
+**Investigation:**
+1. The tell was indirect — Claude's own scratchpad writes started failing with ENOSPC before the session error was even diagnosed. `df -h /` showed 6.0G free on `/dev/nvme0n1p2`.
+2. `hyprctl configerrors` → **empty**. So it was *not* a config parse error, despite `Creating the Error Overlay!` in the log. That log line is at line 12 of 4163 (compositor startup), i.e. boot-time init of the overlay object, not the actual fault. Don't read it as a live error.
+3. Likewise the `getCurrentCRTC: No CRTC 0` and `Wayland backend cannot start: wl_display_connect failed` errors in `hyprland.log` are normal DRM-backend startup noise from boot, not the failure.
+4. `hyprctl version` (running) vs `readlink -f /run/current-system/sw/bin/Hyprland` (on disk) → 0.55.4 vs 0.56.2, confirming the skew.
+5. **Dead end:** a dangling `~/.config/eww` → `dotfiles/default/eww` symlink looked like a half-finished activation (cleared but not rewritten). It is not — it is dated 2026-04-19 and owned by `eksno`, while activation-managed links are root-owned and dated today. It is stale leftover from the pre-`dotfiles.nix` `symlink.sh` era pointing at a directory no longer in the repo. Unrelated; still worth cleaning up.
+**Fix:** Added a disk pressure guard near the top of `update.sh`. Before touching sudo or the rebuild it checks `/` and `/boot` (whichever is worse), and at ≥ `DISK_WARN_THRESHOLD` (default 85%) prints usage plus free space and offers to hand off to `gc.sh` — `(Y/n)`, default yes. `exec ./gc.sh` with `NIXCFG_SKIP_DISK_CHECK=1` exported, which guards the recursion since `gc.sh` ends by calling `update.sh` again. Non-TTY callers (Claude Code, scripts) warn and continue rather than blocking on `read`. Set `DISK_WARN_THRESHOLD=100` to silence.
+**Note:** even after the user's `gc.sh`, `/` sits at 94% — this guard will fire on the next run. That is intended, but the real headroom problem on this box is unsolved.
+**Commit:** `<pending>`
+
 ## 2026-08-13 — scipy-flaky-hypothesis-test-blocks-phonetic
 
 **Symptom:** After fixing the moonlight-qt/ffmpeg-8 breakage below, `./update.sh` still fails the system build. `python3.12-scipy-1.18.0` fails its check phase with `1 failed, 87693 passed` — `test_support_moments_sample` (Hypothesis property test, `scipy.stats._new_distributions.Normal`, `seed=271582488`) asserts `[0., 0.]` vs `[0., 2.010276e-09]`. Cascades scipy → uncertainties → pint → isort → pylint → setuptools-lint → pynput → `phonetic` → `system-path` → `nixos-system-verse`.

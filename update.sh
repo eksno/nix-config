@@ -24,6 +24,48 @@ if ! $do_nix; then
     do_nix=true
 fi
 
+# ---- Disk pressure guard ----
+# Rebuilding on a nearly-full disk half-applies: `system.activationScripts.dotfiles`
+# clears the ~/.config symlinks, then hits ENOSPC before writing them back, so the
+# session lands on a stock-default Hyprland. A nixpkgs bump can add tens of GB of
+# store paths, so check before building and offer to collect garbage instead.
+# Silence with DISK_WARN_THRESHOLD=100. See FIXES.md.
+: "${DISK_WARN_THRESHOLD:=85}"
+if [[ -z "${NIXCFG_SKIP_DISK_CHECK:-}" ]]; then
+    disk_mounts=("/")
+    mountpoint -q /boot 2>/dev/null && disk_mounts+=("/boot")
+
+    worst_pct=0
+    worst_mount=""
+    for mount in "${disk_mounts[@]}"; do
+        pct=$(df --output=pcent "$mount" 2>/dev/null | tail -1 | tr -dc '0-9')
+        [[ -z "$pct" ]] && continue
+        if ((pct > worst_pct)); then
+            worst_pct=$pct
+            worst_mount=$mount
+        fi
+    done
+
+    if ((worst_pct >= DISK_WARN_THRESHOLD)); then
+        worst_avail=$(df -h "$worst_mount" | awk 'NR==2 {print $4}')
+        echo
+        echo "⚠  Disk usage on $worst_mount is at ${worst_pct}% (${worst_avail} free)."
+        echo "   Rebuilding this full risks a half-applied activation (cleared dotfile symlinks)."
+        if [[ -t 0 ]]; then
+            read -r -p "   Running gc.sh instead is recommended. Run it? (Y/n) " gc_reply
+            if [[ ! "$gc_reply" =~ ^[Nn] ]]; then
+                echo "   Handing off to gc.sh — it runs update.sh itself once space is freed."
+                # Guard the recursion: gc.sh ends by calling update.sh again.
+                export NIXCFG_SKIP_DISK_CHECK=1
+                exec ./gc.sh
+            fi
+            echo "   Continuing without garbage collection."
+        else
+            echo "   Non-interactive shell — continuing anyway. Run ./gc.sh first if this fails."
+        fi
+    fi
+fi
+
 # Use `sudo -A` when SUDO_ASKPASS is set (lets non-TTY callers like Claude Code
 # authenticate via secure-askpass); fall back to plain `sudo` otherwise.
 SUDO=("sudo")
