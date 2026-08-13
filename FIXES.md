@@ -4,6 +4,20 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-08-13 — scipy-flaky-hypothesis-test-blocks-phonetic
+
+**Symptom:** After fixing the moonlight-qt/ffmpeg-8 breakage below, `./update.sh` still fails the system build. `python3.12-scipy-1.18.0` fails its check phase with `1 failed, 87693 passed` — `test_support_moments_sample` (Hypothesis property test, `scipy.stats._new_distributions.Normal`, `seed=271582488`) asserts `[0., 0.]` vs `[0., 2.010276e-09]`. Cascades scipy → uncertainties → pint → isort → pylint → setuptools-lint → pynput → `phonetic` → `system-path` → `nixos-system-verse`.
+**Affected:** verse/eksno, `system/users/eksno/programs/default.nix:12` (`nixpkgs.overlays`)
+**Root cause:** Two things had to line up. (1) `phonetic` pulls `pynput`, whose nixpkgs build inputs drag in a long lint/test chain bottoming out at scipy. (2) The `flake.lock` bump (nixpkgs `e7a3ca8` → `867dcbc`) changed scipy's derivation hash, and **cache.nixos.org has no build for the new hash** — so scipy compiles locally and actually runs its test suite, where the flaky tolerance assertion fails. Same scipy version (1.18.0) in both revisions; only the cache status differs.
+**Investigation:**
+1. Verified the failure was not the `phonetic` overlay perturbing the Python set — `builtins.attrNames (overlay p p)` → `[ "phonetic" ]` only. Stock nixpkgs scipy.
+2. `nix path-info --store https://cache.nixos.org` on the new scipy outPath → "path is not valid" (uncached). Same query against the **old** lock's `python312Packages.scipy` → resolves fine. That is the whole difference: old lock never built scipy, so the flaky test never ran.
+3. Note `python3.pkgs.scipy` on the old lock is `python3.14-scipy`, not 3.12 — the 3.12 set is the non-default one that Hydra covers less reliably. Don't be misled by the version prefix when comparing.
+4. Considered reverting `flake.lock` — rejected for the same reason as the moonlight entry (it undoes the wifite2/wireshark-cli fix).
+5. First draft used `python312Packages.overrideScope`. **Wrong**: that only rewrites the `python312Packages` attribute, while `phonetic` reaches `pynput` via `python312.pkgs`, which would keep the un-overridden scipy. Verified by diffing `phonetic.drvPath` with and without the overlay.
+**Fix:** Overlay in `system/users/eksno/programs/default.nix` hanging `packageOverrides` on `python312` itself (which `python312Packages` is derived from, so both paths are covered), setting `doCheck = false` on scipy. Confirmed before rebuilding: `phonetic.drvPath` changes, and both `python312.pkgs.scipy.doCheck` and `python312Packages.scipy.doCheck` read `false`.
+**Commit:** `<pending>`
+
 ## 2026-08-13 — moonlight-qt-fails-to-build-against-ffmpeg-8
 
 **Symptom:** `./update.sh` fails the whole system build. `moonlight-qt-6.1.0` errors in `streaming/video/ffmpeg-renderers/plvk.cpp:519-520`: `'struct AVVulkanDeviceContext' has no member named 'queue_family_decode_index'` / `'nb_decode_queues'`. Cascades `moonlight-qt.drv` → `man-paths.drv` + `*_fish-completions.drv` → `system-path.drv` → `nixos-system-verse.drv`. Surfaced while adding `sioyek`/`codex`, but unrelated to them.

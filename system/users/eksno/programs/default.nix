@@ -9,7 +9,26 @@
     ./obs.nix
   ];
 
-  nixpkgs.overlays = [ inputs.phonetic.overlays.default ];
+  nixpkgs.overlays = [
+    inputs.phonetic.overlays.default
+
+    # scipy's test suite is disabled: its hypothesis-driven
+    # test_support_moments_sample fails on a ~2e-09 tolerance violation
+    # (1 failed / 87693 passed), and this nixpkgs revision ships no cached
+    # python3.12 build to fall back on, so it must compile locally and the
+    # flaky test takes the whole system down. scipy gates phonetic through
+    # pynput -> setuptools-lint -> pylint -> isort -> pint -> uncertainties.
+    # Override hangs on python312 (not python312Packages) so it also reaches
+    # consumers going through python312.pkgs. Drop once nixpkgs caches a
+    # working build. See FIXES.md.
+    (final: prev: {
+      python312 = prev.python312.override {
+        packageOverrides = pyfinal: pyprev: {
+          scipy = pyprev.scipy.overridePythonAttrs (_: { doCheck = false; });
+        };
+      };
+    })
+  ];
 
   services.phonetic = {
     enable = true;
