@@ -16,7 +16,7 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 4. Considered commenting out `moonlight-qt` (the pattern used earlier for wifite2) — kept only as a fallback, since it loses the package entirely.
 5. Read the derivation (`pkgs/by-name/mo/moonlight-qt/package.nix`) → `ffmpeg` is a plain `buildInputs` argument, so it is overridable. Test-built `moonlight-qt.override { ffmpeg = ffmpeg_7; }` standalone → succeeded; `ffmpeg-7.1.5` came from `cache.nixos.org` (~614 KiB), so the pin costs no extra compile time.
 **Fix:** Pinned the single package to FFmpeg 7 in `system/users/eksno/programs/default.nix` — `(moonlight-qt.override { ffmpeg = ffmpeg_7; })`. Nothing else in the closure changes; the rest of the system keeps default ffmpeg 8. Remove the override once moonlight-qt ships FFmpeg 8 support.
-**Commit:** `1f44631`
+**Commit:** `58b6177`
 
 ## 2026-08-02 — systemctl-mask-fails-on-nixos-managed-units
 
