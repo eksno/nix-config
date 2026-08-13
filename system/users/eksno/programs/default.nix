@@ -24,7 +24,9 @@
     (final: prev: {
       python312 = prev.python312.override {
         packageOverrides = pyfinal: pyprev: {
-          scipy = pyprev.scipy.overridePythonAttrs (_: { doCheck = false; });
+          scipy = pyprev.scipy.overridePythonAttrs (_: {
+            doCheck = false;
+          });
         };
       };
     })
@@ -57,10 +59,8 @@
     curl
     libsecret
 
-    # wifite2 — disabled while wireshark-cli source hash is broken upstream
-    # in nixpkgs unstable. Uncomment once nixpkgs ships a working revision.
-    # See FIXES.md "wireshark-cli source hash mismatch (recurring)".
-    # wifite2
+    wifite2
+    hcxtools
     hashcat
     aircrack-ng
 
