@@ -4,6 +4,20 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-08-13 — moonlight-qt-fails-to-build-against-ffmpeg-8
+
+**Symptom:** `./update.sh` fails the whole system build. `moonlight-qt-6.1.0` errors in `streaming/video/ffmpeg-renderers/plvk.cpp:519-520`: `'struct AVVulkanDeviceContext' has no member named 'queue_family_decode_index'` / `'nb_decode_queues'`. Cascades `moonlight-qt.drv` → `man-paths.drv` + `*_fish-completions.drv` → `system-path.drv` → `nixos-system-verse.drv`. Surfaced while adding `sioyek`/`codex`, but unrelated to them.
+**Affected:** verse/eksno, `system/users/eksno/programs/default.nix:197` (moonlight-qt entry)
+**Root cause:** The `flake.lock` bump (nixpkgs `e7a3ca8` → `867dcbc`, 2026-07-21 → 2026-08-12) moved the default `pkgs.ffmpeg` to 8.x. FFmpeg 7.1 deprecated and 8.0 **removed** the flat queue-family fields on `AVVulkanDeviceContext` (`queue_family_decode_index`, `nb_decode_queues`, …) in favour of the `qf[]` array. moonlight-qt 6.1.0 still uses the old API, and 6.1.0 is the newest release — no upstream fix in nixpkgs as of the locked revision.
+**Investigation:**
+1. Confirmed the failure is not caused by the new packages — the errors are pure C++ compile errors inside moonlight-qt.
+2. Checked whether the system was simply stale: `readlink /run/current-system` → generation 146 dated **2026-07-21**, and `flake.lock`/`locale.nix`/wifite2 edits were all still uncommitted → this rebuild had been failing silently for ~3 weeks, not just this session.
+3. Considered reverting `flake.lock` to the old nixpkgs — **rejected**: the pending wifite2 re-enable depends on the *newer* nixpkgs that fixed the wireshark-cli source hash, so a revert undoes that.
+4. Considered commenting out `moonlight-qt` (the pattern used earlier for wifite2) — kept only as a fallback, since it loses the package entirely.
+5. Read the derivation (`pkgs/by-name/mo/moonlight-qt/package.nix`) → `ffmpeg` is a plain `buildInputs` argument, so it is overridable. Test-built `moonlight-qt.override { ffmpeg = ffmpeg_7; }` standalone → succeeded; `ffmpeg-7.1.5` came from `cache.nixos.org` (~614 KiB), so the pin costs no extra compile time.
+**Fix:** Pinned the single package to FFmpeg 7 in `system/users/eksno/programs/default.nix` — `(moonlight-qt.override { ffmpeg = ffmpeg_7; })`. Nothing else in the closure changes; the rest of the system keeps default ffmpeg 8. Remove the override once moonlight-qt ships FFmpeg 8 support.
+**Commit:** `1f44631`
+
 ## 2026-08-02 — systemctl-mask-fails-on-nixos-managed-units
 
 **Symptom:** `sudo systemctl mask --now nixos-upgrade.timer` fails with "File '/etc/systemd/system/nixos-upgrade.timer' already exists and is a symlink to /nix/store/...". Hit while building the verse hotspot data-saver dispatcher (`system/hosts/verse/data-saver.nix`), which originally masked the timer.
