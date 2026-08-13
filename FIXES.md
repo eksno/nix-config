@@ -16,7 +16,7 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 4. Considered reverting `flake.lock` — rejected for the same reason as the moonlight entry (it undoes the wifite2/wireshark-cli fix).
 5. First draft used `python312Packages.overrideScope`. **Wrong**: that only rewrites the `python312Packages` attribute, while `phonetic` reaches `pynput` via `python312.pkgs`, which would keep the un-overridden scipy. Verified by diffing `phonetic.drvPath` with and without the overlay.
 **Fix:** Overlay in `system/users/eksno/programs/default.nix` hanging `packageOverrides` on `python312` itself (which `python312Packages` is derived from, so both paths are covered), setting `doCheck = false` on scipy. Confirmed before rebuilding: `phonetic.drvPath` changes, and both `python312.pkgs.scipy.doCheck` and `python312Packages.scipy.doCheck` read `false`.
-**Commit:** `<pending>`
+**Commit:** `ca5f8ad`
 
 ## 2026-08-13 — moonlight-qt-fails-to-build-against-ffmpeg-8
 
