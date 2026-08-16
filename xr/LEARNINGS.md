@@ -112,6 +112,53 @@ Separate: monado-service ignored SIGINT for >10s in this headless-idle
 state (no client connected) — teardown needs a SIGTERM follow-up after
 a grace window (still never SIGKILL while a lease is held).
 
+## Mesa wsi_display first-present EBUSY wedge → silent black panel (2026-08-16)
+
+"SURFACE_LOST retry recovered" does NOT mean the panel is lit. When
+monado's FIRST present (NONBLOCK|ALLOW_MODESET atomic commit) races
+Hyprland's continuous page-flips, i915 returns transient EBUSY, Mesa
+flattens it to VK_ERROR_SURFACE_LOST_KHR, our retry patch "succeeds" —
+but Mesa's wsi_display flip queue is permanently wedged: every later
+vkQueuePresentKHR returns VK_SUCCESS while issuing ZERO atomic ioctls
+(strace-proven: 5 commits total in a 45 s run). Kernel truth:
+connector `crtc=(null)`, `/sys/class/drm/card1-DP-2/enabled` stays
+"disabled". Every pre-16:00 "stable" run on 2026-08-16 was black.
+
+- **Panel-lit check (user-readable, poll it after starting monado):**
+  `cat /sys/class/drm/card1-DP-2/enabled` == "enabled".
+- **Workaround that lands the modeset:** `hyprctl dispatch dpms off`
+  eDP-1 + HDMI-A-1 → start monado → wait lit (≤20 s) → dpms on. Not
+  100%/attempt; retry loop (KILL monado, restart — lease re-offers on
+  process death, no kernel cycle needed) lit within ≤3 attempts.
+- Monado presents on its own before any OpenXR client connects, so
+  light the panel with monado ALONE, then start wayvr. (Launching
+  wayvr while screens are dpms-off also breaks its screencopy init.)
+- The race is timing-sensitive: `drm.debug=0x14` printk overhead alone
+  made first-present succeed. Plain restarts without quiesce: 0/5.
+- Proper fix (deferred): patch Mesa `wsi_common_display.c` to retry
+  EBUSY as a blocking commit instead of flattening to SURFACE_LOST.
+  See memory/xr-mesa-anv-ebusy-on-first-present.md (May 2026 found the
+  same thing; this session proved the wedge mechanism).
+
+## wayvr SHM-capture SEGV = fd use-after-close in MainThreadWlxCapture (2026-08-16)
+
+wayvr 26.7.1 crashed deterministically at capture start on this iGPU —
+under BOTH `capture_method: screencopy` (CPU) and default auto/"GPU"
+config. Three identical coredumps: wlr_screencopy + DummyDrmExporter →
+capture::upload_image → memcpy SIGSEGV. Mechanism: Mesa anv on the
+Meteor Lake iGPU exposes no spare transfer queue → wayvr wraps capture
+in MainThreadWlxCapture → the capture thread forwards the raw MemFd
+frame through a channel and immediately closes the SHM fd
+(BufData::drop in wlx-capture wlr_screencopy.rs); the main thread later
+mmaps the dead fd; MAP_FAILED (-1) is never checked; memcpy from -1.
+This is also the May 2026 "GPU capture segfault at backend.rs" — same
+wrapper, so switching capture methods never helped.
+
+Fixed locally: `system/lib/xr/wayvr-anv/patches/screencopy-mainthread-fd-use-after-close.patch`
+— mmap on the capture thread (mapping survives close(fd)), forward as
+MemPtr, munmap in receive() after upload; plus MAP_FAILED guard in the
+original MemFd path. Upstream-worthy (olekolek1000/wayvr).
+
 ## Architecture — GNOME-on-Wayland as a parallel SDDM-selectable session
 
 After the nested-shell wall (next section), the working approach is:

@@ -1,31 +1,67 @@
 # XR system state
 
-Last updated: 2026-08-16 (FULL STACK RAN: monado lease + wayvr 5-min stable, zero compositor crashes; awaiting Jorge's world-lock verdict)
+Last updated: 2026-08-16 evening (black panel root-caused + DPMS-quiesce fix; wayvr capture SEGV root-caused + patched; awaiting patched-build test + Jorge's world-lock verdict)
 
-## 2026-08-16 (later) — Full stack end-to-end: monado + wayvr stable on the glasses
+## 2026-08-16 (evening) — Black panel + wayvr capture SEGV both root-caused
+
+**CORRECTION to the section below:** the "5 minutes stable" run had a
+silently BLACK glasses panel and a parked wayvr. Two independent bugs:
+
+1. **Black panel (Mesa wsi_display first-present EBUSY wedge).**
+   Monado's first present races Hyprland's page-flips; i915 returns
+   transient EBUSY on the NONBLOCK|ALLOW_MODESET atomic commit; Mesa
+   flattens it to SURFACE_LOST; our monado retry patch "recovers" but
+   Mesa's flip queue is permanently wedged — later presents return
+   VK_SUCCESS with ZERO further atomic ioctls (strace: 5 commits in
+   45 s). Kernel: connector 530 crtc=(null), enabled=disabled.
+   **Workaround (proven):** dpms-off eDP-1 + HDMI-A-1 before monado
+   start (no pending flips → modeset lands), poll
+   `/sys/class/drm/card1-DP-2/enabled` == "enabled" (panel-lit check,
+   user-readable), dpms back on. Not 100% per attempt — the test
+   script retries up to 5× (lit on attempt 1 and 3 in practice).
+   Monado presents on its own pre-client, so light the panel FIRST,
+   then start wayvr. Proper fix (deferred): Mesa wsi_common_display.c
+   EBUSY→retry/VK_NOT_READY patch.
+   Consequence: wayvr's earlier "5-min stable" was an illusion — with
+   no vblanks it parked in xrWaitFrame and never exercised capture.
+
+2. **wayvr capture SEGV (both "CPU" and "GPU" configs, deterministic).**
+   3 identical coredumps: wlr_screencopy SHM path → upload_image →
+   memcpy. Root cause: on single-queue GPUs (Mesa anv iGPU) wayvr uses
+   MainThreadWlxCapture; the capture thread forwards the raw MemFd
+   frame and immediately closes the SHM fd (BufData::drop); the main
+   thread mmaps the dead fd, MAP_FAILED goes unchecked → memcpy from
+   -1. This is the May "GPU capture segfault" too — same wrapper.
+   **Fixed** in `wayvr-anv/patches/screencopy-mainthread-fd-use-after-close.patch`:
+   mmap on the capture thread while the fd is open, forward as MemPtr,
+   munmap after upload. `~/.config/wayvr/config.yaml` left at default
+   (auto); both methods traverse the fixed path.
+
+Scripts: `.scratch/xr-reboot/monado-lease-test.sh` (v4, lease-only),
+`.scratch/xr-reboot/wayvr-visual-test.sh` (full stack: v4 sequence +
+DPMS-quiesce panel-lit retry loop + wayvr, LIFETIME env).
+Process gotchas: idle monado ignores INT+TERM (KILL after exit-cycle
+is safe); wayvr ignores TERM too — needs a graceful-stop story
+(wayvrctl?) before this graduates into breezy-hyprland.
+
+Remaining: run the full stack on the patched wayvr build, Jorge's
+visual verdict on world-locking, per-workspace headless outputs /
+curved arc, graduate the v4+quiesce sequence into the breezy-hyprland
+launcher, resolve staged flake.lock Aug bump, upstream reports
+(Hyprland mirror-cycle SEGV, wayvr fd use-after-close, Mesa EBUSY).
+
+## 2026-08-16 (later) — Full stack end-to-end (superseded — see above)
 
 After two Hyprland SEGVs traced to the glasses-mirror-watcher race
 (see LEARNINGS "never connect-cycle a MIRRORING output" + v3/v4
 follow-up), the v4 sequence ran crash-free:
 watcher suspend → DP-2 disable + 4s race gate → override + off →
 wait absent → rule to neutral → detect → non-desktop=1 → lease →
-monado (RayNeo head tracker found, view count 2, SBS 3840x1080,
-SURFACE_LOST retry recovers) → wayvr 26.7.1 `--openxr --show` →
-**5 minutes stable**, ScreenCopy capture of HDMI-A-1 active (the May
-segfault path — did not crash; upstream 26.7.1 fixes hold). Teardown
-restores the three-way mirror + watcher automatically; the same
-Hyprland PID survived both tests.
-
-Scripts: `.scratch/xr-reboot/monado-lease-test.sh` (v4, lease-only),
-`.scratch/xr-reboot/wayvr-visual-test.sh` (full stack, LIFETIME env).
-Process gotchas: idle monado ignores INT+TERM (KILL after exit-cycle
-is safe); wayvr ignores TERM too — needs a graceful-stop story
-(wayvrctl?) before this graduates into breezy-hyprland.
-
-Remaining: Jorge's visual verdict on world-locking (test ran; verdict
-pending), per-workspace headless outputs / curved arc, graduate the
-v4 sequence into the breezy-hyprland launcher, resolve staged
-flake.lock Aug bump.
+monado (RayNeo head tracker found, view count 2, SBS 3840x1080) →
+wayvr 26.7.1 `--openxr --show` → 5 minutes without crashing — but the
+panel was black and capture never ran (see CORRECTION above).
+Teardown restores the three-way mirror + watcher automatically; the
+same Hyprland PID survived both tests.
 
 ## 2026-08-16 — Phase A resolved: EC-safe runtime VR-mode toggle works
 
