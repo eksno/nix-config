@@ -55,9 +55,29 @@ the VR-enter connect-cycle forced DP-2 off while it was a *mirror* of
 HDMI-A-1, leaving a dangling monitor ref in the mirror damage path.
 Cost Jorge a session restart ("safe mode" + reboot).
 
-Rule: **`hyprctl keyword monitor "DP-2,disable"` (transient) BEFORE the
-kernel-side off/detect cycle**, both entering and exiting VR mode; after
-exit-cycle, `hyprctl reload` restores the config/watcher mirror state.
+**UPDATE (same day, crash 2134): disable-first alone is NOT enough.**
+The v2 test disabled DP-2 first and Hyprland still SEGV'd at the exact
+same site 13s in (15:01:44, precisely when monado requested the lease).
+Root cause: `glasses-mirror-watcher.sh` (exec-once from breezy.conf)
+listens on socket2 for monitoradded/monitorremoved. The transient
+disable itself fires `monitorremoved`; the watcher wakes 1s later, sees
+the glasses still listed in `monitors all` (disabled outputs stay
+listed, with their EDID description), and RE-APPLIES the three-way
+mirror layout — re-enabling DP-2 as a live mirror right before the
+kernel cycle yanks the connector. The stale mirror ref then sits
+harmless until the next rendered frame (idle desktop = no frames);
+monado's lease request triggered activity → first render → SEGV.
+
+Rule: **suspend the watcher (`pkill -f glasses-mirror-watcher` — this
+also matches the while-loop subshell, and socat exits on EPIPE), THEN
+`hyprctl keyword monitor "DP-2,disable"`, then VERIFY DP-2 stays
+disabled/absent for several consecutive seconds before the kernel-side
+off/detect cycle.** On teardown (after exit-cycle): `hyprctl reload`,
+then `hyprctl dispatch exec` the watcher again (exec-once does not
+re-run on reload) — its startup apply_topology restores the mirrors.
+Safe-mode note: after a crash the watchdog relaunches Hyprland with
+`--safe-mode`, which pins the built-in default config; `hyprctl reload`
+cannot leave it — only a clean session exit + fresh login can.
 Also run risky tests under `systemd-run --user` (survives compositor
 death — the terminal running Claude dies with Hyprland, which killed
 the session mid-test three times today; a detached unit keeps the
