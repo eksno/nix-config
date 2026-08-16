@@ -4,6 +4,32 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-08-16 — wayvr-capture-segv-fd-use-after-close
+
+**Symptom:** wayvr 26.7.1 SIGSEGV'd deterministically ~1-2 s after capture init on the glasses stack — under BOTH `capture_method: screencopy` (CPU) and default auto/GPU config. Same bug as the May 2026 "GPU capture segfault at backend.rs".
+**Affected:** host `lewis`/user `jorge`; `system/lib/xr/wayvr-anv/`; wayvr source `wayvr/src/overlays/screen/capture.rs` + `wlx-capture/src/wlr_screencopy.rs`.
+**Root cause:** on single-Vulkan-queue GPUs (Mesa anv, Meteor Lake iGPU) wayvr wraps capture in `MainThreadWlxCapture`: the capture thread forwards the raw MemFd frame through a channel, then immediately closes the SHM fd (`BufData::drop`). The main thread later `mmap`s the dead fd; `MAP_FAILED` (-1) is never checked; `memcpy` from -1 → SIGSEGV.
+**Investigation:**
+1. 3 coredumps (739863/774115/789458) had byte-identical stacks: `wlr_screencopy` + `DummyDrmExporter` → `capture::upload_image` → `__memcpy_avx_unaligned_erms` — so "switch capture method" could never help; both configs traverse the same wrapper.
+2. wgui's `upload_image` copies exactly `data.len()` — so the source slice itself was bad memory → suspicion moved to the unchecked `libc::mmap` in the MemFd path.
+3. `wlr_screencopy.rs` showed `receive_callback(frame)` → `sender.send` → `drop(buffer)` (closes fd) on the capture thread, while the backtrace showed the real upload running later on the main thread inside `MainThreadWlxCapture::receive` — use-after-close confirmed.
+4. Safe because wayvr only calls `request_new_frame()` after the previous frame is uploaded, but the clean fix doesn't rely on that: mmap while the fd is open (mappings survive `close`).
+**Fix:** `system/lib/xr/wayvr-anv/patches/screencopy-mainthread-fd-use-after-close.patch` — capture-thread callback mmaps MemFd frames and forwards them as MemPtr; `receive()` munmaps after upload; MAP_FAILED guard added to the original path. Verified: first-ever wayvr session to survive capture start (FOCUSED, GPU capture, stable past 80 s and counting).
+**Commit:** `53f636c`
+
+## 2026-08-16 — glasses-panel-black-mesa-first-present-ebusy-wedge
+
+**Symptom:** monado direct-mode sessions "ran stable" but the glasses panel stayed black (`glasses are off, dont see anytihng`); no errors after the SURFACE_LOST retry "recovered".
+**Affected:** host `lewis`/user `jorge`; Mesa anv `wsi_common_display.c`; `.scratch/xr-reboot/wayvr-visual-test.sh`.
+**Root cause:** monado's first present (`NONBLOCK|ALLOW_MODESET` atomic commit) races Hyprland's continuous page-flips; i915 returns transient EBUSY; Mesa flattens it to `VK_ERROR_SURFACE_LOST_KHR`; our monado retry "succeeds" but Mesa's wsi_display flip queue is permanently wedged — later presents return VK_SUCCESS while issuing zero atomic ioctls.
+**Investigation:**
+1. Jorge reported black panel during a "stable" run → checked kernel truth: connector 530 `crtc=(null)`, sysfs `enabled=disabled`, `dpms=Off` — nothing was ever scanned out.
+2. strace (`-e trace=ioctl`): 5 DRM atomic commits total in a 45 s run; flip thread got EBUSY on commit 1, then silence despite VK_SUCCESS presents → wedge, not recovery.
+3. 5/5 plain monado restarts wedged; with `drm.debug=0x14` it lit first try (printk overhead throttles Hyprland) → confirmed timing race, matches May 2026 memory (`xr-mesa-anv-ebusy-on-first-present.md`).
+4. Dead end from earlier same day: the "5-min stable full stack" run was an illusion — with no vblanks wayvr parked in `xrWaitFrame` and never exercised capture.
+**Fix (workaround):** DPMS-quiesce in `wayvr-visual-test.sh`: `hyprctl dispatch dpms off` eDP-1+HDMI-A-1 → start monado → poll `/sys/class/drm/card1-DP-2/enabled` == "enabled" (user-readable panel-lit check) → dpms on; retry loop KILLs monado and repeats (lease re-offers on process death). Lights within ≤3 attempts. Proper fix deferred: Mesa EBUSY→retry patch.
+**Commit:** docs `82fbb47` (the workaround script `.scratch/xr-reboot/wayvr-visual-test.sh` is gitignored; sequence documented in `xr/LEARNINGS.md` for graduation into breezy-hyprland)
+
 ## 2026-08-16 — hyprland-segv-on-vr-mode-entry (mirror-watcher hotplug race)
 
 **Symptom:** Hyprland 0.55.4 SEGV'd twice (crash reports 2129, 2134) during XR VR-mode entry tests; watchdog relaunched it in `--safe-mode` (default config, user config unloadable until relog — `hyprctl reload` cannot exit safe mode).
