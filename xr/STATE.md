@@ -1,6 +1,31 @@
 # XR system state
 
-Last updated: 2026-08-16 (runtime EDID toggle PROVEN — mutual exclusivity dissolved)
+Last updated: 2026-08-16 (FULL STACK RAN: monado lease + wayvr 5-min stable, zero compositor crashes; awaiting Jorge's world-lock verdict)
+
+## 2026-08-16 (later) — Full stack end-to-end: monado + wayvr stable on the glasses
+
+After two Hyprland SEGVs traced to the glasses-mirror-watcher race
+(see LEARNINGS "never connect-cycle a MIRRORING output" + v3/v4
+follow-up), the v4 sequence ran crash-free:
+watcher suspend → DP-2 disable + 4s race gate → override + off →
+wait absent → rule to neutral → detect → non-desktop=1 → lease →
+monado (RayNeo head tracker found, view count 2, SBS 3840x1080,
+SURFACE_LOST retry recovers) → wayvr 26.7.1 `--openxr --show` →
+**5 minutes stable**, ScreenCopy capture of HDMI-A-1 active (the May
+segfault path — did not crash; upstream 26.7.1 fixes hold). Teardown
+restores the three-way mirror + watcher automatically; the same
+Hyprland PID survived both tests.
+
+Scripts: `.scratch/xr-reboot/monado-lease-test.sh` (v4, lease-only),
+`.scratch/xr-reboot/wayvr-visual-test.sh` (full stack, LIFETIME env).
+Process gotchas: idle monado ignores INT+TERM (KILL after exit-cycle
+is safe); wayvr ignores TERM too — needs a graceful-stop story
+(wayvrctl?) before this graduates into breezy-hyprland.
+
+Remaining: Jorge's visual verdict on world-locking (test ran; verdict
+pending), per-workspace headless outputs / curved arc, graduate the
+v4 sequence into the breezy-hyprland launcher, resolve staged
+flake.lock Aug bump.
 
 ## 2026-08-16 — Phase A resolved: EC-safe runtime VR-mode toggle works
 
