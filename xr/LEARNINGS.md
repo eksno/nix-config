@@ -78,6 +78,25 @@ re-run on reload) — its startup apply_topology restores the mirrors.
 Safe-mode note: after a crash the watchdog relaunches Hyprland with
 `--safe-mode`, which pins the built-in default config; `hyprctl reload`
 cannot leave it — only a clean session exit + fresh login can.
+
+**v3/v4 follow-up (same day): the disable rule ALSO suppresses the
+lease offer.** v3 (watcher suspended + disable held through the cycle)
+did not crash but Hyprland kept a disabled monitor entry for DP-2 after
+the non-desktop reconnect and offered 0 lease connectors — even with
+kernel non-desktop=1. v4 fixed it and PASSED end-to-end (15:13-15:15,
+Hyprland survived, full desktop restore):
+  1. suspend watcher; `keyword monitor "DP-2,disable"`; verify it holds
+     4 consecutive seconds (watcher-race gate)
+  2. arm EDID override + kernel `off`; wait until DP-2 is ABSENT from
+     `monitors all` (~2s)
+  3. swap rule to neutral `keyword monitor "DP-2,preferred,auto,1"`
+     while disconnected (nothing to dangle), then kernel `detect`
+  4. non-desktop=1 → lease offered → monado leases, SBS swapchain,
+     SURFACE_LOST retry recovers, 60s stable
+  5. teardown: INT→TERM monado (idle monado ignores BOTH — after the
+     exit-cycle kills the lease, KILL is safe and needed), exit-cycle,
+     `hyprctl reload`, `dispatch exec` the watcher → mirrors restored.
+The working test script: `.scratch/xr-reboot/monado-lease-test.sh` (v4).
 Also run risky tests under `systemd-run --user` (survives compositor
 death — the terminal running Claude dies with Hyprland, which killed
 the session mid-test three times today; a detached unit keeps the
