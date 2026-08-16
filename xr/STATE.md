@@ -1,6 +1,29 @@
 # XR system state
 
-Last updated: 2026-07-30 (project reboot — re-baseline of the full stack)
+Last updated: 2026-08-16 (runtime EDID toggle PROVEN — mutual exclusivity dissolved)
+
+## 2026-08-16 — Phase A resolved: EC-safe runtime VR-mode toggle works
+
+The roadmap-deciding experiment from the reboot brief is done. The
+boot-param EDID override (suspected EC-wedge trigger) is NOT needed:
+a runtime sysfs override + kernel connect-cycle flips DP-2 between
+desktop-mirror mode and wp-drm-lease-v1 lease-offered mode in seconds,
+without touching the EC/altmode path. Full recipe + measurement
+gotchas in LEARNINGS.md ("Runtime EDID override"). Verified round-trip
+on the live system (kernel 7.1.2, Hyprland 0.55.4, gen 71).
+
+Consequence: basic-display and VR-lease modes are no longer mutually
+exclusive; no `nixos-rebuild` needed to enter VR mode. Next: monado
+direct-mode session against the offered lease (new store builds:
+monado w/ EBUSY-retry patch, wayvr 26.7.1 w/ arc patch), then wayvr,
+then visual verification. Privileged steps run via a session-scoped
+root runner Jorge starts manually (`.scratch/xr-reboot/root-runner.sh`).
+
+Smoke test 2026-08-16: glasses enumerate, altmode enters cleanly,
+mirror watcher works (DP-2 + eDP-1 mirror the VG258). EC wedge remains
+absent. Also: laptop froze twice mid-heavy-nix-build (scipy) on
+2026-07-30 — capped builds (`--max-jobs 2 --cores 8`) completed fine;
+watch for recurrence.
 
 ## 2026-07-30 — Project reboot: re-baseline after 2-month pause
 

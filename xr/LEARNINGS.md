@@ -6,6 +6,47 @@ this before debugging a similar issue.
 
 ---
 
+## Runtime EDID override — EC-safe VR-mode toggle (PROVEN 2026-08-16)
+
+The boot-param EDID override (suspected EC-wedge trigger) is unnecessary.
+`/sys/module/drm/parameters/edid_firmware` is writable at runtime, and a
+kernel-side connect-cycle makes Hyprland re-classify the connector:
+
+- **Enter VR mode** (as root, glasses connected, altmode already up):
+  1. `printf 'DP-2:edid/rayneo-air4pro-glasses.bin\n' > /sys/module/drm/parameters/edid_firmware`
+  2. `echo off > /sys/class/drm/card1-DP-2/status` (forced disconnect —
+     Hyprland sees the connector vanish; pure DP-level, EC/altmode mux
+     untouched)
+  3. `echo detect > /sys/class/drm/card1-DP-2/status` (fresh probe loads
+     the patched EDID; kernel sets non-desktop=1; Hyprland sees a NEW
+     connect, skips desktop adoption, offers the connector via
+     wp-drm-lease-v1)
+- **Exit VR mode:** clear the param (`printf '\n' > …`), then the SAME
+  off/detect cycle. Without the cycle the property reverts but Hyprland
+  keeps the connector lease-only — wlroots evaluates non-desktop ONLY at
+  connect time, never on property change of a live connector (proven:
+  120s hold with non-desktop=1 on a connected output → zero lease
+  connectors offered; same with the revert direction).
+- Verified full round-trip on kernel 7.1.2 / Hyprland 0.55.4: mirror →
+  lease-offered → mirror, glasses displaying desktop again after.
+  Scripts: `.scratch/xr-reboot/phase-a4-connect-cycle.sh`, `poll-state.sh`.
+
+Measurement gotchas that burned three runs before the proof:
+- Kernel 7.1.2 has NO `/sys/class/drm/*/non_desktop` attribute and the
+  sysfs `edid` file reads 0 bytes even when connected. Read the DRM
+  connector property instead — it is named `non-desktop` (HYPHEN, not
+  underscore) — via GETCONNECTOR/GETPROPERTY ioctls
+  (`.scratch/xr-reboot/check-nondesktop.py`), and fetch the EDID blob
+  via GETPROPBLOB to check for the Microsoft HMD VSDB (bytes 5c 12 ca).
+- Plain `hyprctl monitors` HIDES mirrored outputs. The glasses mirror
+  the VG258 when both are present, so "not in the list" means nothing.
+  Use `hyprctl monitors all -j` and read `disabled` + `mirrorOf`.
+- Lease ground truth: `wayland-info -i wp_drm_lease_device_v1` — the
+  device global always exists; success = a connector entry appears.
+- `printf '\n' > edid_firmware` makes the next probe log a scary but
+  harmless `Requesting EDID firmware "" failed (err=-22)` — the kernel
+  then falls back to the real DDC EDID.
+
 ## Architecture — GNOME-on-Wayland as a parallel SDDM-selectable session
 
 After the nested-shell wall (next section), the working approach is:
