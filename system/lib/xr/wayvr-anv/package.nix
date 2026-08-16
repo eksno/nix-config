@@ -32,5 +32,6 @@ wayvr.overrideAttrs (old: {
   patches = (old.patches or [ ]) ++ [
     ./patches/text-atlas-larger-initial-size.patch
     ./patches/curved-arc-layout.patch
+    ./patches/screencopy-mainthread-fd-use-after-close.patch
   ];
 })

@@ -1,0 +1,106 @@
+diff -ru a/wayvr/src/overlays/screen/capture.rs b/wayvr/src/overlays/screen/capture.rs
+--- a/wayvr/src/overlays/screen/capture.rs	2026-08-16 16:32:52.966822904 -0600
++++ b/wayvr/src/overlays/screen/capture.rs	2026-08-16 16:33:24.594970116 -0600
+@@ -616,7 +616,16 @@
+                     fd,
+                     offset,
+                 )
+-            } as *const u8;
++            };
++            if map == libc::MAP_FAILED {
++                log::error!(
++                    "{}: mmap of MemFd frame failed (fd already closed?): {}",
++                    me.name,
++                    std::io::Error::last_os_error()
++                );
++                return None;
++            }
++            let map = map as *const u8;
+ 
+             let data = unsafe { std::slice::from_raw_parts(map, len) };
+ 
+@@ -716,7 +725,7 @@
+     ) {
+         self.data = Some(user_data);
+         self.inner
+-            .init(dmabuf_formats, DummyDrmExporter, receive_callback_dummy);
++            .init(dmabuf_formats, DummyDrmExporter, receive_callback_map_memfd);
+     }
+     fn is_ready(&self) -> bool {
+         self.inner.is_ready()
+@@ -731,9 +740,20 @@
+         self.inner.resume();
+     }
+     fn receive(&mut self) -> Option<WlxCaptureOut> {
+-        self.inner
+-            .receive()
+-            .and_then(|frame| receive_callback(self.data.as_ref().unwrap(), frame))
++        self.inner.receive().and_then(|frame| {
++            // MemPtr frames on this path come from receive_callback_map_memfd,
++            // which mmap'd them on the capture thread; unmap after upload.
++            let mapping = if let WlxFrame::MemPtr(f) = &frame {
++                Some((f.ptr, f.size))
++            } else {
++                None
++            };
++            let out = receive_callback(self.data.as_ref().unwrap(), frame);
++            if let Some((ptr, size)) = mapping {
++                unsafe { libc::munmap(ptr as *mut _, size) };
++            }
++            out
++        })
+     }
+     fn supports_dmbuf(&self) -> bool {
+         self.inner.supports_dmbuf()
+@@ -745,6 +765,51 @@
+     Some(frame)
+ }
+ 
++// Runs on the CAPTURE thread, where the SHM fd is still open. The
++// wlr_screencopy capture thread closes the fd (BufData::drop) right after
++// this callback returns, so the main thread must never touch the fd —
++// mmap here and forward the mapping instead (it survives close(fd)).
++// Without this, MainThreadWlxCapture::receive() mmap'd an already-closed
++// fd, got MAP_FAILED (unchecked, -1) and SIGSEGV'd in memcpy — the
++// "wayvr capture crash on Mesa anv" (single-queue GPUs only, since only
++// those use MainThreadWlxCapture).
++#[allow(clippy::trivially_copy_pass_by_ref)]
++fn receive_callback_map_memfd(_: &DummyDrmExporter, frame: WlxFrame) -> Option<WlxFrame> {
++    match frame {
++        WlxFrame::MemFd(frame) => {
++            let Some(fd) = frame.plane.fd else {
++                log::error!("MemFd frame without fd");
++                return None;
++            };
++            let len = frame.plane.stride as usize * frame.format.height as usize;
++            let map = unsafe {
++                libc::mmap(
++                    std::ptr::null_mut(),
++                    len,
++                    libc::PROT_READ,
++                    libc::MAP_SHARED,
++                    fd,
++                    i64::from(frame.plane.offset),
++                )
++            };
++            if map == libc::MAP_FAILED {
++                log::error!(
++                    "mmap of MemFd frame failed: {}",
++                    std::io::Error::last_os_error()
++                );
++                return None;
++            }
++            Some(WlxFrame::MemPtr(wlx_frame::MemPtrFrame {
++                format: frame.format,
++                ptr: map as usize,
++                size: len,
++                mouse: frame.mouse,
++            }))
++        }
++        other => Some(other),
++    }
++}
++
+ fn extent_from_format(fmt: FrameFormat, config: &GeneralConfig) -> [u32; 2] {
+     let (width, height) = match fmt.transform {
+         wlx_frame::Transform::Rotated90
