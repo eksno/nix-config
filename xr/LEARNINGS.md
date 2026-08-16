@@ -47,6 +47,32 @@ Measurement gotchas that burned three runs before the proof:
   harmless `Requesting EDID firmware "" failed (err=-22)` — the kernel
   then falls back to the real DDC EDID.
 
+## Hyprland 0.55.4 SEGV: never connect-cycle a MIRRORING output (2026-08-16)
+
+First monado lease test crashed Hyprland (SEGV, crash report 2129,
+`IHyprRenderer::damageMirrorsWith` ← `renderMonitor` ← frame event):
+the VR-enter connect-cycle forced DP-2 off while it was a *mirror* of
+HDMI-A-1, leaving a dangling monitor ref in the mirror damage path.
+Cost Jorge a session restart ("safe mode" + reboot).
+
+Rule: **`hyprctl keyword monitor "DP-2,disable"` (transient) BEFORE the
+kernel-side off/detect cycle**, both entering and exiting VR mode; after
+exit-cycle, `hyprctl reload` restores the config/watcher mirror state.
+Also run risky tests under `systemd-run --user` (survives compositor
+death — the terminal running Claude dies with Hyprland, which killed
+the session mid-test three times today; a detached unit keeps the
+teardown trap alive).
+
+Same test proved (monado-test.log): DRM lease acquisition works on the
+current stack (lease device card1, connector DP-2 id 530), direct-mode
+swapchain is 3840x1080 A2B10G10R10 (glasses' SBS mode) with
+STORAGE|COLOR_ATTACHMENT (tiling patch active), and the
+surface-lost-retry patch FIRED AND RECOVERED on first present
+("SURFACE_LOST retry 1/3", no retry 2, monado ran its full lifetime).
+Separate: monado-service ignored SIGINT for >10s in this headless-idle
+state (no client connected) — teardown needs a SIGTERM follow-up after
+a grace window (still never SIGKILL while a lease is held).
+
 ## Architecture — GNOME-on-Wayland as a parallel SDDM-selectable session
 
 After the nested-shell wall (next section), the working approach is:
