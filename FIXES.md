@@ -4,6 +4,19 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-08-16 — hyprland-segv-on-vr-mode-entry (mirror-watcher hotplug race)
+
+**Symptom:** Hyprland 0.55.4 SEGV'd twice (crash reports 2129, 2134) during XR VR-mode entry tests; watchdog relaunched it in `--safe-mode` (default config, user config unloadable until relog — `hyprctl reload` cannot exit safe mode).
+**Affected:** host `lewis`/user `jorge`; `dotfiles/default/hypr/shared/scripts/glasses-mirror-watcher.sh`; test scripts in `.scratch/xr-reboot/`.
+**Root cause:** connect-cycling DP-2 (kernel `off`/`detect` for the EDID override) while it is a live Hyprland MIRROR leaves a dangling monitor ref; the next rendered frame crashes in `IHyprRenderer::damageMirrorsWith`. Crash 2 proved a transient `hyprctl keyword monitor "DP-2,disable"` is NOT sufficient protection: the disable fires `monitorremoved`, the mirror watcher wakes 1s later, still sees the glasses in `monitors all` (disabled outputs stay listed), and re-applies the mirror layout before the cycle.
+**Investigation:**
+1. Crash 1 (v1 test): backtrace `damageMirrorsWith ← renderMonitor ← onFrame` → concluded "disable before cycle" — right mechanism, incomplete fix.
+2. Crash 2 (v2 test, disable-first): same backtrace, at t=13s (exactly at monado's lease request, not at the cycle) → journal timing + watcher source read exposed the `monitorremoved`→re-apply race; the stale ref sat dormant until the lease activity triggered the first render.
+3. v3 (watcher suspended, disable held): no crash, but 0 lease connectors — a `disable` rule ALSO suppresses Hyprland's wp-drm-lease-v1 offer for the non-desktop reconnect.
+4. v4: swap the rule to neutral while the connector is physically disconnected (nothing to dangle), then `detect` → lease offered, no crash, full desktop restore. Ran twice + a 5-min full-stack wayvr session on the same Hyprland PID.
+**Fix:** proven sequence in `.scratch/xr-reboot/monado-lease-test.sh` / `wayvr-visual-test.sh`: suspend watcher → `DP-2,disable` + verify it holds 4s → override + `off` → wait DP-2 absent → rule to `DP-2,preferred,auto,1` → `detect` → lease. Teardown: exit-cycle → `hyprctl reload` → `dispatch exec` the watcher. Full detail: `xr/LEARNINGS.md` "never connect-cycle a MIRRORING output".
+**Commit:** `e546aa5`, `5e84c14`, `431b670` (docs; scripts live in gitignored `.scratch/`)
+
 ## 2026-07-30 — system-build-broken-by-flaky-scipy-test (phonetic transitive check dep)
 
 **Symptom:** `nix build .#nixosConfigurations.lewis...toplevel` failed after the flake.lock bump (nixpkgs 26.11.20260723). Errors surfaced as unrelated aggregate drvs (`fish-completions`, `mandb`, `user-units`, `dbus`, polkit units) all saying "1 dependency failed".
