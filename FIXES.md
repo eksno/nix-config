@@ -4,6 +4,19 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-08-18 — moonlight-qt-override-breaks-on-ffmpeg-arg-rename
+
+**Symptom:** `./update.sh` fails the system build with `error: function 'anonymous lambda' called with unexpected argument 'ffmpeg'` pointing at `pkgs/by-name/mo/moonlight-qt/package.nix`, plus a `Did you mean ffmpeg_8?` hint. Note `update.sh` still **exits 0** here — the nix build fails inside it but the script's exit status doesn't reflect that, so the run looks successful. Check `/run/current-system` to confirm whether a switch actually landed.
+**Affected:** verse/eksno, `system/users/eksno/programs/default.nix:224` (the `moonlight-qt.override` line)
+**Root cause:** The `nix flake update` inside `update.sh` moved nixpkgs `0e251e2` → `e5bdc4a`. In that range moonlight-qt's `package.nix` changed its function argument from the generic `ffmpeg` to an explicit `ffmpeg_8`. The pin added on 2026-08-13 (`58b6177`) was `moonlight-qt.override { ffmpeg = ffmpeg_7; }` — `override` validates argument names against the function's actual parameters, so an arg that no longer exists is a hard eval error, not a silent no-op.
+**Investigation:**
+1. Confirmed the switch never landed: `/run/current-system` still resolved to the `0e251e2` generation and `systemctl list-unit-files kbd-backlight-off.service` returned `0 unit files listed`. The exit-0 from `update.sh` was misleading.
+2. Read the new `package.nix` from the store: argument list has `ffmpeg_8` (line 11), used in `buildInputs` (line 55). Version unchanged at 6.1.0, and the only patch is the unrelated Xcode one — so nothing in nixpkgs *looked* like an FFmpeg 8 compat fix.
+3. **Wrong first instinct:** rename the override to `{ ffmpeg_8 = ffmpeg_7; }` to preserve the ffmpeg-7 pin. That would have worked but kept an unnecessary from-source build forever.
+4. Decisive check instead — is upstream's ffmpeg_8 build actually good? `nix path-info --store https://cache.nixos.org` on plain `pkgs.moonlight-qt.outPath` **resolved**, meaning Hydra built 6.1.0 against ffmpeg 8 successfully. The 2026-08-13 incompatibility is fixed upstream, so the pin was obsolete, not just misnamed. Cache hit also means no local compile.
+**Fix:** Dropped the override entirely — plain `moonlight-qt` in `environment.systemPackages`, comment updated to record why the pin is gone. `ffmpeg_7` (7.1.5) still exists in nixpkgs; it simply has no remaining references here.
+**Commit:** `<pending>`
+
 ## 2026-08-13 — full-disk-rebuild-breaks-hyprland-session
 
 **Symptom:** Immediately after a large `./update.sh` switch completed, the running Hyprland session threw a large on-screen error. Running `./gc.sh` cleared it.

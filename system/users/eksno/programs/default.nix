@@ -217,11 +217,10 @@
     # Game streaming — Moonlight client. Connects to a remote Sunshine/GameStream
     # host (e.g. cloud gaming PC). Client only; initiates outbound connections so
     # no firewall ports need opening on this machine. Pair via the host's PIN flow.
-    # ffmpeg pinned to 7.x: 6.1.0's Vulkan renderer still uses the
-    # AVVulkanDeviceContext queue_family_decode_index / nb_decode_queues fields
-    # that FFmpeg 8 removed, so it fails to compile against the default ffmpeg.
-    # Drop the override once upstream ships an FFmpeg 8 fix. See FIXES.md.
-    (moonlight-qt.override { ffmpeg = ffmpeg_7; })
+    # The ffmpeg_7 override is gone: nixpkgs now builds moonlight-qt against
+    # ffmpeg_8 explicitly and Hydra caches the result, so the FFmpeg 8 break
+    # this pinned around is resolved upstream. See FIXES.md.
+    moonlight-qt
   ];
 
   # Git configuration
