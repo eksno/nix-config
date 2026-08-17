@@ -1,6 +1,31 @@
 # XR system state
 
-Last updated: 2026-08-16 evening (black panel root-caused + DPMS-quiesce fix; wayvr capture SEGV root-caused + patched; awaiting patched-build test + Jorge's world-lock verdict)
+Last updated: 2026-08-16 night (multi-screen management: WlxScreenSetVisible IPC + cockpit show/hide/Arrange + VIRTUAL_SCREENS headless outputs; FPS fixed 55.5→60.7 with 0 missed frames; awaiting Jorge's on-head verdict)
+
+## 2026-08-16 (night) — Multi-screen management
+
+wayvr enumerates outputs ONCE at startup (`create_screens`,
+`manager.rs:92`) — no hotplug. So extra screens = Hyprland headless
+outputs created BEFORE wayvr launches. Pieces:
+
+- `ipc-screen-visibility.patch` (commit e005e5f): WlxScreenSetVisible
+  packet + `wayvrctl screen-show/screen-hide` → OverlayTask::
+  ToggleOverlay(EnsureOn/EnsureOff). Stock wayvr puts each screen in
+  its own set (one visible at a time); EnsureOn on a screen parked in
+  another set falls through to `config.activate()` and brings it into
+  the current set — that's the mechanism that lets several screens
+  show at once. We never call SwitchSet, so the set model stays inert.
+- session script: `VIRTUAL_SCREENS=n` env → `hyprctl output create
+  headless claude-vs$i` before wayvr launch; teardown removes
+  claude-vs1..4 unconditionally (covers aborts). Verified create/remove
+  works on Hyprland 0.55.4.
+- cockpit (commit f6fbc11): per-row eye toggle, Arrange (arc spread of
+  visible screens), Virtual displays 0-3 counter persisted in
+  ~/.config/glasses-control/settings.json, passed at session start.
+
+Untested on-head: show/hide round-trip, arrange, virtual screens with
+real content (new headless output = new empty workspace; Jorge drags
+windows there).
 
 ## 2026-08-16 (evening) — Black panel + wayvr capture SEGV both root-caused
 
