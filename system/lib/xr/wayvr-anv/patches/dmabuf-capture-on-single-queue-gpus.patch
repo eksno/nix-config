@@ -1,0 +1,179 @@
+diff -ruN a/wayvr/src/overlays/screen/capture.rs e/wayvr/src/overlays/screen/capture.rs
+--- a/wayvr/src/overlays/screen/capture.rs	2026-08-16 17:37:38.573414487 -0600
++++ b/wayvr/src/overlays/screen/capture.rs	2026-08-16 18:10:46.382302683 -0600
+@@ -504,6 +504,21 @@
+     }
+ }
+ 
++impl WlxCaptureIn {
++    /// A copy of the capture context without the DMA-buf exporter, for
++    /// use on the main thread while the capture thread owns the real one.
++    /// Only the `Implicit` branch of `receive_callback` needs the
++    /// exporter, and that branch runs on the capture thread.
++    fn without_exporter(&self) -> Self {
++        Self {
++            name: self.name.clone(),
++            gfx: self.gfx.clone(),
++            queue: self.queue.clone(),
++            dma_exporter: None,
++        }
++    }
++}
++
+ impl DmaExporter for WlxCaptureIn {
+     fn next_frame(
+         &mut self,
+@@ -681,24 +696,32 @@
+     }
+ }
+ 
+-/// DmaExporter is not used for SHM capture
+-pub(super) struct DummyDrmExporter;
+-impl DmaExporter for DummyDrmExporter {
+-    fn next_frame(
+-        &mut self,
+-        _: u32,
+-        _: u32,
+-        _: DrmFourcc,
+-    ) -> Option<(wlx_frame::FramePlane, DrmModifier)> {
+-        None
+-    }
+-}
+-
+-// Used when a separate GPU queue is not available
+-// In this case, receive_callback needs to run on the main thread
++/// A frame on its way from the capture thread to the main thread.
++pub(super) enum MainThreadFrame {
++    /// Fully converted on the capture thread; nothing left to do.
++    Ready(WlxCaptureOut),
++    /// Needs a queue submission, so the main thread has to finish it.
++    Deferred(WlxFrame),
++}
++
++// Used when a separate GPU queue is not available.
++//
++// Only the SHM paths need the main thread: they call upload_image(),
++// which submits to queue_xfer and blocks on build_and_execute_now().
++// DMA-buf frames are free — WlxFrame::Implicit resolves to an
++// Arc<ImageView> the exporter allocated up front, with no queue work at
++// all — so those are converted on the capture thread and the exporter
++// stays where wlr_screencopy needs it.
++//
++// The exporter must reach the capture thread: wlr_screencopy calls
++// user_data.next_frame() to get a buffer to copy into, and falls back to
++// SHM for the whole session if that returns None. Handing it a
++// no-op exporter here is what pinned single-queue GPUs to CPU capture
++// (~30 fps on a 60 Hz output, one full framebuffer memcpy + upload per
++// screen per frame).
+ pub(super) struct MainThreadWlxCapture<T>
+ where
+-    T: WlxCapture<DummyDrmExporter, WlxFrame>,
++    T: WlxCapture<WlxCaptureIn, MainThreadFrame>,
+ {
+     inner: T,
+     data: Option<WlxCaptureIn>,
+@@ -706,7 +729,7 @@
+ 
+ impl<T> MainThreadWlxCapture<T>
+ where
+-    T: WlxCapture<DummyDrmExporter, WlxFrame>,
++    T: WlxCapture<WlxCaptureIn, MainThreadFrame>,
+ {
+     pub const fn new(inner: T) -> Self {
+         Self { inner, data: None }
+@@ -715,7 +738,7 @@
+ 
+ impl<T> WlxCapture<WlxCaptureIn, WlxCaptureOut> for MainThreadWlxCapture<T>
+ where
+-    T: WlxCapture<DummyDrmExporter, WlxFrame>,
++    T: WlxCapture<WlxCaptureIn, MainThreadFrame>,
+ {
+     fn init(
+         &mut self,
+@@ -723,9 +746,9 @@
+         user_data: WlxCaptureIn,
+         _: fn(&WlxCaptureIn, WlxFrame) -> Option<WlxCaptureOut>,
+     ) {
+-        self.data = Some(user_data);
++        self.data = Some(user_data.without_exporter());
+         self.inner
+-            .init(dmabuf_formats, DummyDrmExporter, receive_callback_map_memfd);
++            .init(dmabuf_formats, user_data, receive_callback_split);
+     }
+     fn is_ready(&self) -> bool {
+         self.inner.is_ready()
+@@ -740,41 +763,48 @@
+         self.inner.resume();
+     }
+     fn receive(&mut self) -> Option<WlxCaptureOut> {
+-        self.inner.receive().and_then(|frame| {
+-            // MemPtr frames on this path come from receive_callback_map_memfd,
+-            // which mmap'd them on the capture thread; unmap after upload.
+-            let mapping = if let WlxFrame::MemPtr(f) = &frame {
+-                Some((f.ptr, f.size))
+-            } else {
+-                None
+-            };
+-            let out = receive_callback(self.data.as_ref().unwrap(), frame);
+-            if let Some((ptr, size)) = mapping {
+-                unsafe { libc::munmap(ptr as *mut _, size) };
++        match self.inner.receive()? {
++            MainThreadFrame::Ready(out) => Some(out),
++            MainThreadFrame::Deferred(frame) => {
++                // MemPtr frames on this path were mmap'd by
++                // receive_callback_split on the capture thread; unmap
++                // after upload.
++                let mapping = if let WlxFrame::MemPtr(f) = &frame {
++                    Some((f.ptr, f.size))
++                } else {
++                    None
++                };
++                let out = receive_callback(self.data.as_ref().unwrap(), frame);
++                if let Some((ptr, size)) = mapping {
++                    unsafe { libc::munmap(ptr as *mut _, size) };
++                }
++                out
+             }
+-            out
+-        })
++        }
+     }
+     fn supports_dmbuf(&self) -> bool {
+         self.inner.supports_dmbuf()
+     }
+ }
+ 
+-#[allow(clippy::trivially_copy_pass_by_ref, clippy::unnecessary_wraps)]
+-const fn receive_callback_dummy(_: &DummyDrmExporter, frame: WlxFrame) -> Option<WlxFrame> {
+-    Some(frame)
++// Runs on the CAPTURE thread. Decides what can be finished here and what
++// has to wait for the main thread's transfer queue.
++//
++// The SHM branch must mmap here, where the fd is still open: the
++// wlr_screencopy capture thread closes it (BufData::drop) right after
++// this callback returns. Without that, MainThreadWlxCapture::receive()
++// mmap'd an already-closed fd, got MAP_FAILED (unchecked, -1) and
++// SIGSEGV'd in memcpy — the "wayvr capture crash on Mesa anv"
++// (single-queue GPUs only, since only those use MainThreadWlxCapture).
++fn receive_callback_split(me: &WlxCaptureIn, frame: WlxFrame) -> Option<MainThreadFrame> {
++    match frame {
++        // No queue submission — just an Arc clone of a pre-allocated image.
++        frame @ WlxFrame::Implicit(_) => receive_callback(me, frame).map(MainThreadFrame::Ready),
++        frame => map_memfd(frame).map(MainThreadFrame::Deferred),
++    }
+ }
+ 
+-// Runs on the CAPTURE thread, where the SHM fd is still open. The
+-// wlr_screencopy capture thread closes the fd (BufData::drop) right after
+-// this callback returns, so the main thread must never touch the fd —
+-// mmap here and forward the mapping instead (it survives close(fd)).
+-// Without this, MainThreadWlxCapture::receive() mmap'd an already-closed
+-// fd, got MAP_FAILED (unchecked, -1) and SIGSEGV'd in memcpy — the
+-// "wayvr capture crash on Mesa anv" (single-queue GPUs only, since only
+-// those use MainThreadWlxCapture).
+-#[allow(clippy::trivially_copy_pass_by_ref)]
+-fn receive_callback_map_memfd(_: &DummyDrmExporter, frame: WlxFrame) -> Option<WlxFrame> {
++fn map_memfd(frame: WlxFrame) -> Option<WlxFrame> {
+     match frame {
+         WlxFrame::MemFd(frame) => {
+             let Some(fd) = frame.plane.fd else {

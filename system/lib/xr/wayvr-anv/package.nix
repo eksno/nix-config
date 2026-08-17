@@ -25,6 +25,21 @@
 #   Also fixes an upstream copy/paste bug where the right pointer's
 #   position was read from pointers[0].
 #
+# - dmabuf-capture-on-single-queue-gpus.patch — the big FPS fix. On a GPU
+#   with only one queue family (Intel Meteor Lake / anv), wayvr routes
+#   capture through MainThreadWlxCapture, which handed wlr_screencopy a
+#   no-op DMA exporter; screencopy falls back to SHM for the whole
+#   session when the exporter yields no buffer, so every frame was a full
+#   framebuffer memcpy plus a blocking upload on the render thread
+#   (~30 fps on a 60 Hz output). Only the SHM paths actually need the
+#   main thread — DMA-buf frames resolve to a pre-allocated Arc<ImageView>
+#   with no queue work — so the callback now splits: DMA-buf finishes on
+#   the capture thread, SHM still defers.
+#
+# - keyboard-optional-on-spawn.patch — adds `keyboard_on_spawn` (default
+#   true) so the virtual keyboard can be left out of the session when a
+#   real keyboard is in reach.
+#
 # Patches apply against the v26.7.1 source nixpkgs pins. If the version
 # bumps, re-verify the patch context (26.2.1 -> 26.7.1 moved the wayland
 # screen-creation loop body and its call site; curved-arc-layout.patch
@@ -42,5 +57,7 @@ wayvr.overrideAttrs (old: {
     ./patches/screencopy-mainthread-fd-use-after-close.patch
     ./patches/ipc-recenter-command.patch
     ./patches/ipc-telemetry-and-layout.patch
+    ./patches/dmabuf-capture-on-single-queue-gpus.patch
+    ./patches/keyboard-optional-on-spawn.patch
   ];
 })

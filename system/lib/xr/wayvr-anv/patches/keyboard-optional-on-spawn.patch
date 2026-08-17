@@ -1,0 +1,27 @@
+diff -ruN a/wayvr/src/windowing/manager.rs e/wayvr/src/windowing/manager.rs
+--- a/wayvr/src/windowing/manager.rs	2026-08-16 17:37:38.575968876 -0600
++++ b/wayvr/src/windowing/manager.rs	2026-08-16 18:11:04.231831822 -0600
+@@ -110,7 +110,7 @@
+         }
+ 
+         let mut keyboard = OverlayWindowData::from_config(create_keyboard(app, wayland)?);
+-        keyboard.config.show_on_spawn = true;
++        keyboard.config.show_on_spawn = app.session.config.keyboard_on_spawn;
+         me.keyboard_id = me.add(keyboard, app);
+ 
+         // is this needed?
+diff -ruN a/wlx-common/src/config.rs e/wlx-common/src/config.rs
+--- a/wlx-common/src/config.rs	2026-08-16 17:37:38.577814567 -0600
++++ b/wlx-common/src/config.rs	2026-08-16 18:11:04.231626162 -0600
+@@ -317,6 +317,11 @@
+ 	#[serde(default = "def_one")]
+ 	pub keyboard_scale: f32,
+ 
++	/// Show the virtual keyboard when the session starts. Off is useful
++	/// on desktop-tethered headsets where a real keyboard is in reach.
++	#[serde(default = "def_true")]
++	pub keyboard_on_spawn: bool,
++
+ 	#[serde(default = "def_one")]
+ 	pub default_overlay_scale: f32,
+ 
