@@ -4,6 +4,18 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-08-17 — keyboard-resurrected-by-saved-layout
+
+**Symptom:** the virtual keyboard reappeared in the glasses despite `keyboard_on_spawn: false` having worked in an earlier session ("the keyboard came back").
+**Affected:** lewis/jorge, wayvr `restore_layout` (`wayvr/src/windowing/manager.rs:529`), `~/.config/wayvr/conf.d/zz-saved-state.json5`
+**Root cause:** wayvr persists the overlay layout to `conf.d/zz-saved-state.json5` and `restore_layout` runs at startup AFTER the spawn-visibility logic. A layout saved while the keyboard was visible (from a session predating the keyboard_on_spawn patch, or after summoning it via the watch) contains `"kbd"` in the set's active `overlays` map — restoring it overrides `show_on_spawn = false` every session.
+**Investigation:**
+1. confirmed the running binary WAS the patched one (`/proc/<pid>/exe` → the store path with keyboard-optional-on-spawn) — so spawn logic wasn't the problem
+2. audited runtime paths that activate `keyboard_id`: AddSet force-activates it; `restore_layout` at manager.rs:164 restores set contents wholesale
+3. found `"kbd"` as an active overlay in `zz-saved-state.json5` (mtime = last session)
+**Fix:** two parts. Live: `wayvrctl screen-hide kbd` — ToggleOverlay-by-name works on any overlay, not just screens. Durable: `keyboard-skip-saved-layout.patch` — restore_layout skips the saved kbd state when `keyboard_on_spawn = false` (a later manual summon still works; only the saved-layout resurrection is blocked).
+**Commit:** `788ec0e`
+
 ## 2026-08-16 — cockpit-knob-changes-revert-on-hidden-screens
 
 **Symptom:** slider changes in the Cockpit "keep getting undone straight after setting a new knob" — value snaps back ~2 s later.

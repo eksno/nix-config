@@ -1,0 +1,18 @@
+diff -ruN a/wayvr/src/windowing/manager.rs h/wayvr/src/windowing/manager.rs
+--- a/wayvr/src/windowing/manager.rs	2026-08-16 23:52:25.772417180 -0600
++++ b/wayvr/src/windowing/manager.rs	2026-08-17 00:00:51.410410891 -0600
+@@ -545,6 +545,14 @@
+             let mut inactive_overlays = AStrMap::new();
+ 
+             for (name, o) in &s.overlays {
++                // A layout saved while the keyboard was up would resurrect
++                // it on every start, overriding keyboard_on_spawn.
++                if name.as_ref() == crate::overlays::keyboard::KEYBOARD_NAME
++                    && !app.session.config.keyboard_on_spawn
++                {
++                    log::debug!("set {i}: skipping saved keyboard state (keyboard_on_spawn=false)");
++                    continue;
++                }
+                 if let Some(id) = self.lookup(name) {
+                     log::debug!("set {i}: loaded state for {name}");
+                     overlays.insert(id, o.clone());

@@ -50,6 +50,11 @@
 #   as yaw so screens land centred where you're looking, instead of
 #   only rotating around you at the old height. Roll never tilts.
 #
+# - keyboard-skip-saved-layout.patch — restore_layout runs after the
+#   spawn-hidden logic and would resurrect the keyboard from a layout
+#   saved while it was visible (conf.d/zz-saved-state.json5). Skip the
+#   saved kbd state when keyboard_on_spawn = false.
+#
 # Patches apply against the v26.7.1 source nixpkgs pins. If the version
 # bumps, re-verify the patch context (26.2.1 -> 26.7.1 moved the wayland
 # screen-creation loop body and its call site; curved-arc-layout.patch
@@ -71,5 +76,6 @@ wayvr.overrideAttrs (old: {
     ./patches/keyboard-optional-on-spawn.patch
     ./patches/ipc-screen-visibility.patch
     ./patches/recenter-include-pitch.patch
+    ./patches/keyboard-skip-saved-layout.patch
   ];
 })
