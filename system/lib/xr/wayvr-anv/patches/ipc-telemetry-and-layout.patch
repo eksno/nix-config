@@ -1,0 +1,478 @@
+diff -ruN a/wayvr/src/backend/wayvr/mod.rs d/wayvr/src/backend/wayvr/mod.rs
+--- a/wayvr/src/backend/wayvr/mod.rs	2026-08-16 16:55:32.559590388 -0600
++++ b/wayvr/src/backend/wayvr/mod.rs	2026-08-16 17:42:29.994817513 -0600
+@@ -285,7 +285,10 @@
+     }
+ 
+     #[allow(clippy::too_many_lines)]
+-    pub fn tick_events(app: &mut AppState) -> anyhow::Result<Vec<TickTask>> {
++    pub fn tick_events(
++        app: &mut AppState,
++        layout: &[wayvr_ipc::packet_server::WlxScreenInfo],
++    ) -> anyhow::Result<Vec<TickTask>> {
+         let mut tasks: Vec<TickTask> = Vec::new();
+ 
+         let Some(wvr_server) = app.wvr_server.as_mut() else {
+@@ -297,6 +300,8 @@
+             input_state: &app.input_state,
+             tasks: &mut tasks,
+             signals: &app.wayvr_signals,
++            delta_time: app.delta_time,
++            layout,
+         });
+ 
+         // Tick all child processes
+diff -ruN a/wayvr/src/ipc/events.rs d/wayvr/src/ipc/events.rs
+--- a/wayvr/src/ipc/events.rs	2026-08-16 16:55:51.074601613 -0600
++++ b/wayvr/src/ipc/events.rs	2026-08-16 17:42:54.478772358 -0600
+@@ -11,8 +11,73 @@
+     },
+     ipc::signal::WayVRSignal,
+     state::AppState,
+-    windowing::manager::OverlayWindowManager,
++    windowing::{
++        OverlaySelector,
++        manager::OverlayWindowManager,
++        window::{OverlayCategory, scalar_scale},
++    },
+ };
++use glam::{Affine3A, EulerRot, Mat3A, Vec3A};
++
++/// Anchor-relative pose of every screen overlay, in the units the GUI
++/// speaks: degrees around/above the user, metres away.
++///
++/// `saved_transform` (not `transform`) is the authoritative value for
++/// `Anchored` overlays — `auto_movement` recomputes `transform` from it
++/// as `anchor * saved` every frame, so anything written to `transform`
++/// alone is discarded on the next tick.
++fn snapshot_layout<O>(overlays: &OverlayWindowManager<O>) -> Vec<packet_server::WlxScreenInfo>
++where
++    O: Default,
++{
++    overlays
++        .values()
++        .filter(|o| matches!(o.config.category, OverlayCategory::Screen))
++        .map(|o| {
++            let state = o.config.active_state.as_ref();
++            let transform = state
++                .and_then(|s| s.saved_transform)
++                .unwrap_or(o.config.default_state.transform);
++            let pos = transform.translation;
++            let distance = pos.length();
++            let pitch = if distance > 1e-4 {
++                (pos.y / distance).asin().to_degrees()
++            } else {
++                0.0
++            };
++
++            packet_server::WlxScreenInfo {
++                name: o.config.name.to_string(),
++                yaw: pos.x.atan2(-pos.z).to_degrees(),
++                pitch,
++                distance,
++                scale: scalar_scale(&transform),
++                curvature: state.and_then(|s| s.curvature).unwrap_or(0.0),
++                visible: state.is_some(),
++            }
++        })
++        .collect()
++}
++
++/// Build the anchor-relative transform for a screen sitting `distance`
++/// metres away at `yaw`/`pitch` degrees, turned to face the user.
++///
++/// Overlay planes face +Z, so the rotation that points a screen at the
++/// origin from (sin y cos p, sin p, -cos y cos p) is YXZ euler
++/// (-yaw, pitch, 0).
++fn place_transform(yaw_deg: f32, pitch_deg: f32, distance: f32, scale: f32) -> Affine3A {
++    let (yaw, pitch) = (yaw_deg.to_radians(), pitch_deg.to_radians());
++    let translation = Vec3A::new(
++        distance * yaw.sin() * pitch.cos(),
++        distance * pitch.sin(),
++        -distance * yaw.cos() * pitch.cos(),
++    );
++
++    Affine3A {
++        matrix3: Mat3A::from_euler(EulerRot::YXZ, -yaw, pitch, 0.0).mul_scalar(scale),
++        translation,
++    }
++}
+ 
+ fn process_tick_tasks(
+     tick_tasks: Vec<backend::wayvr::TickTask>,
+@@ -64,6 +129,46 @@
+                 app.tasks
+                     .enqueue(TaskType::Playspace(PlayspaceTask::Recenter));
+             }
++            WayVRSignal::ScreenPlace(place) => {
++                let name: std::sync::Arc<str> = place.name.as_str().into();
++                app.tasks.enqueue(TaskType::Overlay(OverlayTask::Modify(
++                    OverlaySelector::Name(name),
++                    Box::new(move |app, cfg| {
++                        let Some(state) = cfg.active_state.as_mut() else {
++                            log::warn!("ScreenPlace: '{}' is not visible", place.name);
++                            return;
++                        };
++
++                        let cur = state
++                            .saved_transform
++                            .unwrap_or(cfg.default_state.transform);
++                        let pos = cur.translation;
++                        let cur_distance = pos.length();
++
++                        let transform = place_transform(
++                            place.yaw.unwrap_or_else(|| pos.x.atan2(-pos.z).to_degrees()),
++                            place.pitch.unwrap_or_else(|| {
++                                if cur_distance > 1e-4 {
++                                    (pos.y / cur_distance).asin().to_degrees()
++                                } else {
++                                    0.0
++                                }
++                            }),
++                            place.distance.unwrap_or(cur_distance).max(0.1),
++                            place.scale.unwrap_or_else(|| scalar_scale(&cur)).max(0.01),
++                        );
++
++                        state.saved_transform = Some(transform);
++                        state.transform = app.anchor * transform;
++
++                        if let Some(curvature) = place.curvature {
++                            state.curvature = (curvature > 0.001).then_some(curvature.min(0.5));
++                        }
++
++                        cfg.dirty = true;
++                    }),
++                )));
++            }
+             WayVRSignal::Handsfree(params) => match params {
+                 HandsfreeParams::SetMode(mode) => {
+                     let mode = match mode {
+@@ -80,7 +185,8 @@
+         }
+     }
+ 
+-    let tick_tasks = WvrServerState::tick_events(app)?;
++    let layout = snapshot_layout(_overlays);
++    let tick_tasks = WvrServerState::tick_events(app, &layout)?;
+     if let Some(wayvr_server) = app.wvr_server.as_mut() {
+         process_tick_tasks(tick_tasks, wayvr_server);
+     }
+diff -ruN a/wayvr/src/ipc/ipc_server.rs d/wayvr/src/ipc/ipc_server.rs
+--- a/wayvr/src/ipc/ipc_server.rs	2026-08-16 16:55:51.074265373 -0600
++++ b/wayvr/src/ipc/ipc_server.rs	2026-08-16 17:42:15.325522972 -0600
+@@ -86,6 +86,10 @@
+     pub tasks: &'a mut Vec<wayvr::TickTask>,
+     pub signals: &'a SyncEventQueue<WayVRSignal>,
+     pub input_state: &'a InputState,
++    /// Seconds elapsed in the last render frame.
++    pub delta_time: f32,
++    /// Snapshot of the screen overlays, taken once per tick.
++    pub layout: &'a [packet_server::WlxScreenInfo],
+ }
+ 
+ pub fn gen_args_vec(input: &str) -> Vec<&str> {
+@@ -167,6 +171,10 @@
+         serial: ipc::Serial,
+     ) -> anyhow::Result<()> {
+         let to_arr = |vec: &Vec3A| -> [f32; 3] { [vec.x, vec.y, vec.z] };
++        let hmd_rot = glam::Quat::from_mat3a(&params.input_state.hmd.matrix3.mul_scalar(
++            1.0 / params.input_state.hmd.matrix3.x_axis.length().max(f32::EPSILON),
++        ))
++        .normalize();
+ 
+         send_packet(
+             &mut self.conn,
+@@ -174,11 +182,17 @@
+                 serial,
+                 packet_server::WlxInputState {
+                     hmd_pos: to_arr(&params.input_state.hmd.translation),
++                    hmd_rot: [hmd_rot.x, hmd_rot.y, hmd_rot.z, hmd_rot.w],
++                    fps: if params.delta_time > 0.0 {
++                        1.0 / params.delta_time
++                    } else {
++                        0.0
++                    },
+                     left: WlxInputStatePointer {
+                         pos: to_arr(&params.input_state.pointers[0].raw_pose.translation),
+                     },
+                     right: WlxInputStatePointer {
+-                        pos: to_arr(&params.input_state.pointers[0].raw_pose.translation),
++                        pos: to_arr(&params.input_state.pointers[1].raw_pose.translation),
+                     },
+                 },
+             )),
+@@ -187,6 +201,22 @@
+         Ok(())
+     }
+ 
++    fn handle_wlx_screen_list(
++        &mut self,
++        params: &TickParams,
++        serial: ipc::Serial,
++    ) -> anyhow::Result<()> {
++        send_packet(
++            &mut self.conn,
++            &ipc::data_encode(&PacketServer::WlxScreenListResponse(
++                serial,
++                params.layout.to_vec(),
++            )),
++        )?;
++
++        Ok(())
++    }
++
+     fn handle_wvr_window_list(
+         &mut self,
+         params: &mut TickParams,
+@@ -444,6 +474,12 @@
+             PacketClient::WlxRecenter => {
+                 params.signals.send(WayVRSignal::Recenter);
+             }
++            PacketClient::WlxScreenList(serial) => {
++                self.handle_wlx_screen_list(params, serial)?;
++            }
++            PacketClient::WlxScreenPlace(place) => {
++                params.signals.send(WayVRSignal::ScreenPlace(place));
++            }
+         }
+ 
+         Ok(())
+diff -ruN a/wayvr/src/ipc/signal.rs d/wayvr/src/ipc/signal.rs
+--- a/wayvr/src/ipc/signal.rs	2026-08-16 16:55:51.074191887 -0600
++++ b/wayvr/src/ipc/signal.rs	2026-08-16 17:42:29.994511989 -0600
+@@ -5,6 +5,7 @@
+     SwitchSet(Option<usize>),
+     Handsfree(wayvr_ipc::packet_client::HandsfreeParams),
+     Recenter,
++    ScreenPlace(wayvr_ipc::packet_client::WlxScreenPlace),
+     ShowHide,
+     CustomTask(crate::backend::task::ModifyPanelTask),
+ }
+diff -ruN a/wayvrctl/src/helper.rs d/wayvrctl/src/helper.rs
+--- a/wayvrctl/src/helper.rs	2026-08-16 16:55:51.074769166 -0600
++++ b/wayvrctl/src/helper.rs	2026-08-16 17:43:18.551421856 -0600
+@@ -173,6 +173,29 @@
+     )
+ }
+ 
++pub async fn wlx_screen_list(state: &mut WayVRClientState) {
++    handle_result(
++        state.pretty_print,
++        WayVRClient::fn_wlx_screen_list(
++            state.wayvr_client.clone(),
++            state.serial_generator.increment_get(),
++        )
++        .await
++        .context("failed to get screen list"),
++    )
++}
++
++pub async fn wlx_screen_place(
++    state: &mut WayVRClientState,
++    params: packet_client::WlxScreenPlace,
++) {
++    handle_empty_result(
++        WayVRClient::fn_wlx_screen_place(state.wayvr_client.clone(), params)
++            .await
++            .context("failed to place screen"),
++    )
++}
++
+ pub async fn wlx_recenter(state: &mut WayVRClientState) {
+     handle_empty_result(
+         WayVRClient::fn_wlx_recenter(state.wayvr_client.clone())
+diff -ruN a/wayvrctl/src/main.rs d/wayvrctl/src/main.rs
+--- a/wayvrctl/src/main.rs	2026-08-16 16:55:51.074728313 -0600
++++ b/wayvrctl/src/main.rs	2026-08-16 17:43:33.963972672 -0600
+@@ -14,9 +14,10 @@
+ };
+ 
+ use crate::helper::{
+-    WayVRClientState, wlx_device_haptics, wlx_handsfree, wlx_input_state, wlx_panel_modify, wlx_recenter,
+-    wlx_show_hide, wlx_switch_set, wvr_process_get, wvr_process_launch, wvr_process_list,
+-    wvr_process_terminate, wvr_window_list, wvr_window_set_visible,
++    WayVRClientState, wlx_device_haptics, wlx_handsfree, wlx_input_state, wlx_panel_modify,
++    wlx_recenter, wlx_screen_list, wlx_screen_place, wlx_show_hide, wlx_switch_set,
++    wvr_process_get, wvr_process_launch, wvr_process_list, wvr_process_terminate,
++    wvr_window_list, wvr_window_set_visible,
+ };
+ 
+ mod helper;
+@@ -200,6 +201,30 @@
+         Subcommands::Recenter => {
+             wlx_recenter(state).await;
+         }
++        Subcommands::ScreenList => {
++            wlx_screen_list(state).await;
++        }
++        Subcommands::ScreenPlace {
++            name,
++            yaw,
++            pitch,
++            distance,
++            scale,
++            curvature,
++        } => {
++            wlx_screen_place(
++                state,
++                packet_client::WlxScreenPlace {
++                    name,
++                    yaw,
++                    pitch,
++                    distance,
++                    scale,
++                    curvature,
++                },
++            )
++            .await;
++        }
+         Subcommands::Handsfree { command } => {
+             wlx_handsfree(state, command.into()).await;
+         }
+@@ -306,6 +331,28 @@
+     },
+     /// Recenter the playspace to the current headset yaw and position
+     Recenter,
++    /// List screen overlays with their position in the playspace
++    ScreenList,
++    /// Move/resize a screen overlay. Omitted values are left unchanged.
++    ScreenPlace {
++        /// Screen overlay name, as reported by screen-list
++        name: String,
++        /// Degrees around the user; positive is to the right
++        #[arg(long)]
++        yaw: Option<f32>,
++        /// Degrees of elevation; positive is up
++        #[arg(long)]
++        pitch: Option<f32>,
++        /// Metres from the user
++        #[arg(long)]
++        distance: Option<f32>,
++        /// Screen width in metres
++        #[arg(long)]
++        scale: Option<f32>,
++        /// Fraction of a full circle, 0.0..=0.5. 0 is flat.
++        #[arg(long)]
++        curvature: Option<f32>,
++    },
+ }
+ 
+ #[derive(Debug, Clone, Copy, clap::ValueEnum)]
+diff -ruN a/wayvr-ipc/src/client.rs d/wayvr-ipc/src/client.rs
+--- a/wayvr-ipc/src/client.rs	2026-08-16 16:55:51.074137289 -0600
++++ b/wayvr-ipc/src/client.rs	2026-08-16 17:51:34.293991703 -0600
+@@ -452,6 +452,26 @@
+ 		Ok(())
+ 	}
+ 
++	pub async fn fn_wlx_screen_list(
++		client: WayVRClientMutex,
++		serial: Serial,
++	) -> anyhow::Result<Vec<packet_server::WlxScreenInfo>> {
++		Ok(send_and_wait!(
++			client,
++			serial,
++			&PacketClient::WlxScreenList(serial),
++			WlxScreenListResponse
++		))
++	}
++
++	pub async fn fn_wlx_screen_place(
++		client: WayVRClientMutex,
++		params: packet_client::WlxScreenPlace,
++	) -> anyhow::Result<()> {
++		send_only!(client, &PacketClient::WlxScreenPlace(params));
++		Ok(())
++	}
++
+ 	pub async fn fn_wlx_recenter(client: WayVRClientMutex) -> anyhow::Result<()> {
+ 		send_only!(client, &PacketClient::WlxRecenter);
+ 		Ok(())
+diff -ruN a/wayvr-ipc/src/ipc.rs d/wayvr-ipc/src/ipc.rs
+--- a/wayvr-ipc/src/ipc.rs	2026-08-16 16:55:32.575305546 -0600
++++ b/wayvr-ipc/src/ipc.rs	2026-08-16 17:37:38.594558692 -0600
+@@ -22,7 +22,7 @@
+ 	}
+ }
+ 
+-pub const PROTOCOL_VERSION: u32 = 3;
++pub const PROTOCOL_VERSION: u32 = 4;
+ pub const CONNECTION_MAGIC: &str = "wayvr_ipc";
+ 
+ pub fn data_encode<T>(data: &T) -> Vec<u8>
+diff -ruN a/wayvr-ipc/src/packet_client.rs d/wayvr-ipc/src/packet_client.rs
+--- a/wayvr-ipc/src/packet_client.rs	2026-08-16 16:55:51.074062212 -0600
++++ b/wayvr-ipc/src/packet_client.rs	2026-08-16 17:37:38.594526194 -0600
+@@ -65,6 +65,18 @@
+ 	pub frequency: f32,
+ }
+ 
++/// Absolute placement for a screen overlay. Fields left as None keep
++/// their current value.
++#[derive(Clone, Debug, Serialize, Deserialize)]
++pub struct WlxScreenPlace {
++	pub name: String,
++	pub yaw: Option<f32>,
++	pub pitch: Option<f32>,
++	pub distance: Option<f32>,
++	pub scale: Option<f32>,
++	pub curvature: Option<f32>,
++}
++
+ #[derive(Clone, Debug, Serialize, Deserialize)]
+ pub enum WlxModifyPanelCommand {
+ 	SetText(String),
+@@ -97,4 +109,6 @@
+ 	WlxSwitchSet(Option<usize>),
+ 	WlxHandsfree(HandsfreeParams),
+ 	WlxRecenter,
++	WlxScreenList(Serial),
++	WlxScreenPlace(WlxScreenPlace),
+ }
+diff -ruN a/wayvr-ipc/src/packet_server.rs d/wayvr-ipc/src/packet_server.rs
+--- a/wayvr-ipc/src/packet_server.rs	2026-08-16 16:55:32.575553186 -0600
++++ b/wayvr-ipc/src/packet_server.rs	2026-08-16 17:57:40.186113896 -0600
+@@ -87,8 +87,27 @@
+ }
+ 
+ #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
++pub struct WlxScreenInfo {
++	pub name: String,
++	/// Degrees around the user; positive is to the right.
++	pub yaw: f32,
++	/// Degrees of elevation; positive is up.
++	pub pitch: f32,
++	/// Metres from the user.
++	pub distance: f32,
++	pub scale: f32,
++	/// Fraction of a full circle, 0.0..=0.5. 0 is flat.
++	pub curvature: f32,
++	pub visible: bool,
++}
++
++#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+ pub struct WlxInputState {
+ 	pub hmd_pos: [f32; 3],
++	/// HMD orientation as a quaternion (x, y, z, w).
++	pub hmd_rot: [f32; 4],
++	/// Renderer frames per second.
++	pub fps: f32,
+ 	pub left: WlxInputStatePointer,
+ 	pub right: WlxInputStatePointer,
+ }
+@@ -100,6 +119,7 @@
+ 	Disconnect(Disconnect),
+ 	HandshakeSuccess(HandshakeSuccess),
+ 	WlxInputStateResponse(Serial, WlxInputState),
++	WlxScreenListResponse(Serial, Vec<WlxScreenInfo>),
+ 	WvrWindowListResponse(Serial, Option<WvrWindowList>),
+ 	WvrProcessGetResponse(Serial, Option<WvrProcess>),
+ 	WvrProcessLaunchResponse(Serial, Result<WvrProcessHandle, String>),
+@@ -113,6 +133,7 @@
+ 			PacketServer::Disconnect(_) => None,
+ 			PacketServer::HandshakeSuccess(_) => None,
+ 			PacketServer::WlxInputStateResponse(serial, _) => Some(serial),
++			PacketServer::WlxScreenListResponse(serial, _) => Some(serial),
+ 			PacketServer::WvrWindowListResponse(serial, _) => Some(serial),
+ 			PacketServer::WvrProcessGetResponse(serial, _) => Some(serial),
+ 			PacketServer::WvrProcessLaunchResponse(serial, _) => Some(serial),

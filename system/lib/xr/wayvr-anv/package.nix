@@ -18,6 +18,13 @@
 #   SPACING=0.6 rad (~34°). Single-screen sessions fall back to the
 #   legacy (0, 0, -0.5) anchor.
 #
+# - ipc-telemetry-and-layout.patch — the IPC surface the Glasses cockpit
+#   app needs: WlxInputState gains hmd_rot + fps, and two new packets
+#   (WlxScreenList / WlxScreenPlace) report and set each screen's
+#   yaw/pitch/distance/scale/curvature. Bumps PROTOCOL_VERSION 3 -> 4.
+#   Also fixes an upstream copy/paste bug where the right pointer's
+#   position was read from pointers[0].
+#
 # Patches apply against the v26.7.1 source nixpkgs pins. If the version
 # bumps, re-verify the patch context (26.2.1 -> 26.7.1 moved the wayland
 # screen-creation loop body and its call site; curved-arc-layout.patch
@@ -34,5 +41,6 @@ wayvr.overrideAttrs (old: {
     ./patches/curved-arc-layout.patch
     ./patches/screencopy-mainthread-fd-use-after-close.patch
     ./patches/ipc-recenter-command.patch
+    ./patches/ipc-telemetry-and-layout.patch
   ];
 })
