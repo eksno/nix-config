@@ -4,6 +4,18 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-08-16 — cockpit-app-dies-on-session-teardown
+
+**Symptom:** pressing "Turn off" in the Cockpit killed the Cockpit window itself ("it crashed").
+**Affected:** lewis/jorge, glasses-control app; teardown in `.scratch/xr-reboot/wayvr-visual-test.sh`
+**Root cause:** teardown re-enables DP-2 + runs `hyprctl reload`; during the output reshuffle Hyprland resets the app's Wayland connection (app log: `vkQueuePresentKHR VK_ERROR_OUT_OF_DATE_KHR` then `Error flushing display: Connection reset by peer`). A GTK app cannot survive a Wayland disconnect. Hyprland itself stayed up (pixman "Invalid rectangle" warnings in the journal are noise from the same reshuffle); wayvr/monado teardown completed cleanly, twice even (trap fires on both TERM and EXIT — harmless, teardown is idempotent).
+**Investigation:**
+1. supervisor log showed a clean double teardown, units inactive, no coredumps — so the "crash" wasn't the session
+2. glasses-app.log timestamped the GTK death at 23:42:03, the same second as `hyprctl reload`
+3. checked Hyprland start time (23:25) — desktop survived, only the app's connection was reset
+**Fix:** run the Cockpit under a user unit with `Restart=on-failure` (`~/.config/systemd/user/glasses-cockpit.service`), so it relaunches ~2 s after a compositor disconnect. Also added `~/.local/share/applications/no.starti.Glasses.desktop` so "Glasses" shows up in the launcher (the package's own .desktop entry is invisible while the app lives in `.scratch` instead of systemPackages). Both files are home-dir side; they graduate into the repo with breezy-hyprland.
+**Commit:** `aea3bc1` (docs-only; the fix lives in ~/.config and ~/.local)
+
 ## 2026-08-16 — glasses-half-framerate-direct-mode-double-buffer
 
 **Symptom:** the glasses felt sluggish. monado logged `Compositor probably missed frame by 16.7ms` 601 times per 20 s — one full 60 Hz period, 30 times a second — and wayvr's own render loop reported 55 fps.
