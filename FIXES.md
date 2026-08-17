@@ -15,7 +15,7 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 3. Confirmed both services actively looping in the current boot; after `systemctl --user disable --now` both, temp only fell to ~90°C because the live wayvr/monado session keeps the iGPU at max clock.
 4. `platform_profile` balanced→performance: fan 3700→5400 RPM, package 98→80°C within a minute, VR session still running.
 **Fix:** disabled both crash-looping services (re-enable only after repointing openclaw-node's ExecStart to `/run/current-system/sw/bin/node` and fixing the review GUI's dep prompt, e.g. `Environment=CI=true`). Session script `.scratch/xr-reboot/wayvr-visual-test.sh` now sets `platform_profile=performance` + iGPU min freq 1200 MHz for the session and restores both on teardown, and exports `U_PACING_LIVE_STATS` / `XRT_COMPOSITOR_PRINT_MODES` for frame-timing ground truth. Remaining candidates (not yet applied): cap MMIO RAPL PL1 to 28 W during XR, extend `power-mode` to write the MMIO path, thermal trace logger for the next cutoff.
-**Commit:** `bb2a643`
+**Commit:** `be00e04`
 
 ## 2026-08-17 — keyboard-resurrected-by-saved-layout
 
