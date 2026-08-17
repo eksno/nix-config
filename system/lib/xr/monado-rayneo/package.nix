@@ -1,6 +1,7 @@
 {
   monado,
   fetchFromGitLab,
+  makeWrapper,
 }:
 
 # Monado with Stanislav Aleksandrov's Rayneo driver from MR !2737
@@ -51,4 +52,19 @@ monado.overrideAttrs (old: {
       ./patches/comp-renderer-scanout-compatible-tiling.patch
       ./patches/comp-renderer-surface-lost-retry.patch
     ];
+
+  nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ makeWrapper ];
+
+  # Direct-mode targets default to a 2-image swapchain, deliberately, so the
+  # compositor runs lockstep with the display (comp_target_swapchain.c). That
+  # assumes present returns once the flip is queued; on Mesa anv's wsi_display
+  # it returns once the flip has *scanned out*, so render serialises behind
+  # scanout and the glasses present at exactly half rate — 601 "Compositor
+  # probably missed frame by 16.7ms" warnings in 20s at 3840x1080, and 30 fps.
+  # A third image breaks the lockstep: 0 missed frames, a steady 60.
+  # --set-default so it can still be overridden for A/B testing.
+  postFixup = (old.postFixup or "") + ''
+    wrapProgram $out/bin/monado-service \
+      --set-default XRT_COMPOSITOR_PREFERRED_IMAGE_COUNT 3
+  '';
 })
