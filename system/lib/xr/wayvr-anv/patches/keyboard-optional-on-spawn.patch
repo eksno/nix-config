@@ -1,7 +1,7 @@
 diff -ruN a/wayvr/src/windowing/manager.rs e/wayvr/src/windowing/manager.rs
 --- a/wayvr/src/windowing/manager.rs	2026-08-16 17:37:38.575968876 -0600
-+++ b/wayvr/src/windowing/manager.rs	2026-08-16 18:11:04.231831822 -0600
-@@ -110,7 +110,7 @@
++++ b/wayvr/src/windowing/manager.rs	2026-08-16 18:28:56.305498082 -0600
+@@ -110,21 +110,24 @@
          }
  
          let mut keyboard = OverlayWindowData::from_config(create_keyboard(app, wayland)?);
@@ -10,6 +10,29 @@ diff -ruN a/wayvr/src/windowing/manager.rs e/wayvr/src/windowing/manager.rs
          me.keyboard_id = me.add(keyboard, app);
  
          // is this needed?
+         me.switch_to_set(app, None, false);
+ 
+-        // copy keyboard to all sets
+-        let kbd_state = me
++        // Copy the keyboard to all sets. When keyboard_on_spawn is off it
++        // has no visible state to copy; toggling it on later falls back to
++        // OverlayWindowConfig::activate, so every set can still show it.
++        if let Some(kbd_state) = me
+             .sets
+             .last()
+             .and_then(|s| s.overlays.get(me.keyboard_id))
+-            .unwrap()
+-            .clone();
+-        for set in &mut me.sets {
+-            set.overlays.insert(me.keyboard_id, kbd_state.clone());
++            .cloned()
++        {
++            for set in &mut me.sets {
++                set.overlays.insert(me.keyboard_id, kbd_state.clone());
++            }
+         }
+ 
+         let anchor = OverlayWindowData::from_config(create_anchor(app)?);
 diff -ruN a/wlx-common/src/config.rs e/wlx-common/src/config.rs
 --- a/wlx-common/src/config.rs	2026-08-16 17:37:38.577814567 -0600
 +++ b/wlx-common/src/config.rs	2026-08-16 18:11:04.231626162 -0600
