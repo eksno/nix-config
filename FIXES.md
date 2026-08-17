@@ -4,6 +4,19 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-08-17 — laptop-overheating-crash-loops-and-lazy-fan
+
+**Symptom:** package temp 93–98°C at "near-idle", fan stuck at ~3700 RPM, and one unexplained hard power-off at 23:23:27 (suspected thermal safety cutoff).
+**Affected:** lewis/jorge, `~/.config/systemd/user/openclaw-node.service`, `~/.config/systemd/user/assistant-review-gui.service`, `/sys/firmware/acpi/platform_profile`
+**Root cause:** two enabled user services crash-looped every 5–9 s for the entire uptime: `openclaw-node` hardcodes a GC'd nix store node path (`status=203/EXEC`), and `assistant-review-gui` runs `pnpm dev` → dep check → `pnpm install` → no-TTY prompt abort (~3.6 s CPU per 9 s cycle, restart counter 677 in one 69-min boot). On top of that the EC fan curve on `platform_profile=balanced` idles at 3700 RPM even at 98°C, and a live VR session pins the iGPU at max clock (2233/2250 MHz). The power-off itself left zero OS traces (journal ends mid-record, empty pstore, fsck journal recovery next boot) — consistent with an EC/firmware-level thermal cutoff, which logs nothing; not provable from logs alone.
+**Investigation:**
+1. Subagent forensics on boot -1: no shutdown target, no mce/PROCHOT/thermal kernel lines, no panic in efi_pstore, coredumps clean → hard power cut, not a kernel event.
+2. RAPL: MSR PL1 was 200 W (thermald `--adaptive` / firmware, not our power-mode module); effective cap is MMIO PL1 = 36 W vs 28 W chassis design.
+3. Confirmed both services actively looping in the current boot; after `systemctl --user disable --now` both, temp only fell to ~90°C because the live wayvr/monado session keeps the iGPU at max clock.
+4. `platform_profile` balanced→performance: fan 3700→5400 RPM, package 98→80°C within a minute, VR session still running.
+**Fix:** disabled both crash-looping services (re-enable only after repointing openclaw-node's ExecStart to `/run/current-system/sw/bin/node` and fixing the review GUI's dep prompt, e.g. `Environment=CI=true`). Session script `.scratch/xr-reboot/wayvr-visual-test.sh` now sets `platform_profile=performance` + iGPU min freq 1200 MHz for the session and restores both on teardown, and exports `U_PACING_LIVE_STATS` / `XRT_COMPOSITOR_PRINT_MODES` for frame-timing ground truth. Remaining candidates (not yet applied): cap MMIO RAPL PL1 to 28 W during XR, extend `power-mode` to write the MMIO path, thermal trace logger for the next cutoff.
+**Commit:** `bb2a643`
+
 ## 2026-08-17 — keyboard-resurrected-by-saved-layout
 
 **Symptom:** the virtual keyboard reappeared in the glasses despite `keyboard_on_spawn: false` having worked in an earlier session ("the keyboard came back").
