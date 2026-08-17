@@ -14,7 +14,7 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 2. Confirmed nothing XR was actually in use: `which breezy-hyprland breezy-gnome breezy-session wayvr` → all absent from PATH.
 3. **Name-collision trap worth remembering:** "breezy" here is `breezy-desktop`, a *GNOME Shell extension for world-locked XR virtual displays* (AR glasses). It is **unrelated** to the `BreezeX-Dark` **cursor theme**, which is plain files in `dotfiles/default/icons/BreezeX-Dark` symlinked to `~/.local/share/icons` and selected via `XCURSOR_THEME` in `dotfiles/default/hypr/shared/themes/default/env.conf:2`. Verified no module under `system/lib/xr/` references `XCURSOR` or cursors. Disabling XR does not touch the cursor.
 **Fix:** Commented out the five `lib/xr/*` imports in `system/users/eksno/dev/default.nix` with a note on why and how to restore. Contained to eksno/verse — jorge/lewis keep their XR imports. Re-enable after re-rolling `curved-arc-layout.patch` against wayvr 26.7.1.
-**Commit:** `<pending>`
+**Commit:** `9c41405`
 
 ## 2026-08-18 — moonlight-qt-override-breaks-on-ffmpeg-arg-rename
 
