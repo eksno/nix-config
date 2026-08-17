@@ -4,6 +4,18 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-08-18 — wayvr-anv-patches-stop-applying-after-nixpkgs-bump
+
+**Symptom:** `./update.sh` fails with `error: Cannot build '...wayvr-26.7.1.drv'` — `Hunk #3 FAILED at 70` in `wayvr/src/overlays/screen/mod.rs`, `Hunk #2 FAILED at 141` in `wl.rs`, rejects saved to `.rej`. Cascades wayvr → `breezy-hyprland` → `man-paths` → whole system build. As with the moonlight entry below, `update.sh` still exits 0.
+**Affected:** verse/eksno, `system/users/eksno/dev/default.nix:7-11` (XR imports), `system/lib/xr/wayvr-anv/package.nix`
+**Root cause:** `nix flake update` moved nixpkgs `0e251e2` → `e5bdc4a`, bumping wayvr **26.2.1 → 26.7.1**. `wayvr-anv/package.nix` applies two local patches and its own comment warns: *"Patches apply against the v26.2.1 source nixpkgs pins. If the version bumps, re-verify the patch context."* Exactly that. `text-atlas-larger-initial-size.patch` still applies; `curved-arc-layout.patch` (Phase 4B screen geometry) has 2 of its hunks rejected.
+**Investigation:**
+1. Not a pre-existing verse failure — `git show pre-merge-backup-alpha:system/users/eksno/dev/default.nix` has only `nixpacks.nix` + `python.nix`. The XR stack entered eksno's config through the 113-commit merge from origin/alpha (`d380d38` wired it in), so this was its **first ever build attempt on verse**.
+2. Confirmed nothing XR was actually in use: `which breezy-hyprland breezy-gnome breezy-session wayvr` → all absent from PATH.
+3. **Name-collision trap worth remembering:** "breezy" here is `breezy-desktop`, a *GNOME Shell extension for world-locked XR virtual displays* (AR glasses). It is **unrelated** to the `BreezeX-Dark` **cursor theme**, which is plain files in `dotfiles/default/icons/BreezeX-Dark` symlinked to `~/.local/share/icons` and selected via `XCURSOR_THEME` in `dotfiles/default/hypr/shared/themes/default/env.conf:2`. Verified no module under `system/lib/xr/` references `XCURSOR` or cursors. Disabling XR does not touch the cursor.
+**Fix:** Commented out the five `lib/xr/*` imports in `system/users/eksno/dev/default.nix` with a note on why and how to restore. Contained to eksno/verse — jorge/lewis keep their XR imports. Re-enable after re-rolling `curved-arc-layout.patch` against wayvr 26.7.1.
+**Commit:** `<pending>`
+
 ## 2026-08-18 — moonlight-qt-override-breaks-on-ffmpeg-arg-rename
 
 **Symptom:** `./update.sh` fails the system build with `error: function 'anonymous lambda' called with unexpected argument 'ffmpeg'` pointing at `pkgs/by-name/mo/moonlight-qt/package.nix`, plus a `Did you mean ffmpeg_8?` hint. Note `update.sh` still **exits 0** here — the nix build fails inside it but the script's exit status doesn't reflect that, so the run looks successful. Check `/run/current-system` to confirm whether a switch actually landed.
