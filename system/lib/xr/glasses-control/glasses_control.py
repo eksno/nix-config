@@ -271,81 +271,250 @@ class Poller:
 
 
 class Radar(Gtk.DrawingArea):
-    """Top-down map: you at the centre, screens arranged around you."""
+    """Top-down map: you at the centre, screens arranged around you.
 
-    def __init__(self):
+    Screens are live handles — drag one to set its yaw (pointer angle)
+    and distance (pointer radius). Selection, slider sync and the
+    debounced screen-place all flow through the window callbacks."""
+
+    RINGS = (0.5, 1.5, 3.0)  # metres
+    GRAB_PX = 30.0
+
+    def __init__(self, on_select=None, on_move=None, on_commit=None):
         super().__init__(hexpand=True, vexpand=True)
         self.screens: list[Screen] = []
         self.selected = 0
         self.yaw = 0.0
+        self.on_select = on_select
+        self.on_move = on_move
+        self.on_commit = on_commit
+        self.hover = None
+        self.dragging = None
         self.set_draw_func(self.draw)
 
-    def draw(self, _area, cr, width, height):
-        cx, cy = width / 2, height * 0.66
-        max_r = min(width * 0.42, height * 0.52)
+        drag = Gtk.GestureDrag()
+        drag.connect("drag-begin", self.drag_begin)
+        drag.connect("drag-update", self.drag_update)
+        drag.connect("drag-end", self.drag_end)
+        self.add_controller(drag)
+        motion = Gtk.EventControllerMotion()
+        motion.connect("motion", self.motion)
+        motion.connect("leave", self.leave)
+        self.add_controller(motion)
 
-        cr.set_source_rgb(0.039, 0.059, 0.051)
+    # ---- geometry ---------------------------------------------------
+
+    def _geom(self):
+        w, h = self.get_width(), self.get_height()
+        return w / 2, h * 0.66, min(w * 0.42, h * 0.52)
+
+    @staticmethod
+    def _reach(distance):
+        return 0.3 + min(distance, 3.0) / 3.0 * 0.6
+
+    def _screen_xy(self, sc, cx, cy, max_r):
+        theta = math.radians(sc.yaw)
+        r = max_r * self._reach(sc.distance)
+        return cx + r * math.sin(theta), cy - r * math.cos(theta)
+
+    def _hit(self, x, y):
+        cx, cy, max_r = self._geom()
+        best, best_d = None, self.GRAB_PX
+        for i, sc in enumerate(self.screens):
+            px, py = self._screen_xy(sc, cx, cy, max_r)
+            d = math.hypot(x - px, y - py)
+            if d < best_d:
+                best, best_d = i, d
+        return best
+
+    # ---- interaction ------------------------------------------------
+
+    def motion(self, _c, x, y):
+        if self.dragging is not None:
+            return
+        h = self._hit(x, y)
+        if h != self.hover:
+            self.hover = h
+            self.set_cursor_from_name("grab" if h is not None else "default")
+            self.queue_draw()
+
+    def leave(self, _c):
+        if self.hover is not None:
+            self.hover = None
+            self.set_cursor_from_name("default")
+            self.queue_draw()
+
+    def drag_begin(self, _g, x, y):
+        self.dragging = self._hit(x, y)
+        if self.dragging is not None and not self.screens[self.dragging].visible:
+            if self.on_select:
+                self.on_select(self.dragging)
+            self.dragging = None
+            return
+        if self.dragging is not None:
+            self.set_cursor_from_name("grabbing")
+            if self.on_select:
+                self.on_select(self.dragging)
+
+    def drag_update(self, gesture, dx, dy):
+        if self.dragging is None:
+            return
+        ok, sx, sy = gesture.get_start_point()
+        if not ok:
+            return
+        cx, cy, max_r = self._geom()
+        vx, vy = (sx + dx) - cx, cy - (sy + dy)
+        if max_r <= 0 or (vx == 0 and vy == 0):
+            return
+        sc = self.screens[self.dragging]
+        sc.yaw = math.degrees(math.atan2(vx, vy))
+        frac = math.hypot(vx, vy) / max_r
+        sc.distance = max(0.15, min(3.0, (frac - 0.3) / 0.6 * 3.0))
+        if self.on_move:
+            self.on_move(self.dragging)
+        self.queue_draw()
+
+    def drag_end(self, _g, _dx, _dy):
+        if self.dragging is not None and self.on_commit:
+            self.on_commit(self.dragging)
+        self.dragging = None
+        self.set_cursor_from_name("grab" if self.hover is not None else "default")
+
+    # ---- drawing ----------------------------------------------------
+
+    def draw(self, _area, cr, width, height):
+        cx, cy, max_r = self._geom()
+
+        grad = __import__("cairo").RadialGradient(cx, cy, 0, cx, cy, max_r * 1.2)
+        grad.add_color_stop_rgb(0.0, 0.055, 0.085, 0.072)
+        grad.add_color_stop_rgb(1.0, 0.031, 0.047, 0.041)
+        cr.set_source(grad)
         cr.paint()
 
-        for frac in (0.35, 0.62, 0.9):
-            cr.set_source_rgba(0.27, 0.42, 0.36, 0.28)
-            cr.set_line_width(1)
-            cr.arc(cx, cy, max_r * frac, math.pi, 2 * math.pi)
-            cr.stroke()
+        cr.select_font_face("monospace")
 
+        # distance rings, labelled in metres
+        for metres in self.RINGS:
+            r = max_r * self._reach(metres)
+            cr.set_source_rgba(0.27, 0.42, 0.36, 0.30)
+            cr.set_line_width(1)
+            cr.arc(cx, cy, r, math.pi, 2 * math.pi)
+            cr.stroke()
+            cr.set_font_size(9)
+            cr.set_source_rgba(0.39, 0.47, 0.44, 0.8)
+            label = f"{metres:g} m"
+            cr.move_to(cx + 6, cy - r - 4)
+            cr.show_text(label)
+
+        # crosshair
         cr.set_source_rgba(0.27, 0.42, 0.36, 0.18)
+        cr.set_line_width(1)
         cr.move_to(cx, cy)
         cr.line_to(cx, cy - max_r)
+        cr.stroke()
+        cr.move_to(cx - max_r, cy)
+        cr.line_to(cx + max_r, cy)
         cr.stroke()
 
         # viewer cone, rotated by live head yaw
         cr.save()
         cr.translate(cx, cy)
         cr.rotate(math.radians(self.yaw or 0.0))
-        cr.set_source_rgba(0.27, 0.90, 0.63, 0.22)
+        cone = __import__("cairo").LinearGradient(0, 0, 0, -max_r * 0.5)
+        cone.add_color_stop_rgba(0.0, 0.27, 0.90, 0.63, 0.30)
+        cone.add_color_stop_rgba(1.0, 0.27, 0.90, 0.63, 0.02)
+        cr.set_source(cone)
         cr.move_to(0, 0)
-        cr.line_to(-max_r * 0.30, -max_r * 0.42)
-        cr.line_to(max_r * 0.30, -max_r * 0.42)
+        cr.line_to(-max_r * 0.30, -max_r * 0.46)
+        cr.line_to(max_r * 0.30, -max_r * 0.46)
         cr.close_path()
         cr.fill()
         cr.restore()
 
+        # you
+        cr.set_source_rgba(0.27, 0.90, 0.63, 0.25)
+        cr.arc(cx, cy, 9, 0, 2 * math.pi)
+        cr.fill()
         cr.set_source_rgb(0.84, 0.94, 0.90)
-        cr.arc(cx, cy, 5, 0, 2 * math.pi)
+        cr.arc(cx, cy, 4.5, 0, 2 * math.pi)
         cr.fill()
 
-        for i, s in enumerate(self.screens):
-            theta = math.radians(s.yaw)
-            reach = 0.3 + min(s.distance, 3.0) / 3.0 * 0.6
-            r = max_r * reach
-            px, py = cx + r * math.sin(theta), cy - r * math.cos(theta)
-            half = max_r * 0.20 * min(s.width, 3.0)
-
+        for i, sc in enumerate(self.screens):
+            theta = math.radians(sc.yaw)
+            px, py = self._screen_xy(sc, cx, cy, max_r)
+            half = max_r * 0.20 * min(sc.width, 3.0)
             sel = i == self.selected
-            if not s.visible:
-                cr.set_source_rgba(0.35, 0.42, 0.39, 0.5)
-            elif sel:
-                cr.set_source_rgb(0.27, 0.90, 0.63)
-            else:
-                cr.set_source_rgb(0.44, 0.53, 0.49)
+            hov = i == self.hover or i == self.dragging
 
-            cr.set_line_width(6 if sel else 4)
-            cr.set_line_cap(1)
             cr.save()
             cr.translate(px, py)
             cr.rotate(theta)
-            cr.move_to(-half, 0)
-            cr.line_to(half, 0)
+
+            # cylindrical curvature: the screen is an arc of a circle
+            # around the viewer, so its ends bend toward local +Y.
+            def trace():
+                c = max(0.0, min(50.0, sc.curvature)) / 100.0
+                if c < 0.01:
+                    cr.move_to(-half, 0)
+                    cr.line_to(half, 0)
+                    return
+                phi = 2 * math.pi * c
+                r_arc = (2 * half) / phi
+                steps = 16
+                for t in range(steps + 1):
+                    a = (t / steps - 0.5) * phi
+                    x, y = r_arc * math.sin(a), r_arc * (1 - math.cos(a))
+                    (cr.move_to if t == 0 else cr.line_to)(x, y)
+
+            cr.set_line_cap(1)
+            if sel and sc.visible:
+                cr.set_source_rgba(0.27, 0.90, 0.63, 0.25)
+                cr.set_line_width(12)
+                trace()
+                cr.stroke()
+
+            if not sc.visible:
+                cr.set_source_rgba(0.35, 0.42, 0.39, 0.55)
+                cr.set_line_width(3)
+                cr.set_dash([4, 5])
+            elif sel:
+                cr.set_source_rgb(0.31, 0.94, 0.66)
+                cr.set_line_width(6)
+            elif hov:
+                cr.set_source_rgb(0.60, 0.72, 0.66)
+                cr.set_line_width(5)
+            else:
+                cr.set_source_rgb(0.44, 0.53, 0.49)
+                cr.set_line_width(4)
+            trace()
             cr.stroke()
+            cr.set_dash([])
+
+            # normal tick: which way the screen faces
+            if sc.visible:
+                cr.set_source_rgba(0.46, 0.90, 0.70, 0.5 if sel else 0.25)
+                cr.set_line_width(1.5)
+                cr.move_to(0, 0)
+                cr.line_to(0, half * 0.35)
+                cr.stroke()
             cr.restore()
 
-            cr.select_font_face("monospace")
             cr.set_font_size(11)
-            label = f"{s.name} · {s.yaw:+.0f}°"
+            label = f"{sc.name} · {sc.yaw:+.0f}° · {sc.distance:.1f} m"
+            if not sc.visible:
+                label = f"{sc.name} · hidden"
             ext = cr.text_extents(label)
             cr.set_source_rgba(0.84, 0.94, 0.90, 1.0 if sel else 0.55)
-            cr.move_to(px - ext.width / 2, py - 16 if py < cy else py + 24)
+            cr.move_to(px - ext.width / 2, py - 18 if py < cy else py + 26)
             cr.show_text(label)
+
+        if not self.screens:
+            cr.set_font_size(12)
+            msg = "No screens — turn on VR mode"
+            ext = cr.text_extents(msg)
+            cr.set_source_rgba(0.39, 0.47, 0.44, 0.9)
+            cr.move_to(cx - ext.width / 2, cy - max_r * 0.55)
+            cr.show_text(msg)
 
 
 class Metric(Gtk.Box):
@@ -398,7 +567,9 @@ class Window(Adw.ApplicationWindow):
                         margin_start=12, margin_end=12, margin_bottom=12,
                         vexpand=True)
         left = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12, hexpand=True)
-        self.radar = Radar()
+        self.radar = Radar(on_select=self.radar_select,
+                           on_move=self.radar_move,
+                           on_commit=self.radar_commit)
         radar_frame = Gtk.Box(css_classes=["panel"], vexpand=True)
         radar_frame.append(self.radar)
         left.append(radar_frame)
@@ -508,6 +679,7 @@ class Window(Adw.ApplicationWindow):
         return side
 
     def rebuild_displays(self):
+        self.row_vals = []
         child = self.display_list.get_first_child()
         while child:
             nxt = child.get_next_sibling()
@@ -522,8 +694,9 @@ class Window(Adw.ApplicationWindow):
                 name_css = ["muted"]
             row.append(Gtk.Label(label=s.name, xalign=0, css_classes=name_css))
             row.append(Gtk.Box(hexpand=True))
-            row.append(Gtk.Label(label=f"{s.yaw:+.0f}°" if s.visible else "hidden",
-                                 css_classes=["sublabel"]))
+            val = Gtk.Label(label="", css_classes=["sublabel"])
+            self.row_vals.append((val, s))
+            row.append(val)
             eye = Gtk.Button(label="●" if s.visible else "○",
                              css_classes=["small-act"], has_frame=False)
             eye.set_tooltip_text("Hide this screen" if s.visible else "Show this screen")
@@ -534,30 +707,56 @@ class Window(Adw.ApplicationWindow):
             row.add_controller(click)
             self.display_list.append(row)
 
+        self.update_row_values()
+
+    def update_row_values(self):
+        for val, sc in getattr(self, "row_vals", []):
+            val.set_label(f"{sc.yaw:+.0f}° · {sc.distance:.1f} m"
+                          if sc.visible else "hidden")
+
     def sync_sliders(self):
         self.syncing = True
         try:
             has = bool(self.screens)
             s = self.screens[self.selected] if has else None
+            editable = has and s.visible
             for key, (scale, val, unit, decimals) in self.sliders.items():
-                scale.set_sensitive(has)
+                scale.set_sensitive(editable)
                 if not has:
                     val.set_label("—")
                     continue
                 value = getattr(s, key)
                 scale.set_value(value)
-                val.set_label(f"{value:.{decimals}f}{unit}")
+                val.set_label(f"{value:.{decimals}f}{unit}"
+                              if editable else "hidden")
         finally:
             self.syncing = False
 
     # ---- events ----------------------------------------------------
 
     def on_select(self, _gesture, _n, _x, _y, index):
+        self.radar_select(index)
+
+    def radar_select(self, index):
         self.selected = index
         self.radar.selected = index
         self.rebuild_displays()
         self.sync_sliders()
         self.radar.queue_draw()
+
+    def radar_move(self, _index):
+        self.sync_sliders()
+        self.update_row_values()
+        # Coalesce the drag into one screen-place, same as the sliders.
+        if self.settle_source:
+            GLib.source_remove(self.settle_source)
+        self.settle_source = GLib.timeout_add(SETTLE_MS, self.flush_placement)
+
+    def radar_commit(self, _index):
+        if self.settle_source:
+            GLib.source_remove(self.settle_source)
+            self.settle_source = None
+        self.flush_placement()
 
     def on_toggle_visible(self, _btn, index):
         s = self.screens[index]
@@ -603,6 +802,7 @@ class Window(Adw.ApplicationWindow):
 
         _, val, unit, decimals = self.sliders[key]
         val.set_label(f"{value:.{decimals}f}{unit}")
+        self.update_row_values()
         self.radar.queue_draw()
 
         # Coalesce a drag into a single screen-place.
@@ -615,6 +815,8 @@ class Window(Adw.ApplicationWindow):
         if not self.screens:
             return False
         s = self.screens[self.selected]
+        if not s.visible:
+            return False
         r = run([WAYVRCTL, "screen-place", s.name,
                  f"--yaw={s.yaw:.3f}",
                  f"--pitch={s.pitch:.3f}",
@@ -708,6 +910,11 @@ class Window(Adw.ApplicationWindow):
         self.radar.selected = self.selected
         if names_changed:
             self.rebuild_displays()
+        else:
+            self.row_vals = [(val, screens[i]) for i, (val, _) in
+                             enumerate(getattr(self, "row_vals", []))
+                             if i < len(screens)]
+        self.update_row_values()
         self.sync_sliders()
 
 

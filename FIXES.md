@@ -4,6 +4,17 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-08-16 — cockpit-knob-changes-revert-on-hidden-screens
+
+**Symptom:** slider changes in the Cockpit "keep getting undone straight after setting a new knob" — value snaps back ~2 s later.
+**Affected:** lewis/jorge, `system/lib/xr/glasses-control/glasses_control.py`; wayvr `ScreenPlace` handler (events.rs, ipc-telemetry-and-layout.patch)
+**Root cause:** wayvr's `ScreenPlace` silently no-ops on a screen whose `active_state` is None (hidden / parked in another set) — it logs "not visible" and drops the move. The app applied the value optimistically, then the next layout poll (LAYOUT_EVERY=4 ticks ≈ 2 s) adopted the server's unchanged value, reverting the knob. Jorge hit it because the virtual screens (claude-vs1/vs2) start hidden.
+**Investigation:**
+1. suspected a poll/debounce race in the app — reproduced server-side first: `screen-place --yaw=-25` on a *visible* screen, then polled screen-list at +0.2/1/2/4/6 s — value held exactly. Server is not the problem for visible screens.
+2. noticed the live session's extra screens report `visible: false` and recalled the `ScreenPlace` handler's early return: `let Some(state) = cfg.active_state.as_mut() else { warn; return }`.
+**Fix:** app-side honesty — sliders disable (value shows "hidden") when the selected screen is hidden, `flush_placement` skips hidden screens, and the radar refuses to drag one (selects it instead). Show the screen first (● toggle), then place it. A wayvr-side fix (placing parked state) is possible but touches the set model; deferred.
+**Commit:** `8145657`
+
 ## 2026-08-16 — cockpit-app-dies-on-session-teardown
 
 **Symptom:** pressing "Turn off" in the Cockpit killed the Cockpit window itself ("it crashed").
