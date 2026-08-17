@@ -45,6 +45,11 @@
 #   (EnsureOn/EnsureOff) so the cockpit can show several screens in the
 #   current overlay set at once instead of one-screen-per-set.
 #
+# - recenter-include-pitch.patch — adds `recenter_includes_pitch`
+#   config (default off). When on, Recenter matches gaze pitch as well
+#   as yaw so screens land centred where you're looking, instead of
+#   only rotating around you at the old height. Roll never tilts.
+#
 # Patches apply against the v26.7.1 source nixpkgs pins. If the version
 # bumps, re-verify the patch context (26.2.1 -> 26.7.1 moved the wayland
 # screen-creation loop body and its call site; curved-arc-layout.patch
@@ -65,5 +70,6 @@ wayvr.overrideAttrs (old: {
     ./patches/dmabuf-capture-on-single-queue-gpus.patch
     ./patches/keyboard-optional-on-spawn.patch
     ./patches/ipc-screen-visibility.patch
+    ./patches/recenter-include-pitch.patch
   ];
 })

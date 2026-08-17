@@ -1,0 +1,59 @@
+diff -ruN a/wayvr/src/backend/openxr/playspace.rs g/wayvr/src/backend/openxr/playspace.rs
+--- a/wayvr/src/backend/openxr/playspace.rs	2026-08-16 23:17:13.372528214 -0600
++++ b/wayvr/src/backend/openxr/playspace.rs	2026-08-16 23:52:52.087882424 -0600
+@@ -1,4 +1,4 @@
+-use glam::{Affine3A, Quat, Vec3, Vec3A, vec3a};
++use glam::{Affine3A, EulerRot, Quat, Vec3, Vec3A, vec3a};
+ use libmonado::{MndResult, Monado, Pose, ReferenceSpaceType};
+ use wgui::log::LogErr;
+ 
+@@ -58,7 +58,8 @@
+                 self.reset_offset(&mut monado.ipc);
+             }
+             PlayspaceTask::Recenter => {
+-                self.recenter(&app.input_state, &mut monado.ipc);
++                let include_pitch = app.session.config.recenter_includes_pitch;
++                self.recenter(&app.input_state, include_pitch, &mut monado.ipc);
+             }
+         }
+     }
+@@ -227,7 +228,7 @@
+         }
+     }
+ 
+-    pub fn recenter(&mut self, input: &InputState, monado: &mut Monado) {
++    pub fn recenter(&mut self, input: &InputState, include_pitch: bool, monado: &mut Monado) {
+         if self.drag.is_some() {
+             log::info!("Space drag interrupted by recenter");
+             self.drag = None;
+@@ -256,7 +257,14 @@
+ 
+         let hmd_yaw = if horiz_len_sq > f32::EPSILON {
+             let yaw = (-fwd.x).atan2(-fwd.z);
+-            Quat::from_rotation_y(yaw)
++            if include_pitch {
++                // fwd = R * -Z, so fwd.y = sin(pitch); YXZ keeps roll
++                // out so the horizon only tilts, never banks.
++                let pitch = fwd.y.clamp(-1.0, 1.0).asin();
++                Quat::from_euler(EulerRot::YXZ, yaw, pitch, 0.0)
++            } else {
++                Quat::from_rotation_y(yaw)
++            }
+         } else {
+             Quat::IDENTITY
+         };
+diff -ruN a/wlx-common/src/config.rs g/wlx-common/src/config.rs
+--- a/wlx-common/src/config.rs	2026-08-16 23:17:13.390391463 -0600
++++ b/wlx-common/src/config.rs	2026-08-16 23:52:52.084298718 -0600
+@@ -322,6 +322,11 @@
+ 	#[serde(default = "def_true")]
+ 	pub keyboard_on_spawn: bool,
+ 
++	/// Recenter matches your gaze pitch as well as yaw, so screens land
++	/// centred where you are looking instead of only rotating around you.
++	#[serde(default)]
++	pub recenter_includes_pitch: bool,
++
+ 	#[serde(default = "def_one")]
+ 	pub default_overlay_scale: f32,
+ 
