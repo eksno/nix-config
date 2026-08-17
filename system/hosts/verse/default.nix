@@ -8,6 +8,7 @@
     ./data-saver.nix
     ./bluetooth.nix
     ./corne-bt-recovery.nix
+    ./kbd-backlight.nix
 
     ../../lib/device/intel
   ];
