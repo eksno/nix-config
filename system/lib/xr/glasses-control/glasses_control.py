@@ -78,6 +78,9 @@ button.act {
   border-radius: 8px; padding: 8px 16px; font-weight: 600;
 }
 button.act:hover { background: #174535; }
+scale > trough > highlight { background: #46e6a0; }
+scale > trough { background: #1c2a24; }
+scale > trough > slider { background: #d7efe5; border: none; }
 button.ghost {
   background: #131c18; color: #9fbfb2; border: 1px solid #1c2a24;
   border-radius: 8px; padding: 8px 16px;
@@ -192,7 +195,7 @@ class Telemetry:
 
 class Poller:
     def __init__(self):
-        self._miss_mark = (0, time.monotonic())
+        self._miss_mark = (None, time.monotonic())
 
     def missed_per_sec(self):
         try:
@@ -203,11 +206,11 @@ class Poller:
         prev_count, prev_t = self._miss_mark
         now = time.monotonic()
         dt = now - prev_t
-        if dt < 1.0:
+        if prev_count is not None and dt < 1.0:
             return None
         self._miss_mark = (count, now)
-        if prev_count == 0:
-            return None
+        if prev_count is None:
+            return None  # first sample: no interval to rate over yet
         return max(0.0, (count - prev_count) / dt)
 
     def phase(self):
@@ -526,11 +529,11 @@ class Window(Adw.ApplicationWindow):
             return False
         s = self.screens[self.selected]
         r = run([WAYVRCTL, "screen-place", s.name,
-                 "--yaw", f"{s.yaw:.3f}",
-                 "--pitch", f"{s.pitch:.3f}",
-                 "--distance", f"{s.distance:.3f}",
-                 "--scale", f"{s.width:.3f}",
-                 "--curvature", f"{s.curvature / 100.0:.4f}"], timeout=6)
+                 f"--yaw={s.yaw:.3f}",
+                 f"--pitch={s.pitch:.3f}",
+                 f"--distance={s.distance:.3f}",
+                 f"--scale={s.width:.3f}",
+                 f"--curvature={s.curvature / 100.0:.4f}"], timeout=6)
         if r.returncode != 0:
             self.notify(f"Could not move {s.name}")
         return False

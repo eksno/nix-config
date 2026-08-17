@@ -283,7 +283,7 @@ diff -ruN a/wayvrctl/src/helper.rs d/wayvrctl/src/helper.rs
          WayVRClient::fn_wlx_recenter(state.wayvr_client.clone())
 diff -ruN a/wayvrctl/src/main.rs d/wayvrctl/src/main.rs
 --- a/wayvrctl/src/main.rs	2026-08-16 16:55:51.074728313 -0600
-+++ b/wayvrctl/src/main.rs	2026-08-16 17:43:33.963972672 -0600
++++ b/wayvrctl/src/main.rs	2026-08-16 18:51:59.138553133 -0600
 @@ -14,9 +14,10 @@
  };
  
@@ -329,13 +329,15 @@ diff -ruN a/wayvrctl/src/main.rs d/wayvrctl/src/main.rs
          Subcommands::Handsfree { command } => {
              wlx_handsfree(state, command.into()).await;
          }
-@@ -306,6 +331,28 @@
+@@ -306,6 +331,30 @@
      },
      /// Recenter the playspace to the current headset yaw and position
      Recenter,
 +    /// List screen overlays with their position in the playspace
 +    ScreenList,
 +    /// Move/resize a screen overlay. Omitted values are left unchanged.
++    // Angles are routinely negative; without this clap reads `-35` as a flag.
++    #[command(allow_negative_numbers = true)]
 +    ScreenPlace {
 +        /// Screen overlay name, as reported by screen-list
 +        name: String,

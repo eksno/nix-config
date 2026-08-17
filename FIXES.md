@@ -4,6 +4,30 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-08-16 — glasses-half-framerate-direct-mode-double-buffer
+
+**Symptom:** the glasses felt sluggish. monado logged `Compositor probably missed frame by 16.7ms` 601 times per 20 s — one full 60 Hz period, 30 times a second — and wayvr's own render loop reported 55 fps.
+**Affected:** host `lewis`/user `jorge`; `system/lib/xr/monado-rayneo/package.nix`, `system/lib/xr/wayvr-anv/patches/dmabuf-capture-on-single-queue-gpus.patch`.
+**Root cause:** two independent things, stacked.
+1. *Capture (wayvr).* On a GPU with one queue family (Meteor Lake / anv) wayvr wraps capture in `MainThreadWlxCapture`, which handed `wlr_screencopy` a `DummyDrmExporter`. screencopy asks `user_data.next_frame()` for a buffer to copy into and falls back to SHM **for the whole session** when that returns `None` — so every frame was a full 1920x1080x4 memcpy plus a blocking `build_and_execute_now()` upload on the render thread.
+2. *Present (monado).* `comp_target_swapchain.c` deliberately picks **2** swapchain images for direct-mode targets to run "lockstep with the display", assuming present returns once the flip is *queued*. On Mesa anv's `wsi_display` it returns once the flip has *scanned out*, so render serialises behind scanout: exactly half rate.
+**Investigation:**
+1. Read the capture path end to end. `WlxFrame::Implicit` (the DMA-buf branch of `receive_callback`) does **no** queue submission — it just clones an `Arc<ImageView>` the exporter allocated up front. So the "must run on the main thread" constraint only ever applied to the SHM branches, and the Dummy substitution was over-conservative.
+2. Split the capture-thread callback: DMA-buf finishes in place, SHM still mmaps on the capture thread and uploads on the main one. wayvr CPU dropped to ~10%, and `/proc/$(pgrep -x wayvr)/fd` showed two dmabufs of exactly 8294400 bytes = 1920x1080x4 — the exporter's buffer pair, which `DummyDrmExporter` never allocated. **But the missed-frame count did not move: still exactly 601 per 20 s.** Identical to the digit — the giveaway that this was structural, not load-dependent.
+3. That pointed at present, not render. monado's log had `caps.minImageCount: 2` / `presentMode: VK_PRESENT_MODE_FIFO_KHR`, and the miss was always ~16.70ms — precisely one frame period, never a variable overrun.
+4. `comp_target_swapchain.c` exposes `XRT_COMPOSITOR_PREFERRED_IMAGE_COUNT` (default 2) with a comment explaining the lockstep intent; `caps.maxImageCount` is 0, so 3 is allowed. No patch needed.
+**Fix:** wayvr patch `dmabuf-capture-on-single-queue-gpus.patch` (commit `7b7e5e6`), and `monado-service` wrapped with `--set-default XRT_COMPOSITOR_PREFERRED_IMAGE_COUNT 3`. Measured after: **0 missed frames per 20 s, 60.7 fps** (from 601 and 55.5).
+**Commit:** `7b7e5e6`, `4f7c58f`
+
+## 2026-08-16 — wayvr-panic-when-keyboard-spawns-hidden
+
+**Symptom:** wayvr panicked at startup — `called Option::unwrap() on a None value` at `wayvr/src/windowing/manager.rs:124` — immediately after adding `keyboard_on_spawn: false` to `~/.config/wayvr/config.yaml`.
+**Affected:** host `lewis`/user `jorge`; `system/lib/xr/wayvr-anv/patches/keyboard-optional-on-spawn.patch`.
+**Root cause:** the new option feeds `keyboard.config.show_on_spawn`. When false the keyboard never lands in the set's visible `overlays` map (it goes to `hidden_overlays`, keyed by name), but the "copy keyboard to all sets" step right after unwrapped that lookup unconditionally.
+**Investigation:** the backtrace named the line directly; the only question was whether skipping the copy leaves the keyboard unreachable. It doesn't — `OverlayTask::ToggleOverlay` falls through to `OverlayWindowConfig::activate` when a set has no saved state for an overlay, so any set can still show it.
+**Fix:** guard the copy with `if let Some(kbd_state) = ...cloned()`.
+**Commit:** `0d0b4ff`
+
 ## 2026-08-16 — wayvr-capture-segv-fd-use-after-close
 
 **Symptom:** wayvr 26.7.1 SIGSEGV'd deterministically ~1-2 s after capture init on the glasses stack — under BOTH `capture_method: screencopy` (CPU) and default auto/GPU config. Same bug as the May 2026 "GPU capture segfault at backend.rs".
