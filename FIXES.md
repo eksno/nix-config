@@ -15,7 +15,7 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 3. **Wrong first instinct:** rename the override to `{ ffmpeg_8 = ffmpeg_7; }` to preserve the ffmpeg-7 pin. That would have worked but kept an unnecessary from-source build forever.
 4. Decisive check instead — is upstream's ffmpeg_8 build actually good? `nix path-info --store https://cache.nixos.org` on plain `pkgs.moonlight-qt.outPath` **resolved**, meaning Hydra built 6.1.0 against ffmpeg 8 successfully. The 2026-08-13 incompatibility is fixed upstream, so the pin was obsolete, not just misnamed. Cache hit also means no local compile.
 **Fix:** Dropped the override entirely — plain `moonlight-qt` in `environment.systemPackages`, comment updated to record why the pin is gone. `ffmpeg_7` (7.1.5) still exists in nixpkgs; it simply has no remaining references here.
-**Commit:** `<pending>`
+**Commit:** `36c60f7`
 
 ## 2026-08-13 — full-disk-rebuild-breaks-hyprland-session
 
