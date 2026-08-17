@@ -8,6 +8,9 @@
     ./bluetooth.nix
     ./caddy.nix
     ../../lib/device/intel
+    # Forces the non-desktop bit on the Rayneo glasses' EDID so wlroots
+    # advertises DP-2 via wp-drm-lease-v1 (Phase 3 of breezy-hyprland).
+    ../../lib/xr/glasses-edid
   ];
 
   services.xserver.exportConfiguration = true;

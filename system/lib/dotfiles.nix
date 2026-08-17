@@ -100,7 +100,33 @@ in
         ${linkDir "btop" "$cfg/btop"}
         ${linkDir "tofi" "$cfg/tofi"}
         ${linkDir "waybar" "$cfg/waybar"}
+        ${linkDir "eww" "$cfg/eww"}
         ${linkDir "xdg-desktop-portal" "$cfg/xdg-desktop-portal"}
+
+        # ── ags (per-file symlinks + generated package.json) ──
+        # ags v2 needs a package.json next to app.ts so its esbuild step
+        # can resolve the `astal` import. The astal-gjs path lives in the
+        # nix store and changes when ags upgrades, so we regenerate the
+        # file each rebuild rather than commit a stale path.
+        rm -rf "$cfg/ags"
+        mkdir -p "$cfg/ags/widget"
+        ${resolve "ags"}
+        for f in "$_src"/*.ts "$_src"/*.tsx "$_src"/*.scss "$_src"/tsconfig.json; do
+          [ -e "$f" ] && ln -sf "$f" "$cfg/ags/$(${pkgs.coreutils}/bin/basename "$f")"
+        done
+        for f in "$_src/widget/"*.tsx "$_src/widget/"*.ts; do
+          [ -e "$f" ] && ln -sf "$f" "$cfg/ags/widget/$(${pkgs.coreutils}/bin/basename "$f")"
+        done
+        cat > "$cfg/ags/package.json" <<JSON
+        {
+          "name": "kbd-cheatsheet",
+          "private": true,
+          "dependencies": {
+            "astal": "${pkgs.astal.gjs}/share/astal/gjs"
+          }
+        }
+        JSON
+        chown -R ${user}:users "$cfg/ags" 2>/dev/null || true
 
         # ── Locals ──
         mkdir -p "/home/${user}/.local/share"

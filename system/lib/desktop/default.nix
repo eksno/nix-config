@@ -1,6 +1,7 @@
 {
   config,
   catppuccin,
+  lib,
   pkgs,
   ...
 }:

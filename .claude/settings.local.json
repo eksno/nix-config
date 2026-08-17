@@ -17,7 +17,21 @@
       "Bash(chmod:*)",
       "Bash(patchelf:*)",
       "Bash(nix-shell:*)",
-      "Bash(fastfetch *)"
+      "Bash(fastfetch *)",
+      "mcp__claude-in-chrome__tabs_context_mcp",
+      "mcp__claude-in-chrome__tabs_create_mcp",
+      "mcp__claude-in-chrome__tabs_close_mcp",
+      "mcp__claude-in-chrome__navigate",
+      "mcp__claude-in-chrome__read_page",
+      "mcp__claude-in-chrome__get_page_text",
+      "mcp__claude-in-chrome__browser_batch",
+      "mcp__claude-in-chrome__javascript_tool",
+      "mcp__claude-in-chrome__find",
+      "mcp__claude-in-chrome__read_console_messages",
+      "mcp__claude-in-chrome__select_browser",
+      "mcp__claude-in-chrome__list_connected_browsers",
+      "Agent(general-purpose:*)",
+      "ToolSearch"
     ],
     "additionalDirectories": [
       "/home/eksno/repos/eksno/zmk-dvorak-36"

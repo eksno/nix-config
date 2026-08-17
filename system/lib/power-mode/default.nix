@@ -1135,8 +1135,14 @@ in
   ];
 
   # Allow sudo without a tty (needed for systemd user services calling power-mode)
+  # Longer timestamp + !tty_tickets so a single `sudo -v` primes credentials
+  # across all of the user's shells (Claude Code Bash tool, terminal panes,
+  # background scripts) for an hour — saves password prompts during debug
+  # sessions involving lots of sudo (kernel tracing, sysfs writes, etc.)
   security.sudo.extraConfig = ''
     Defaults !requiretty
+    Defaults timestamp_timeout=60
+    Defaults !tty_tickets
   '';
 
   environment.systemPackages = [
@@ -1156,9 +1162,11 @@ in
     };
   };
 
+  # Auto-bump on battery % disabled — Jorge wants power level to stay where he
+  # sets it manually. Service+timer definitions kept so they can be re-enabled
+  # by adding `wantedBy = [ "timers.target" ];` back if desired.
   systemd.user.timers.battery-watchdog = {
     description = "Poll battery level every 1s";
-    wantedBy = [ "timers.target" ];
     timerConfig = {
       OnBootSec = "1s";
       OnUnitActiveSec = "1s";

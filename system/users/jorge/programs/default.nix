@@ -120,6 +120,13 @@
     pulsemixer # TUI audio device and volume control
     speechd
     eww
+    # ags v2 (Astal) for the toucan keyboard cheatsheet — GTK4 layer-shell
+    # widgets. nixpkgs' ags wrapper propagates only gtk3 typelibs; pass
+    # gtk4 + gtk4-layer-shell through extraPackages so they land in the
+    # wrapper's buildInputs and EXTRA_GIR_DIRS.
+    (pkgs.ags.override {
+      extraPackages = with pkgs; [ gtk4 gtk4-layer-shell ];
+    })
     waybar
     libreoffice-fresh
     dbeaver-bin

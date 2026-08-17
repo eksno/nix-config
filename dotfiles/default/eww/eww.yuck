@@ -1,0 +1,218 @@
+;; ─────────────────────────────────────────────────────────────
+;;  Toucan 36-key cheatsheet
+;;  Persistent overlay. Layers L→R: NUM | HOME | NAV
+;;  Subscript on a key = home-row mod hold (⌘ ⌥ ⌃ ⇧).
+;;  Dim keys are &trans (fall through to home layer).
+;;  Inline cell between halves shows positional combo (HOME only).
+;; ─────────────────────────────────────────────────────────────
+
+(defwidget key [label sub dim col]
+  (box :class { "key " + dim + " " + col }
+       :orientation "v" :valign "start" :halign "center"
+    (label :class "key-label" :text label)
+    (label :class "key-sub"   :text sub :visible {sub != ""})))
+
+(defwidget thumb [tap hold dim col]
+  (box :class { "thumb " + dim + " " + col }
+       :orientation "v" :valign "start" :halign "center"
+    (label :class "thumb-tap"  :text tap)
+    (label :class "thumb-hold" :text hold :visible {hold != ""})))
+
+(defwidget combo-cell [text]
+  (box :class "combo-cell" :valign "center" :halign "center"
+    (label :class "combo-label" :text text :visible {text != ""})))
+
+(defwidget side [class]
+  (box :class { "side " + class } :orientation "h" :spacing 2 :halign "start" :valign "start"
+    (children)))
+
+(defwidget kbd-row [combo]
+  (box :class "row" :orientation "h" :spacing 4 :halign "center" :valign "start"
+    (children)))
+
+(defwidget panel [name accent]
+  (box :class { "panel " + accent }
+       :orientation "v" :spacing 2 :valign "start"
+    (label :class "layer-name" :text name)
+    (children)))
+
+;; ── window ────────────────────────────────────────────────────
+
+(defwindow keyboard-cheatsheet
+  :monitor 0
+  :geometry (geometry :anchor "bottom center"
+                      :x "0" :y "10px"
+                      :width "1080px" :height "200px")
+  :stacking "overlay"
+  :exclusive false
+  :focusable false
+  :namespace "kbd-cheatsheet"
+  (keyboard))
+
+(defwidget keyboard []
+  (box :class "kbd" :orientation "h" :space-evenly false :spacing 14 :halign "center"
+
+    ;; ──────────── NUM ────────────
+    (panel :name "NUM" :accent ""
+      (kbd-row :combo ""
+        (side :class "side-l"
+          (key :label "!" :sub "" :dim "" :col "col-pinky")
+          (key :label "@" :sub "" :dim "" :col "col-ring")
+          (key :label "{" :sub "" :dim "" :col "col-middle")
+          (key :label "}" :sub "" :dim "" :col "col-index")
+          (key :label "|" :sub "" :dim "" :col "col-inner"))
+        (combo-cell :text "")
+        (side :class "side-r"
+          (key :label "+" :sub "" :dim "" :col "col-inner")
+          (key :label "7" :sub "" :dim "" :col "col-index")
+          (key :label "8" :sub "" :dim "" :col "col-middle")
+          (key :label "9" :sub "" :dim "" :col "col-ring")
+          (key :label "*" :sub "" :dim "" :col "col-pinky")))
+      (kbd-row :combo ""
+        (side :class "side-l"
+          (key :label "#" :sub "⌘" :dim "" :col "col-pinky")
+          (key :label "$" :sub "⌥" :dim "" :col "col-ring")
+          (key :label "(" :sub "⌃" :dim "" :col "col-middle")
+          (key :label ")" :sub "⇧" :dim "" :col "col-index")
+          (key :label "`" :sub "" :dim "" :col "col-inner"))
+        (combo-cell :text "")
+        (side :class "side-r"
+          (key :label "-" :sub "" :dim ""  :col "col-inner")
+          (key :label "4" :sub "⇧" :dim "" :col "col-index")
+          (key :label "5" :sub "⌃" :dim "" :col "col-middle")
+          (key :label "6" :sub "⌥" :dim "" :col "col-ring")
+          (key :label ":" :sub "⌘" :dim "" :col "col-pinky")))
+      (kbd-row :combo ""
+        (side :class "side-l"
+          (key :label "%" :sub "" :dim "" :col "col-pinky")
+          (key :label "^" :sub "" :dim "" :col "col-ring")
+          (key :label "[" :sub "" :dim "" :col "col-middle")
+          (key :label "]" :sub "" :dim "" :col "col-index")
+          (key :label "~" :sub "" :dim "" :col "col-inner"))
+        (combo-cell :text "")
+        (side :class "side-r"
+          (key :label "=" :sub "" :dim ""    :col "col-inner")
+          (key :label "1" :sub "" :dim ""    :col "col-index")
+          (key :label "2" :sub "" :dim ""    :col "col-middle")
+          (key :label "3" :sub "" :dim ""    :col "col-ring")
+          (key :label "\\\\" :sub "" :dim "" :col "col-pinky")))
+      (box :class "thumb-row" :orientation "h" :spacing 4 :halign "center" :valign "start"
+        (side :class "thumb-l"
+          (thumb :tap "/"   :hold "" :dim "" :col "thumb-outer")
+          (thumb :tap "?"   :hold "" :dim "" :col "thumb-mid")
+          (thumb :tap "Del" :hold "" :dim "" :col "thumb-inner"))
+        (combo-cell :text "")
+        (side :class "thumb-r"
+          (thumb :tap "↵" :hold "" :dim "" :col "thumb-inner")
+          (thumb :tap "␣" :hold "" :dim "" :col "thumb-mid")
+          (thumb :tap "0" :hold "" :dim "" :col "thumb-outer"))))
+
+    ;; ──────────── HOME (active) ────────────
+    (panel :name "HOME" :accent "panel-active"
+      (kbd-row :combo "-"
+        (side :class "side-l"
+          (key :label "Q" :sub "" :dim "" :col "col-pinky")
+          (key :label "W" :sub "" :dim "" :col "col-ring")
+          (key :label "E" :sub "" :dim "" :col "col-middle")
+          (key :label "R" :sub "" :dim "" :col "col-index")
+          (key :label "T" :sub "" :dim "" :col "col-inner"))
+        (combo-cell :text "−")
+        (side :class "side-r"
+          (key :label "Y" :sub "" :dim "" :col "col-inner")
+          (key :label "U" :sub "" :dim "" :col "col-index")
+          (key :label "I" :sub "" :dim "" :col "col-middle")
+          (key :label "O" :sub "" :dim "" :col "col-ring")
+          (key :label "P" :sub "" :dim "" :col "col-pinky")))
+      (kbd-row :combo "CAPS"
+        (side :class "side-l"
+          (key :label "A" :sub "⌘" :dim "" :col "col-pinky")
+          (key :label "S" :sub "⌥" :dim "" :col "col-ring")
+          (key :label "D" :sub "⌃" :dim "" :col "col-middle")
+          (key :label "F" :sub "⇧" :dim "" :col "col-index")
+          (key :label "G" :sub "" :dim ""  :col "col-inner"))
+        (combo-cell :text "CAPS")
+        (side :class "side-r"
+          (key :label "H" :sub "" :dim ""  :col "col-inner")
+          (key :label "J" :sub "⇧" :dim "" :col "col-index")
+          (key :label "K" :sub "⌃" :dim "" :col "col-middle")
+          (key :label "L" :sub "⌥" :dim "" :col "col-ring")
+          (key :label ";" :sub "⌘" :dim "" :col "col-pinky")))
+      (kbd-row :combo "_"
+        (side :class "side-l"
+          (key :label "Z" :sub "" :dim "" :col "col-pinky")
+          (key :label "X" :sub "" :dim "" :col "col-ring")
+          (key :label "C" :sub "" :dim "" :col "col-middle")
+          (key :label "V" :sub "" :dim "" :col "col-index")
+          (key :label "B" :sub "" :dim "" :col "col-inner"))
+        (combo-cell :text "_")
+        (side :class "side-r"
+          (key :label "N" :sub "" :dim "" :col "col-inner")
+          (key :label "M" :sub "" :dim "" :col "col-index")
+          (key :label "," :sub "" :dim "" :col "col-middle")
+          (key :label "." :sub "" :dim "" :col "col-ring")
+          (key :label "/" :sub "" :dim "" :col "col-pinky")))
+      (box :class "thumb-row" :orientation "h" :spacing 4 :halign "center" :valign "start"
+        (side :class "thumb-l"
+          (thumb :tap "Esc" :hold "↳sp"  :dim "" :col "thumb-outer")
+          (thumb :tap "⌫"   :hold "↳num" :dim "" :col "thumb-mid")
+          (thumb :tap "Tab" :hold "↳nav" :dim "" :col "thumb-inner"))
+        (combo-cell :text "")
+        (side :class "thumb-r"
+          (thumb :tap "↵" :hold "↳nav" :dim "" :col "thumb-inner")
+          (thumb :tap "␣" :hold "↳num" :dim "" :col "thumb-mid")
+          (thumb :tap "⌘" :hold "↳sp"  :dim "" :col "thumb-outer"))))
+
+    ;; ──────────── NAV ────────────
+    (panel :name "NAV" :accent ""
+      (kbd-row :combo ""
+        (side :class "side-l"
+          (key :label "F1" :sub "" :dim ""        :col "col-pinky")
+          (key :label "F2" :sub "" :dim ""        :col "col-ring")
+          (key :label "F3" :sub "" :dim ""        :col "col-middle")
+          (key :label "F4" :sub "" :dim ""        :col "col-index")
+          (key :label "T"  :sub "" :dim "key-dim" :col "col-inner"))
+        (combo-cell :text "")
+        (side :class "side-r"
+          (key :label "Y"   :sub "" :dim "key-dim" :col "col-inner")
+          (key :label "U"   :sub "" :dim "key-dim" :col "col-index")
+          (key :label "PgD" :sub "" :dim ""        :col "col-middle")
+          (key :label "PgU" :sub "" :dim ""        :col "col-ring")
+          (key :label "P"   :sub "" :dim "key-dim" :col "col-pinky")))
+      (kbd-row :combo ""
+        (side :class "side-l"
+          (key :label "F5"   :sub "⌘"  :dim "" :col "col-pinky")
+          (key :label "F6"   :sub "⌥"  :dim "" :col "col-ring")
+          (key :label "F7"   :sub "⌃"  :dim "" :col "col-middle")
+          (key :label "F8"   :sub "⇧"  :dim "" :col "col-index")
+          (key :label "⌃C"   :sub "⌃V" :dim "" :col "col-inner"))
+        (combo-cell :text "")
+        (side :class "side-r"
+          (key :label "H" :sub ""  :dim "key-dim" :col "col-inner")
+          (key :label "←" :sub "⇧" :dim ""        :col "col-index")
+          (key :label "↓" :sub "⌃" :dim ""        :col "col-middle")
+          (key :label "↑" :sub "⌥" :dim ""        :col "col-ring")
+          (key :label "→" :sub "⌘" :dim ""        :col "col-pinky")))
+      (kbd-row :combo ""
+        (side :class "side-l"
+          (key :label "F9"   :sub "" :dim "" :col "col-pinky")
+          (key :label "F10"  :sub "" :dim "" :col "col-ring")
+          (key :label "F11"  :sub "" :dim "" :col "col-middle")
+          (key :label "F12"  :sub "" :dim "" :col "col-index")
+          (key :label "PrSc" :sub "" :dim "" :col "col-inner"))
+        (combo-cell :text "")
+        (side :class "side-r"
+          (key :label "N" :sub "" :dim "key-dim" :col "col-inner")
+          (key :label "M" :sub "" :dim "key-dim" :col "col-index")
+          (key :label "," :sub "" :dim "key-dim" :col "col-middle")
+          (key :label "." :sub "" :dim "key-dim" :col "col-ring")
+          (key :label "/" :sub "" :dim "key-dim" :col "col-pinky")))
+      (box :class "thumb-row" :orientation "h" :spacing 4 :halign "center" :valign "start"
+        (side :class "thumb-l"
+          (thumb :tap "BTclr" :hold "" :dim ""        :col "thumb-outer")
+          (thumb :tap "BT→"   :hold "" :dim ""        :col "thumb-mid")
+          (thumb :tap "Tab"   :hold "" :dim "key-dim" :col "thumb-inner"))
+        (combo-cell :text "")
+        (side :class "thumb-r"
+          (thumb :tap "↵" :hold "" :dim "key-dim" :col "thumb-inner")
+          (thumb :tap "␣" :hold "" :dim "key-dim" :col "thumb-mid")
+          (thumb :tap "⌘" :hold "" :dim "key-dim" :col "thumb-outer"))))))

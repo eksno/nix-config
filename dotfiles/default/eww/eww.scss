@@ -1,0 +1,160 @@
+// ─────────────────────────────────────────────────────────────
+//  Toucan keyboard cheatsheet — Catppuccin Mocha
+//  Tight, low-opacity, click-through (via hyprland layerrule).
+// ─────────────────────────────────────────────────────────────
+
+$base:     #1e1e2e;
+$mantle:   #181825;
+$crust:    #11111b;
+$surface0: #313244;
+$surface1: #45475a;
+$surface2: #585b70;
+$overlay0: #6c7086;
+$overlay1: #7f849c;
+$text:     #cdd6f4;
+$subtext0: #a6adc8;
+$mauve:    #cba6f7;
+$lavender: #b4befe;
+$peach:    #fab387;
+
+* {
+  all: unset;
+  font-family: "JetBrainsMono Nerd Font", "JetBrains Mono", monospace;
+}
+
+window {
+  background: transparent;
+}
+
+.kbd {
+  padding: 2px 6px;
+}
+
+// ── panels ───────────────────────────────────────────────────
+
+.panel {
+  background-color: rgba(17, 17, 27, 0.34);     // crust @ 34%
+  border: 1px solid rgba(108, 112, 134, 0.22);  // overlay0 @ 22%
+  border-radius: 8px;
+  padding: 4px 8px;
+}
+
+.panel-active {
+  background-color: rgba(30, 30, 46, 0.44);     // base @ 44%
+  border: 1px solid rgba(203, 166, 247, 0.50);  // mauve @ 50%
+}
+
+.layer-name {
+  color: $subtext0;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  margin-bottom: 2px;
+}
+
+.panel-active .layer-name {
+  color: $mauve;
+}
+
+// ── keys ─────────────────────────────────────────────────────
+
+.key {
+  background-color: rgba(49, 50, 68, 0.28);     // surface0 @ 28%
+  border: 1px solid rgba(88, 91, 112, 0.28);    // surface2 @ 28%
+  border-radius: 3px;
+  min-width: 24px;
+  min-height: 20px;
+  padding: 0;
+}
+
+.key-label {
+  color: $text;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.key-sub {
+  color: $peach;
+  font-size: 7px;
+  font-weight: 500;
+  margin-top: -2px;
+}
+
+.key.key-dim {
+  background-color: rgba(49, 50, 68, 0.18);
+  border-color: rgba(88, 91, 112, 0.18);
+}
+
+.key.key-dim .key-label {
+  color: rgba(166, 173, 200, 0.40);
+  font-weight: 400;
+}
+
+// ── column stagger (Toucan 36 columnar layout) ───────────────
+// Pinky lowest (8px), ring 4, middle 0 (top), index 4, inner 6.
+// Same offset on left + right (mirrored) — col class drives it.
+
+.key.col-pinky  { margin-top: 8px; }
+.key.col-ring   { margin-top: 4px; }
+.key.col-middle { margin-top: 0px; }
+.key.col-index  { margin-top: 4px; }
+.key.col-inner  { margin-top: 6px; }
+
+// ── thumbs ───────────────────────────────────────────────────
+
+.thumb {
+  background-color: rgba(69, 71, 90, 0.32);     // surface1 @ 32%
+  border: 1px solid rgba(127, 132, 156, 0.30);  // overlay1 @ 30%
+  border-radius: 3px;
+  min-width: 32px;
+  min-height: 24px;
+  padding: 0 4px;
+  margin-top: 2px;
+}
+
+.thumb-tap {
+  color: $text;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.thumb-hold {
+  color: $lavender;
+  font-size: 7px;
+  margin-top: -1px;
+}
+
+.thumb.key-dim {
+  background-color: rgba(69, 71, 90, 0.18);
+  border-color: rgba(127, 132, 156, 0.18);
+}
+
+.thumb.key-dim .thumb-tap {
+  color: rgba(166, 173, 200, 0.40);
+  font-weight: 400;
+}
+
+// ── thumb cluster arc (outer thumbs slightly lower) ──────────
+
+.thumb.thumb-outer { margin-top: 6px; }
+.thumb.thumb-mid   { margin-top: 3px; }
+.thumb.thumb-inner { margin-top: 2px; }
+
+// ── inline combo cell (between halves) ───────────────────────
+
+.combo-cell {
+  min-width: 10px;       // empty case = thin gap
+  min-height: 20px;
+  padding: 0 2px;
+}
+
+.combo-label {
+  color: $overlay1;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.panel-active .combo-label {
+  color: $lavender;
+}

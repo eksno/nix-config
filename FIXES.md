@@ -194,6 +194,50 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 **Fix:** `bluetooth.sh:7` `set -euo pipefail` → `set -uo pipefail` (drop `-e`; it's a resilient poll loop where optional-interface queries legitimately fail). Added `"restart-interval": 5` to `custom/bluetooth` in `config` as a respawn safety-net. Dotfiles are symlinked so changes were live immediately; `pkill -SIGUSR2 waybar` reloaded waybar and the module came back (`Cor 44%`, child PID parented by waybar). No nixos-rebuild required.
 **Commit:** `85eeef9`
 
+## 2026-06-03 — phonetic-keybind-dead-after-version-bump (SIGUSR1 trigger removed in 0.6.10)
+
+**Symptom:** Jorge's speech-to-text hotkey `CTRL+ALT+R` stopped working after a flake bump (which also pulled the `phonetic` input forward to 0.6.10). Pressing it did nothing.
+**Affected:** host `lewis`, user `jorge`. `dotfiles/default/hypr/users/jorge/default.conf:9`. (`system/users/.../eksno/default.conf:8` has the same stale bind — not yet fixed, different user/host.)
+**Root cause:** The keybind ran `kill -USR1 "$(cat ~/.cache/phonetic/pid)"`. phonetic 0.6.10 **removed the SIGUSR1-via-pidfile trigger** — the daemon no longer installs a USR1 handler, so the signal is silently ignored. The new trigger interface is `phonetic --trigger <profile>` (the daemon runs `--headless` as a user service and its own log advertises this: "Global hotkeys are unavailable here — trigger a profile with: phonetic --trigger <profile-id>").
+**Investigation:**
+1. `systemctl --user status phonetic.service` → active/running, healthy (PID 1422789). Not a dead-daemon problem.
+2. Suspected stale pidfile after the rebuild restarted the daemon. `cat ~/.cache/phonetic/pid` = `1422789` = live PID. **Dead end** — pidfile was correct.
+3. Suspected the merge clobbered the bind (the Startino theme merge `3e208bc` did touch jorge's `default.conf`). `grep phonetic` → bind line still present, only recolored. Not it.
+4. `phonetic --help` (0.6.10) documents only `--trigger PROFILE`; no signal mechanism mentioned. "This is how global hotkeys work on Wayland."
+5. **Confirmed SIGUSR1 dead (evidence, not assertion):** `kill -USR1 $(cat ~/.cache/phonetic/pid)` then `journalctl --user -u phonetic --since "5 seconds ago"` → "No entries". Daemon did not react.
+6. `phonetic --list-profiles` → one profile, name `Migrated`, trigger command `phonetic --trigger Migrated`.
+**Fix:** Rebind to `bind = CTRL ALT, r, exec, phonetic --trigger Migrated` in `dotfiles/default/hypr/users/jorge/default.conf`, then `hyprctl reload`. Verified end-to-end: trigger → daemon logs "Recording with profile 'Migrated'...", second trigger stops, transcribe returns HTTP 200 (`voxtral-small-24b`), result copied to clipboard. (Dotfile is symlinked → no rebuild needed, just reload.)
+**Commit:** `b4f19e2`
+
+## 2026-05-28 — file-picker-window-never-opens (hyprland CAP_SYS_NICE poisons descendants)
+
+**Symptom:** "File attachments don't open a window with my folders anymore." Same symptom Jorge first reported 2026-05-23. The two earlier fixes (`747a3e1` ptrace_scope=0, `48f08fb` drop landlock LSM) **did NOT resolve it** — even after reboot, `busctl --user call ... org.freedesktop.portal.FileChooser OpenFile …` kept returning `org.freedesktop.DBus.Error.AccessDenied: Portal operation not allowed: Unable to open /proc/<pid>/root`. This is the real fix.
+**Affected:** host `lewis`, user `jorge` (Hyprland). `system/lib/desktop/wayland/hyprland/default.nix` adds `security.wrappers.Hyprland.capabilities = lib.mkForce ""`. Reverted: the `security.lsm` override and the `ptrace_scope` sysctl from the earlier dead-end fixes.
+**Root cause:** Two layers. (1) nixpkgs' `programs.hyprland` module wraps the Hyprland binary at `/run/wrappers/bin/Hyprland` with file capability `cap_sys_nice+ep` so Hyprland can self-promote to `SCHED_RR` at init. (2) Hyprland on startup calls `prctl(PR_CAP_AMBIENT, PR_CAP_AMBIENT_RAISE, CAP_SYS_NICE)`, so the cap propagates into the **ambient** set — meaning every descendant (kitty → fish → chrome → discord → …) inherits `CAP_SYS_NICE` in `cap_permitted` and `cap_ambient`. The portal is a normal `xdg-desktop-portal.service` user systemd unit with `cap_effective = 0`. When the portal does `open("/proc/<caller>/root", O_DIRECTORY)` to detect flatpak (xdp 1.20.4 `xdp-app-info-flatpak.c::open_flatpak_info`), the kernel's `cap_ptrace_access_check` in `security/commoncap.c` enforces `cap_issubset(child.permitted, caller.effective)`. `{CAP_SYS_NICE} ⊆ {}` is false → `-EPERM` → symlink layer converts to `-EACCES` → portal answers `AccessDenied` to *every* call (FileChooser, Settings, Account, …). No dialog ever appears. Upstream: [flatpak/xdg-desktop-portal#1691](https://github.com/flatpak/xdg-desktop-portal/issues/1691) — same exact pattern (Nix user with `cap_wake_alarm` ambient → portal fails).
+**Investigation:**
+1. Booted into the new generation (post-landlock-drop). `cat /sys/kernel/security/lsm` → `capability,yama,bpf,ima`. Landlock IS gone. `busctl FileChooser OpenFile` → **still** `Access denied`. Landlock was not the cause.
+2. `gdbus call` (better error reporting than `busctl`) → full message: `Portal operation not allowed: Unable to open /proc/1473983/root`. Located the source: `xdp-app-info-flatpak.c:650-676` — `openat("/proc/%u/root", O_RDONLY|O_NONBLOCK|O_DIRECTORY|O_CLOEXEC|O_NOCTTY)` → on `EACCES` non-FUSE, returns fatal "Unable to open" error.
+3. Restarted the portal with `Environment=G_MESSAGES_DEBUG=all` drop-in → no log entry at all for the OpenFile call. The portal rejects in the pre-handler app-info phase, before dispatching. Confirmed both portal and caller share same uid (1000), same namespaces (user/pid/mnt/ipc/net/cgroup all inode `4026531837/...536/...832`), same dumpable (USER, verified by jorge-owned `/proc/<pid>/*`).
+4. **Dead end (re-walked):** chased landlock domain scoping; landlock removed → still fails. Chased yama (`ptrace_scope=1`); only restricts `PTRACE_MODE_ATTACH`, never READ. Chased BPF LSM (`bpftool prog show` → no LSM programs attached). Chased seccomp (zero filters everywhere). Chased systemd hardening on the portal unit (none — bare `Type=dbus`, no `ProtectProc`/`Private*`).
+5. Reproduced from a fresh `systemd-run --user --service` running a Python `os.open("/proc/<other-pid>/root", O_RDONLY|O_DIRECTORY)` → `EACCES`. Survey of all user processes from the service showed an asymmetric pattern: it could open `/proc/X/root` for some processes (other services like dbus-broker, pipewire) but not for any Hyprland descendant (kitty, fish, chrome, eww, …). My interactive shell could open all of them.
+6. **The cap diff finally surfaced:** `grep ^Cap /proc/$$/status` (my shell, an interactive bash) had `CapEff: 0000000000800000` (`CAP_SYS_NICE`); the same grep inside a fresh user service had `CapEff: 0`. The Hyprland descendants all had `CapPrm: 0000000000800000`.
+7. Searched upstream xdp issues for "Portal operation not allowed" → found **#1691 "Capabilities mismatch breaks flatpak detection and triggers error"** — exact same symptom, with the reporter's diagnosis pointing at `security/commoncap.c::cap_ptrace_access_check` and `cap_issubset(child_cred->cap_permitted, *caller_caps)`. That was the missing piece.
+8. Walked the PID tree from a fish child: `getcap /run/wrappers/bin/Hyprland` → `cap_setpcap,cap_sys_nice=ep`. nixpkgs `nixos/modules/programs/wayland/hyprland.nix:93-97` adds it so Hyprland can run `SCHED_RR` (comment: "Hyprland needs permissions to give itself SCHED_RR on startup"). Hyprland then ambient-raises `CAP_SYS_NICE` so all its children inherit it — every kitty, every fish, every browser. Portal (a user systemd service, not a Hyprland child) has none, so it fails the cap_issubset check against every Hyprland descendant. Mismatch.
+**Fix:** `security.wrappers.Hyprland.capabilities = lib.mkForce ""` in `system/lib/desktop/wayland/hyprland/default.nix`. Hyprland loses its ability to self-promote to `SCHED_RR` (it falls back to the default scheduler — works fine, just no real-time priority). Hyprland's `prctl(PR_CAP_AMBIENT_RAISE)` then fails silently with `EPERM` because the cap isn't in permitted, ambient cap isn't raised, descendants inherit nothing, portal's `cap_issubset({}, {})` succeeds, `open(/proc/<caller>/root)` returns OK, flatpak check completes, FileChooser dispatches normally. Same edit also reverts the no-longer-needed `security.lsm = mkForce ["yama" "bpf"]` from `system/lib/desktop/default.nix` (landlock restored).
+After `./update.sh`, requires a **logout/login** for the change to bite the running Hyprland — the cap fix only affects newly-spawned Hyprland sessions, the current one keeps `CAP_SYS_NICE` ambient until it dies. To verify post-relog: `cat /proc/$$/status | grep CapPrm` should show `0000000000000000`; `busctl --user call org.freedesktop.portal.Desktop /org/freedesktop/portal/desktop org.freedesktop.portal.FileChooser OpenFile "ssa{sv}" "" t 0` should return a request handle.
+**Commit:** `56151d5`
+
+## 2026-05-24 — glasses-mirror-doesnt-persist-across-replug
+
+**Symptom:** After setting up clean glasses-as-source mirroring (laptop mirrors the Rayneo so the glasses show their native 1920x1080 with no bars), the mirror was gone the next day when the glasses were re-plugged — back to a standalone extension monitor.
+**Affected:** host `lewis`, user `jorge`. `dotfiles/default/hypr/users/jorge/default/monitor.conf`, `dotfiles/default/hypr/users/jorge/default/breezy.conf`, new `dotfiles/default/hypr/shared/scripts/glasses-mirror-watcher.sh`.
+**Root cause:** Two layers. (1) The working mirror had only been applied at runtime via `hyprctl keyword monitor` — never written to config, so any reload/replug/reboot reverted it. (2) The static `monitor.conf` rules couldn't express the desired topology anyway: Hyprland is last-match-wins, and a `monitor=...,mirror,<target>` rule whose target is ABSENT clobbers the output to standalone rather than falling through to an earlier rule. So `eDP-1 ... mirror, HDMI-A-1` (VG258, usually absent) always won over the glasses-as-source rule and forced eDP standalone. The file's comment claiming fall-through was wrong.
+**Investigation:**
+1. Live state on replug: glasses came up as DP-2 this session (DP-1 the day before — connector name varies), both monitors `mirrorOf=none`. Confirms non-persistence.
+2. Reproduced the clobber: applied glasses-as-source live (`eDP-1 mirrorOf=1`, verified clean by Jorge), then applied an absent-target rule (`mirror,HDMI-A-1`) on top — eDP immediately dropped to `mirrorOf=none`. Proved absent mirror-target → standalone, not fall-through.
+**Fix:** Replaced the dead `breezy-monitor-watcher.sh` (which reaped the now-removed breezy-sideview) with `glasses-mirror-watcher.sh`: a socket2 listener that applies the correct topology at session start and on every `monitoradded`/`monitorremoved` event. Matches the glasses by EDID description (`desc:`), so the DP-1/DP-2 variance doesn't matter. Topology: VG258 present → VG258 source, eDP+glasses mirror it; else glasses present → glasses source, eDP mirrors glasses; else → eDP native. Stripped the broken static mirror rules from `monitor.conf` (left only the `,preferred,auto,1` fallback + an eDP baseline), and pointed `breezy.conf`'s `exec-once` at the new watcher.
+**Commit:** `531cf96`
+
 ## 2026-05-23 — corne-reconnect-loop-recurrence-bt-service-ordering-cycle
 
 **Symptom:** Corne BLE keyboard back in the Connected↔Disconnected loop again, ~2 weeks after the 2026-05-22 fix (`46cae11`/`33fc458`) supposedly resolved it. Same `read_pnpid_cb` ATT 0x0E failures.
@@ -207,6 +251,48 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 **Fix:** Replaced the separate cyclic unit with `systemd.services.powertop.serviceConfig.ExecStartPost = "${bt-no-autosuspend}";`. It runs immediately after `--auto-tune` within powertop's own oneshot and introduces no new unit anchored to `multi-user.target`, so a cycle is structurally impossible. `powerManagement.resumeCommands` re-pin kept for resume. Verified post-rebuild: new generation active, no failed units, `powertop.service` shows the `ExecStartPost`, no ordering-cycle log.
 **Collateral (process lesson, not a code bug):** Applying this via `./update.sh` was disruptive — `update.sh` runs `nix flake update` first, which bumped nixpkgs unstable to `…20260521.f83fc3c`; the resulting `switch` restarted systemd + the graphical stack, tore down the Hyprland/uwsm session (`user@1000.service` deactivated, `switch-to-configuration` exited 101, Discord coredumped), and logged the user out with loss of open app state. For a small `system/` change, prefer a plain `nixos-rebuild switch` without a flake bump, and warn before any switch that can restart the display manager.
 **Commit:** `36a6102`
+
+## 2026-05-23 — file-picker-window-never-opens (portal landlock-domained as systemd service)
+
+**Symptom:** "File attachments don't open a window with my folders anymore." Clicking attach/open-file in any app produces no file-chooser window at all.
+**Affected:** host `lewis`, user `jorge` (Hyprland). `system/lib/desktop/default.nix` (`security.lsm = lib.mkForce [ "yama" "bpf" ]`, dropping `landlock`).
+**Root cause:** The `fea4e19` bump pulled **systemd 260.1** + **xdg-desktop-portal 1.20.4**, with the nixpkgs default `security.lsm = [ "landlock" "yama" "bpf" ]`. systemd 260 places every **service** in a **Landlock domain**. Landlock's `ptrace_access_check` hook then forbids a domained process from `PTRACE_MODE_READ`-accessing any process outside its domain (i.e. any non-descendant). xdg-desktop-portal 1.20.4 verifies each D-Bus caller by `open("/proc/<caller-pid>/root", O_DIRECTORY)` — which is `PTRACE_MODE_READ_FSCREDS`-gated — and the caller (Chrome, etc.) is not a descendant of the portal. So the open returns `EACCES`, the portal answers `org.freedesktop.DBus.Error.AccessDenied: … Unable to open /proc/<pid>/root` to ALL interfaces (FileChooser, Settings, …), and no dialog ever appears.
+**Investigation:**
+1. `fastfetch` → lewis/jorge, Hyprland 0.55.2. All portal backends running; FileChooser present on D-Bus. Not a missing backend.
+2. `busctl FileChooser OpenFile` and `zenity --file-selection` both → `AccessDenied: Unable to open /proc/<pid>/root`, no window mapped.
+3. **Dead end #1 (the first commit, reverted):** blamed `kernel.yama.ptrace_scope`. Set it to 0 via `boot.kernel.sysctl` and rebuilt — **still broken**. Wrong because `/proc/<pid>/root` open is `PTRACE_MODE_READ`, and **yama only restricts `PTRACE_MODE_ATTACH`**, never READ. ptrace_scope was a red herring.
+4. **Dead end #2:** suspected the Claude Bash-tool sandbox (separate PID ns). Disproved: my bash, the portal, and Chrome were all in the *same* pid/mnt/user namespaces; tests valid.
+5. Key asymmetry: my interactive shell (uid 1000, caps 0) CAN `open(/proc/<chrome>/root, O_DIRECTORY)`, but the portal (same uid, same caps, scope 0, same ns) gets EACCES on the identical call. So not yama, not target-dumpable, not namespaces, not caps.
+6. Bisected with `systemd-run --user`: a **`--scope`** opens non-descendant `/proc/root` fine; a **`--service`** gets EACCES; a service opening its **own child** succeeds. Descendant-only `PTRACE_MODE_READ` at scope-0 is the fingerprint of **Landlock domain scoping** (`lsm=landlock` active; `bpf-restrict-fs` BPF-LSM also attached but it's FS-type based, not ptrace).
+7. **Decisive proof:** `systemctl --user stop xdg-desktop-portal.service`, then ran the portal binary directly from my (non-domained) shell → `busctl FileChooser OpenFile` **succeeded** (returned a request handle). Same binary, only difference = service-domain vs scope.
+8. Found the knob: nixpkgs `nixos/modules/security/default.nix` defaults `security.lsm = [ "landlock" "yama" "bpf" ]`. No documented per-service Landlock opt-out in systemd 260 man pages; the domain is applied to *all* services (a bare transient service was domained too).
+**Fix:** `security.lsm = lib.mkForce [ "yama" "bpf" ]` in the shared desktop module (drop `landlock`). Needs `./update.sh` **and a reboot** (kernel cmdline `lsm=` change). Tradeoff: apps that opt into Landlock (some browser/flatpak sandboxes) lose that defense-in-depth layer; they still have seccomp + namespace sandboxing. To verify post-reboot: `busctl --user call org.freedesktop.portal.Desktop /org/freedesktop/portal/desktop org.freedesktop.portal.FileChooser OpenFile "ssa{sv}" "" t 0` should return a handle, not `Access denied`.
+**Commit:** `48f08fb`
+
+## 2026-05-23 — hyprland-0.55-deprecated-config-options
+
+**Symptom:** After a long-delayed `./update.sh`, Hyprland greeted with the error overlay. `hyprctl configerrors` reported: `Invalid dispatcher: togglesplit` (qwerty.conf:9), then `dwindle:pseudotile does not exist` (dwindle.conf:2) and `misc:vfr does not exist` (misc.conf:5).
+**Affected:** host `lewis`, user `jorge`. `dotfiles/default/hypr/shared/workflow/default/binds/qwerty.conf:9`, `dotfiles/default/hypr/shared/utility/dwindle.conf:2`, `dotfiles/default/hypr/shared/utility/misc.conf:5`.
+**Root cause:** The flake.lock bump pulled Hyprland 0.54.3 → 0.55.2, which made three breaking config changes: (1) the `togglesplit` dispatcher moved under `layoutmsg`, (2) `dwindle:pseudotile` was removed entirely — pseudotiling is now only the `pseudo` dispatcher (Super+P), no global toggle, (3) `misc:vfr` moved to `debug:vfr` (defaults on; "do not turn off unless debugging").
+**Investigation:**
+1. `hyprctl version` → confirmed 0.55.2 (was 0.54.3 before the rebuild).
+2. Grep'd hyprland.log → real error was `ERR: Invalid dispatcher: togglesplit`; the per-file "line N" errors are just re-raised at each include site.
+3. `hyprctl dispatch togglesplit` → Invalid; `hyprctl dispatch layoutmsg togglesplit` → ran (valid).
+4. `hyprctl getoption dwindle:pseudotile` / `misc:vfr` → both "no such option". `hyprctl descriptions` confirmed `debug:vfr` is the new home for vfr and dwindle has no pseudotile key.
+**Fix:** `bind = ..., togglesplit,` → `bind = ..., layoutmsg, togglesplit` in qwerty.conf (Jorge's keymap only — other users' keymaps left untouched per Jorge's request, they'll need the same fix when rebuilt). Dropped the `pseudotile = true` and `vfr = true` lines (defaults preserve prior behavior). Verified `hyprctl configerrors` is empty after reload.
+**Commit:** `c18fba8`
+
+## 2026-05-23 — update-booted-into-gnome-instead-of-hyprland
+
+**Symptom:** After a long-delayed `./update.sh`, the machine autologged into a GNOME session instead of Hyprland. Jorge rolled back to the previous generation to recover.
+**Affected:** host `lewis`, user `jorge`. `system/users/jorge/dev/default.nix:8-9`, `system/lib/xr/breezy-session/default.nix`.
+**Root cause:** Not the update *adding* GNOME — GNOME had been in the config since 2026-05-05 (commit `41aabee`, the `breezy-session` module: `services.desktopManager.gnome.enable = true` for world-locked XR surfaces). This was the first rebuild after that commit, so it was the first time GNOME's session files landed in the SDDM SessionDir. SDDM autologin (`Session=hyprland-uwsm.desktop`) resolved to the GNOME session instead — exact mechanism never confirmed (candidates: GDM force-disable undone by nixpkgs churn, session-file sort order, or uwsm session-name change in the nixpkgs slice).
+**Investigation:**
+1. fastfetch confirmed the rolled-back gen is on Hyprland; `/run/current-system/sw/share/wayland-sessions/` listed only `hyprland*.desktop` (no gnome), confirming the rollback predates the breezy-session build.
+2. `git log -- system/lib/xr/breezy-session/` → module added 2026-05-05; this was the first rebuild since.
+3. `/etc/sddm.conf.d/00-nixos.conf` still had the correct `Session=hyprland-uwsm.desktop` autologin — config wasn't wrong, the session selection behavior changed.
+**Fix:** Removed `../../../lib/xr/breezy-gnome` and `../../../lib/xr/breezy-session` imports from `system/users/jorge/dev/default.nix`; added `../../../lib/xr/breezy-recenter` directly so the Hyprland Super+R recenter binding keeps working (it was only pulled in transitively via breezy-session). GNOME removed entirely — Jorge isn't using the breezy-gnome XR path. Verified via `nixos-rebuild build` that the closure's wayland-sessions contains only hyprland sessions before switching.
+**Commit:** `2981e3e`
 
 ## 2026-05-22 — corne-bluetooth-connect-disconnect-loop-after-idle
 
@@ -247,6 +333,76 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 **Fix:** Re-comment `wifite2` in `system/users/eksno/programs/default.nix:44`.
 **Commit:** `71625e7`
 
+## 2026-05-08 — hyprland-layerrule-ignorealpha-rejected-as-invalid-field
+
+**Symptom:** Three cascading config errors after adding a layerrule for the eww keyboard cheatsheet: `invalid field type ignorealpha` at `layerrules.conf:13`, propagated up through `users/jorge/default.conf:4` and `hyprland.conf:1` (each just re-reports the inner failure).
+**Affected:** host `lewis`, user `jorge`. `dotfiles/default/hypr/shared/utility/layerrules.conf`.
+**Root cause:** Hyprland 0.54.3 expects snake_case effect names (matches the existing `no_anim` rule in the same file). The correct spelling is `ignore_alpha`, not `ignorealpha`. The parser falls through to the `invalid field type` branch in `ConfigManager.cpp:3053` for any unknown name.
+**Investigation:**
+1. Reproduced via `hyprctl configerrors` — only line 13 was the real failure; the other two were re-raised at the include-site, not separate errors.
+2. Tried to grep the binary for valid effect names — Hyprland's binary is stripped to ~26 strings, so binary inspection was useless.
+3. Verified against v0.54.3 source: `src/desktop/rule/layerRule/LayerRuleEffectContainer.cpp` enumerates the valid effects (`no_anim`, `blur`, `blur_popups`, `dim_around`, `xray`, `animation`, `order`, `above_lock`, `no_screen_share`, `ignore_alpha`).
+4. **Important footnote:** I'd reached for `ignore_alpha` thinking it gave click-through (input passthrough). It doesn't — it's a *blur optimization* (skip blur where alpha < threshold). Hyprland 0.54 has no layerrule for input passthrough; the wlr-layer-shell `set_input_region` call would have to come from the surface (eww), and eww 0.6.0 / master @ 2026-03-05 does not expose that — see open eww issues #896 and #1253. So even with the corrected name, the cheatsheet still captures pointer events on its bbox.
+**Fix:** Renamed `ignorealpha` → `ignore_alpha` in `dotfiles/default/hypr/shared/utility/layerrules.conf:13` and updated the comment to clarify it's a blur optimization, not click-through.
+**Commit:** `13928d9`
+
+## 2026-05-08 — edid-override-keyed-only-on-DP-2-misses-DP-1
+
+**Symptom:** Glasses connected and showed Hyprland content, but `breezy-hyprland` couldn't lease the connector via `wp-drm-lease-v1`. Glasses appeared as a regular desktop output instead of a non_desktop one.
+**Affected:** host `lewis`, user `jorge`. `system/lib/xr/glasses-edid/default.nix:44`.
+**Root cause:** The Rayneo connector name on lewis varies between DP-1 and DP-2 across sessions/replugs (per `memory/xr-rayneo-connector-name-varies.md`). The kernel cmdline override `drm.edid_firmware=DP-2:edid/...` only applies on the matching connector — when the glasses came up on DP-1, the connector kept its native (desktop) EDID, so `non_desktop` wasn't set and wlroots never advertised it on `wp-drm-lease-v1`.
+**Investigation:**
+1. After UCSI altmode wedge recovered (cause unknown), `hyprctl monitors` showed glasses on DP-1, not DP-2.
+2. Greped kernel cmdline (`/proc/cmdline`) — confirmed only `DP-2:` was listed in `drm.edid_firmware`.
+3. Memory file `xr-rayneo-connector-name-varies.md` already flagged the gap; we'd just never broadened the override.
+**Fix:** `system/lib/xr/glasses-edid/default.nix:44` now lists both connectors comma-separated:
+```
+drm.edid_firmware=DP-1:edid/rayneo-air4pro-glasses.bin,DP-2:edid/rayneo-air4pro-glasses.bin
+```
+Kernel applies the override only on the matching connector, so listing both is safe — both connectors are never the glasses simultaneously.
+**Commit:** `96dd306`
+
+## 2026-05-08 — DP-altmode-wedge-on-lewis-not-caused-by-power-saving-flags
+
+**Symptom:** Mid-day on 2026-05-07, DP altmode stopped entering for the Rayneo Air 4 Pro after working at 14:12. UCSI debugfs fingerprint: `GET_CONNECTOR_STATUS` reports altmode-capable partner with SVID `0xff01`, but `GET_CAM_SUPPORTED=0` and `SET_NEW_CAM` times out.
+**Affected:** host `lewis`, user `jorge`. EC firmware (UX3405MA.301), no specific file.
+**Root cause:** Unknown — wedge state lives in EC firmware memory that survives cold cycle, BIOS Restore Defaults, every kernel-cmdline tweak, and every UCSI runtime command we tried. The wedge recovered on its own around 2026-05-08 evening with no deliberate fix.
+**Investigation:**
+1. Tested cable on Jorge's phone — works fine. Cable ruled out.
+2. Tried every UCSI runtime command (`CONNECTOR_RESET`, `PPM_RESET`, `SET_NEW_CAM`) and every driver rebind (`ucsi_acpi`, `xhci`). No effect.
+3. Cold cycle (shutdown + AC unplug + 30s power-button hold). No effect.
+4. BIOS Restore Defaults (F2 → F9 → F10). No effect — also re-enabled secure boot, breaking NixOS boot until Jorge disabled it again.
+5. **Tested kernel cmdline without aggressive power-saving flags** (`i915.enable_dc=4`, `pcie_aspm=force`, `acpi.ec_no_wakeup=1`, `usbcore.autosuspend=1`) — committed `fa683f4` to disable, rebuilt, rebooted. UCSI fingerprint identical → ruled out as the cause. Reverted in `30e1aad`.
+6. While building Phase 4 (per-workspace headless outputs), altmode came back on its own. Glasses now drive `DP-1 1920x1080@120` as an active independent display, even though UCSI debugfs *still* reports the wedge fingerprint.
+**Fix:** No deliberate fix. Recovery cause unknown. Documented in `memory/xr-lewis-ec-refuses-altmode.md` (status: recovered 2026-05-08 evening). Key takeaway: **UCSI debugfs is not a reliable signal for actual altmode state on this stack** — i915 can engage DP independently. Cross-check `hyprctl monitors -j` / `/sys/class/drm/card1-DP-*/status` for ground truth. See `xr/LEARNINGS.md` "UCSI debugfs is NOT a reliable signal" entry.
+**Commit:** `627cfee` (memory update); investigation commits `12fd3f8`, `fa683f4`, `30e1aad`, `1a92a06`.
+
+## 2026-05-07 — monado-surface-lost-retry-on-mesa-ebusy-flatten
+
+**Symptom:** Rayneo Air 4 Pro panel stayed black even after monado reached FOCUSED with IPD/pose flowing. SBS scene rendered fine on the laptop screen but not on the glasses. `monado-service.log` showed a single `VK_ERROR_SURFACE_LOST_KHR` from `comp_target_acquire`/`comp_target_present` then deadlocked waiting on `drm_syncobj_array_wait_timeout` fences that would never signal.
+**Affected:** host `lewis`, user `jorge`. `system/lib/xr/monado-rayneo/package.nix:40`, new `system/lib/xr/monado-rayneo/patches/comp-renderer-surface-lost-retry.patch`.
+**Root cause:** Kernel returns `EBUSY` on monado's *first* `DRM_IOCTL_MODE_ATOMIC` (CRTC contention with Hyprland's stale binding to DP-2, even though aquamarine takes the `non_desktop` early-return at `Monitor.cpp:246`). Mesa's `wsi_common_display.c:3129` flattens any non-`EACCES` `atomic_commit` failure to `VK_ERROR_SURFACE_LOST_KHR`. Monado's `renderer_acquire_swapchain_image` and `renderer_present_swapchain_image` only special-case `VK_ERROR_OUT_OF_DATE_KHR` and `VK_SUBOPTIMAL_KHR`, so SURFACE_LOST falls through to a single log line and the present cycle stalls.
+**Investigation:**
+1. **Round 1 (dead end):** Suspected swapchain-usage / Mesa anv display-plane gap. Authored `comp-renderer-scanout-compatible-tiling.patch` pairing `COLOR_ATTACHMENT_BIT` with `STORAGE_BIT`. Necessary fix (kept) but didn't solve the black panel.
+2. **Round 2 (dead end):** Suspected EDID 3840-mode injection / i915 atomic_check rejection. v2 strace with `drm.debug=0x1f` showed *successful* DP-2 modeset — refuted.
+3. **Round 3 (real diagnosis):** v3 strace showed `DRM_IOCTL_MODE_ATOMIC = -1 EBUSY` immediately preceding the SURFACE_LOST log. Read Mesa source: `wsi_common_display.c:3129` confirms the `if (ret != -EACCES)` branch unconditionally maps to `VK_ERROR_SURFACE_LOST_KHR`. Read monado source: only OUT_OF_DATE/SUBOPTIMAL branches exist, no SURFACE_LOST recovery. Documented in `memory/xr-mesa-anv-ebusy-on-first-present.md`.
+4. Considered the symmetric Mesa fix (`EBUSY → VK_NOT_READY`) but verified monado treats `VK_NOT_READY` exactly like SURFACE_LOST — Mesa-side change alone is useless without a monado pair patch. Minimal-blast-radius decision: patch monado only.
+**Fix:** New patch `comp-renderer-surface-lost-retry.patch` adds bounded retries (3 attempts × 16 ms backoff) on `VK_ERROR_SURFACE_LOST_KHR` in both `renderer_acquire_swapchain_image` (calls `renderer_ensure_images_and_renderings(r, true)` then re-acquires) and `renderer_present_swapchain_image` (calls `renderer_resize(r)`, re-acquires a fresh `buffer_index` since `r->acquired_buffer == -1` by that point, then re-presents). On exhaustion the original log-and-return behavior is preserved. Wired into `system/lib/xr/monado-rayneo/package.nix` patches list.
+**Commit:** `baa7b4e`
+
+## 2026-05-06 — breezy-hyprland-stale-monado-ipc-socket-race
+
+**Symptom:** `breezy-hyprland` would sometimes exit cleanly within ~1s of launch with no visible error; wayvr.log showed `Failed to connect to socket /run/user/1000/monado_comp_ipc: Connection refused!` and `XR_ERROR_RUNTIME_UNAVAILABLE`. Monado-service log showed `WARN [create_listen_socket] Removing stale socket file` immediately followed by `INFO [ipc_server_main_common] Server exiting: '0'`. Glasses got a brief "left half black, right half rainbow streaks, on/off" pattern — direct mode WAS working, just being torn down before any frame landed.
+**Affected:** host `lewis`, user `jorge`. `system/lib/xr/breezy-hyprland/launcher.nix:77`.
+**Root cause:** Race condition in the launcher. The socket-wait loop checks `[[ -S "$SOCK" ]]` and breaks immediately if the socket file exists. A stale socket from a previous run satisfies that check. Wayvr launches and tries to connect — but monado-service has just removed the stale socket and hasn't yet created its own. Wayvr gets ECONNREFUSED, OpenXR loader bails with `XR_ERROR_RUNTIME_UNAVAILABLE`, wayvr exits clean, EXIT trap kills monado.
+**Investigation:**
+1. Initial diagnosis chased `VK_ERROR_SURFACE_LOST_KHR` from monado on first present (v1 5s diagnostic). Spent multiple iterations wrong-direction (Mesa anv display-plane gap — refuted) and almost-wrong (i915 atomic_check rejection — refuted by v2 with `drm.debug=0x1f` showing successful DP-2 modeset).
+2. v3 (15s diagnostic) showed monado exiting cleanly with no SURFACE_LOST and no present cycle. Read breezy-stdout: wayvr's "Connection refused" was the actual failure mode.
+3. Checked monado log: `Removing stale socket file` was the smoking gun — explains the race.
+**Fix:** Added `rm -f "$XDG_RUNTIME_DIR/monado_comp_ipc"` next to the existing `rm -f` for `monado.pid` in `system/lib/xr/breezy-hyprland/launcher.nix`.
+**Commit:** `f74154b`
+
+
 ## 2026-05-06 — waybar-icon-percentage-color-mismatch
 
 **Symptom:** In waybar, the audio icon and the percentage rendered in different colors — icon was Catppuccin purple, value was Startino pink. Same pattern would have hit backlight if anyone had looked closely.
@@ -284,6 +440,28 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 4. Read `catppuccin_options_tmux.conf` — found a `%if @catppuccin_reset == true` block that does `set -Ugq @thm_*` (unset) for the entire palette. Catppuccin's own flavor-switching docs (the comment block in that file showing dark/light theme hooks) set `@catppuccin_reset "true"` before re-running the plugin for exactly this reason.
 **Fix:** Add `set -g @catppuccin_reset "true"` immediately before the `run ~/.config/tmux/plugins/tmux/catppuccin.tmux` line in `tmux.conf`. Catppuccin's options conf clears the reset flag (`set -Ug @catppuccin_reset` at the bottom of the `%if` block) so it doesn't accumulate.
 **Commit:** `22fd835`
+
+## 2026-05-05 — xr-driver-crashloop-from-sddm-owned-shm-state
+
+**Symptom:** After logging into the new GNOME-on-Wayland session for the first time, `xr-driver` was stuck in `auto-restart` (exit 1, ~190 restart attempts). `/dev/shm/xr_driver_state` existed but was owned `sddm:sddm`, blocking jorge's driver from overwriting it. Driver log showed a segfault in `fprintf` between "Using hardware id" and "Starting up XR driver".
+**Affected:** host `lewis`, user `jorge`. `system/lib/xr/driver/default.nix`.
+**Root cause:** The xr-driver systemd unit is `systemd.user.services.xr-driver` with `wantedBy = [ "default.target" ]`, which means it auto-starts for **every** user that gets a systemd `--user` instance — including `sddm`, the user that runs the SDDM greeter. The greeter's brief lifetime is enough for xr-driver to write `/dev/shm/xr_driver_state` as `sddm:sddm`. After sddm exits, the file persists with sddm ownership, and the next user's xr-driver segfaults inside `fprintf` when it tries to overwrite it.
+**Investigation:**
+1. `systemctl --user status xr-driver` → "activating (auto-restart) ... exit code 1, restart counter 190+".
+2. `ls -la /dev/shm/xr_driver_state` showed owner `sddm`, not `jorge`.
+3. `~/.local/state/xr_driver/driver.log` had repeated "Segmentation fault occurred" with backtrace through `_IO_fprintf` — confirmed the EACCES was killing fprintf rather than logging cleanly.
+4. Manual `sudo rm /dev/shm/xr_driver_state && systemctl --user restart xr-driver` got the driver alive — but next reboot would re-trigger the same race.
+5. Considered: per-user xr-driver disabled, runtime path under `$XDG_RUNTIME_DIR` (would break the contract with the breezy extension that hardcodes `/dev/shm/...`), or refusing to start for sddm. systemd `ConditionUser=!sddm` is the cleanest — only the greeter user is excluded; jorge, eksno, etc. start normally.
+**Fix:** Added `unitConfig.ConditionUser = "!sddm";` to `system/lib/xr/driver/default.nix`.
+**Commit:** `9161463`
+
+## 2026-05-05 — gnome-breezy-session-pivot-from-nested-shell
+
+**Symptom:** breezy-sideview wrapper couldn't run on Hyprland; nested gnome-shell architectural wall (see `xr/LEARNINGS.md`).
+**Affected:** host `lewis`, user `jorge` (with `eksno`/verse wired in same change). Pivot involves: deleted `system/lib/xr/breezy-sideview/`; new `system/lib/xr/breezy-session/`, `system/lib/xr/breezy-recenter/`; flake input `nixpkgs-gnome48` removed; `dotfiles/default/hypr/users/jorge/default/breezy.conf`; `dotfiles/default/hypr/shared/scripts/breezy-recenter.sh` (deleted).
+**Root cause:** `gnome-shell --nested` is nested-on-X11 (routes through XWayland under Hyprland → Clutter init fails); v49 removed the flag entirely; `--display-server`/`--headless`/`--virtual-monitor` all lose the seat-control fight to Hyprland (`Failed to take control of the session: ... EBUSY`).
+**Investigation + fix:** See archived plan at `xr/plans/02-gnome-breezy-session-2026-05-05.md` for the per-step rationale, schema verification, dconf serialization gotchas, and stop-the-line conditions. Implementation landed in commits `c9fbff6` (strip dead wrapper), `41aabee` (add breezy-session module), `acced9e` (seed dconf), `bc8b2eb` (recenter CLI + GNOME custom-keybinding), `d380d38` (wire eksno/verse), and `95a00d8` (drop gnome48 input + doc refresh).
+**Commit:** `95a00d8`
 
 ## 2026-05-05 — hypr-mirror-direction-for-correct-aspect-on-external
 
