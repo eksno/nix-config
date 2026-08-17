@@ -26,7 +26,7 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 **Root cause:** the new option feeds `keyboard.config.show_on_spawn`. When false the keyboard never lands in the set's visible `overlays` map (it goes to `hidden_overlays`, keyed by name), but the "copy keyboard to all sets" step right after unwrapped that lookup unconditionally.
 **Investigation:** the backtrace named the line directly; the only question was whether skipping the copy leaves the keyboard unreachable. It doesn't — `OverlayTask::ToggleOverlay` falls through to `OverlayWindowConfig::activate` when a set has no saved state for an overlay, so any set can still show it.
 **Fix:** guard the copy with `if let Some(kbd_state) = ...cloned()`.
-**Commit:** `0d0b4ff`
+**Commit:** `e6ef3cc`
 
 ## 2026-08-16 — wayvr-capture-segv-fd-use-after-close
 
