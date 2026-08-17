@@ -40,6 +40,11 @@
 #   true) so the virtual keyboard can be left out of the session when a
 #   real keyboard is in reach.
 #
+# - ipc-screen-visibility.patch — WlxScreenSetVisible packet +
+#   `wayvrctl screen-show/screen-hide`. Wraps OverlayTask::ToggleOverlay
+#   (EnsureOn/EnsureOff) so the cockpit can show several screens in the
+#   current overlay set at once instead of one-screen-per-set.
+#
 # Patches apply against the v26.7.1 source nixpkgs pins. If the version
 # bumps, re-verify the patch context (26.2.1 -> 26.7.1 moved the wayland
 # screen-creation loop body and its call site; curved-arc-layout.patch
@@ -59,5 +64,6 @@ wayvr.overrideAttrs (old: {
     ./patches/ipc-telemetry-and-layout.patch
     ./patches/dmabuf-capture-on-single-queue-gpus.patch
     ./patches/keyboard-optional-on-spawn.patch
+    ./patches/ipc-screen-visibility.patch
   ];
 })
