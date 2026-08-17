@@ -16,7 +16,8 @@
       "WebSearch",
       "Bash(chmod:*)",
       "Bash(patchelf:*)",
-      "Bash(nix-shell:*)"
+      "Bash(nix-shell:*)",
+      "Bash(fastfetch *)"
     ],
     "additionalDirectories": [
       "/home/eksno/repos/eksno/zmk-dvorak-36"
