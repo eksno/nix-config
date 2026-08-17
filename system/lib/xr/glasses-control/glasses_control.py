@@ -43,6 +43,8 @@ MONADO_LOG = os.environ.get(
     "/home/jorge/nix-config/.scratch/xr-reboot/monado-test.log",
 )
 WAYVRCTL = os.environ.get("WAYVRCTL", "wayvrctl")
+SETTINGS_PATH = os.path.expanduser("~/.config/glasses-control/settings.json")
+MAX_VIRTUAL_SCREENS = 3
 PANEL_SYSFS = "/sys/class/drm/card1-DP-2/enabled"
 
 # Layout is re-read every LAYOUT_EVERY ticks; it only changes when
@@ -57,6 +59,8 @@ CSS = b"""
 window, .cockpit { background: #0a0f0d; }
 .panel { background: #0e1512; border: 1px solid #1c2a24; border-radius: 12px; }
 .accent { color: #46e6a0; }
+.small-act { background: #14201b; color: #9fbcae; border: 1px solid #24382f;
+             border-radius: 8px; padding: 1px 10px; min-height: 22px; }
 .muted { color: #63796f; }
 .metric-label { color: #63796f; font-size: 10px; letter-spacing: 1.4px; }
 .metric-value { color: #d7efe5; font-size: 22px; font-family: monospace; }
@@ -93,6 +97,20 @@ def run(argv, timeout=10):
         return subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
     except (OSError, subprocess.SubprocessError) as e:
         return subprocess.CompletedProcess(argv, 1, "", str(e))
+
+
+def load_settings():
+    try:
+        with open(SETTINGS_PATH) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def save_settings(settings):
+    os.makedirs(os.path.dirname(SETTINGS_PATH), exist_ok=True)
+    with open(SETTINGS_PATH, "w") as f:
+        json.dump(settings, f, indent=2)
 
 
 def wayvrctl_json(*args, timeout=4):
@@ -363,6 +381,9 @@ class Window(Adw.ApplicationWindow):
         self.screens: list[Screen] = []
         self.selected = 0
         self.busy_until = 0.0
+        self.settings = load_settings()
+        self.virtual_screens = max(0, min(MAX_VIRTUAL_SCREENS,
+                                          int(self.settings.get("virtual_screens", 0))))
         self.ticks = 0
         # Set while the sliders are written to from telemetry, so the
         # resulting value-changed signals don't echo back as edits.
@@ -439,9 +460,31 @@ class Window(Adw.ApplicationWindow):
                         margin_top=16, margin_bottom=16,
                         margin_start=14, margin_end=14)
 
-        inner.append(Gtk.Label(label="DISPLAYS", xalign=0, css_classes=["metric-label"]))
+        disp_head = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        disp_head.append(Gtk.Label(label="DISPLAYS", xalign=0, css_classes=["metric-label"]))
+        disp_head.append(Gtk.Box(hexpand=True))
+        self.arrange_btn = Gtk.Button(label="Arrange", css_classes=["small-act"])
+        self.arrange_btn.set_tooltip_text("Spread the visible screens in an arc")
+        self.arrange_btn.connect("clicked", self.on_arrange)
+        disp_head.append(self.arrange_btn)
+        inner.append(disp_head)
         self.display_list = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         inner.append(self.display_list)
+
+        vd = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8,
+                     css_classes=["rowitem"])
+        vd.append(Gtk.Label(label="Virtual displays", xalign=0, css_classes=["muted"]))
+        vd.append(Gtk.Box(hexpand=True))
+        self.vd_minus = Gtk.Button(label="−", css_classes=["small-act"])
+        self.vd_minus.connect("clicked", self.on_vd, -1)
+        self.vd_count = Gtk.Label(label=str(self.virtual_screens), css_classes=["accent"])
+        self.vd_plus = Gtk.Button(label="+", css_classes=["small-act"])
+        self.vd_plus.connect("clicked", self.on_vd, +1)
+        vd.append(self.vd_minus)
+        vd.append(self.vd_count)
+        vd.append(self.vd_plus)
+        vd.set_tooltip_text("Extra screens for the glasses, created at session start")
+        inner.append(vd)
 
         inner.append(Gtk.Separator(margin_top=6, margin_bottom=6))
 
@@ -474,10 +517,18 @@ class Window(Adw.ApplicationWindow):
         for i, s in enumerate(self.screens):
             row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8,
                           css_classes=["rowitem"] + (["sel"] if i == self.selected else []))
-            row.append(Gtk.Label(label=s.name, xalign=0,
-                                 css_classes=["accent"] if i == self.selected else []))
+            name_css = ["accent"] if i == self.selected else []
+            if not s.visible:
+                name_css = ["muted"]
+            row.append(Gtk.Label(label=s.name, xalign=0, css_classes=name_css))
             row.append(Gtk.Box(hexpand=True))
-            row.append(Gtk.Label(label=f"{s.yaw:+.0f}°", css_classes=["sublabel"]))
+            row.append(Gtk.Label(label=f"{s.yaw:+.0f}°" if s.visible else "hidden",
+                                 css_classes=["sublabel"]))
+            eye = Gtk.Button(label="●" if s.visible else "○",
+                             css_classes=["small-act"], has_frame=False)
+            eye.set_tooltip_text("Hide this screen" if s.visible else "Show this screen")
+            eye.connect("clicked", self.on_toggle_visible, i)
+            row.append(eye)
             click = Gtk.GestureClick()
             click.connect("released", self.on_select, i)
             row.add_controller(click)
@@ -504,6 +555,42 @@ class Window(Adw.ApplicationWindow):
     def on_select(self, _gesture, _n, _x, _y, index):
         self.selected = index
         self.radar.selected = index
+        self.rebuild_displays()
+        self.sync_sliders()
+        self.radar.queue_draw()
+
+    def on_toggle_visible(self, _btn, index):
+        s = self.screens[index]
+        verb = "screen-hide" if s.visible else "screen-show"
+        r = run([WAYVRCTL, verb, s.name], timeout=6)
+        if r.returncode != 0:
+            self.notify(f"Could not toggle {s.name}")
+            return
+        s.visible = not s.visible
+        self.rebuild_displays()
+        self.radar.queue_draw()
+
+    def on_vd(self, _btn, delta):
+        self.virtual_screens = max(0, min(MAX_VIRTUAL_SCREENS,
+                                          self.virtual_screens + delta))
+        self.vd_count.set_label(str(self.virtual_screens))
+        self.settings["virtual_screens"] = self.virtual_screens
+        save_settings(self.settings)
+        if self.session_up():
+            self.notify("Applies at next session start")
+
+    def on_arrange(self, _btn):
+        shown = [s for s in self.screens if s.visible]
+        if not shown:
+            return
+        shown.sort(key=lambda s: s.yaw)
+        spread = min(42.0, 160.0 / max(1, len(shown) - 1)) if len(shown) > 1 else 0.0
+        for i, s in enumerate(shown):
+            s.yaw = (i - (len(shown) - 1) / 2.0) * spread
+            r = run([WAYVRCTL, "screen-place", s.name, f"--yaw={s.yaw:.3f}"],
+                    timeout=6)
+            if r.returncode != 0:
+                self.notify(f"Could not move {s.name}")
         self.rebuild_displays()
         self.sync_sliders()
         self.radar.queue_draw()
@@ -550,7 +637,9 @@ class Window(Adw.ApplicationWindow):
         else:
             run(["systemctl", "--user", "reset-failed", UNIT], timeout=5)
             r = run(["systemd-run", "--user", f"--unit={UNIT}", "--collect",
-                     "--setenv=LIFETIME=86400", "bash", SESSION_SCRIPT], timeout=15)
+                     "--setenv=LIFETIME=86400",
+                     f"--setenv=VIRTUAL_SCREENS={self.virtual_screens}",
+                     "bash", SESSION_SCRIPT], timeout=15)
             if r.returncode != 0:
                 self.notify("Could not start: " + (r.stderr or "").strip()[:60])
 
@@ -586,6 +675,7 @@ class Window(Adw.ApplicationWindow):
         self.dot.set_css_classes(["dot", "live" if live else "off"])
         self.power_btn.set_label("Turn off" if self.session_up() else "Turn on")
         self.recenter_btn.set_sensitive(live)
+        self.arrange_btn.set_sensitive(live and len(self.screens) > 1)
 
         self.metrics["fps"].set(
             f"{t.fps:.0f}" if t.fps else "—",
@@ -610,7 +700,8 @@ class Window(Adw.ApplicationWindow):
         the headset. `None` means it wasn't read this tick."""
         if screens is None:
             return
-        names_changed = [s.name for s in screens] != [s.name for s in self.screens]
+        names_changed = ([(s.name, s.visible) for s in screens]
+                         != [(s.name, s.visible) for s in self.screens])
         self.screens = screens
         self.selected = min(self.selected, max(0, len(screens) - 1))
         self.radar.screens = screens
