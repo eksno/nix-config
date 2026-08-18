@@ -38,6 +38,7 @@
 
 ### nixos build + host model
 
+- [Hyprland .conf retired in 0.57](hyprland-lua-config-migration.md) — all 1230 lines of hypr dotfiles are legacy hyprlang; upstream deletes .conf support in 0.57 and `update.sh` auto-bumps the flake. Read before touching hypr config.
 - [NixOS rebuild flow](nixos-rebuild-flow.md) — `update.sh` quirks (`git add .` before flake), `--impure`, dotfile activation script, fast-iteration without flake bumps
 - [Host context detection protocol](nixos-host-context-protocol.md) — `fastfetch` first (mandatory), then host/user → directory mapping
 - [lewis host profile](lewis-host-profile.md) — Intel Arc, Hyprland primary, battery cap 85%, primary dev box
