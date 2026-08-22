@@ -2,6 +2,22 @@
 
 Chronological log of non-trivial fixes for this NixOS flake. Newest entries at the top. See `CLAUDE.md` "Log Every Fix" section for the entry format and rules.
 
+## 2026-08-22 — phonetic-mic-dead-paerrorcode-9999 (ACP card stuck on `off`, no HiFi profiles)
+
+**Symptom:** `phonetic --trigger Migrated` failed instantly with `Error opening InputStream: Unanticipated host error [PaErrorCode -9999]: 'No such file or directory' [ALSA error -2]`. Appeared right after an OpenRouter API-key swap, so it looked key-related — it was not.
+**Affected:** host `lewis` / user `jorge`; runtime state only (PipeWire/WirePlumber), no repo files. Related: the `2026-0?-??` verse entry below on the same ASUS Zenbook SOF card.
+**Root cause:** WirePlumber had the `alsa_card.pci-0000_00_1f.3-platform-skl_hda_dsp_generic` (device 45) sitting on profile `off`, and while in that state ACP exposed **only** `off` and `pro-audio` — no HiFi profile at all. So PipeWire had zero audio Sources; the only sink was "Dummy Output". PortAudio's device 7 ("pipewire") therefore resolved to nothing and ALSA returned ENOENT.
+**Investigation:**
+1. Read phonetic's journal — the PortAudio failure came from `pa_linux_alsa.c:2099/2733/2845`, i.e. capture-stream configure, not from HTTP/auth. Ruled out the key swap.
+2. `wpctl status` → device 45 present under Devices, **Sources section empty**, only `Dummy Output` as sink. Default configured sink still pointed at `…HiFi__HDMI2__sink`, a profile name not currently offered.
+3. `pw-cli enum-params 45 EnumProfile` → only `off` (0) and `pro-audio` (1). Confirmed with `pw-dump`. So this was NOT the verse case of "HiFi exists but available=no" — HiFi was absent entirely.
+4. **Dead end — suspected missing/broken UCM.** Checked kernel side first: `journalctl -k` showed SOF fw 2.14.1.1 booted, topology `sof-hda-generic-2ch.tplg` loaded, ALC294 + both CS35L41 amps bound with calibration, `Mic=0x19` in autoconfig. `/proc/asound/pcm` listed `00-00 HDA Analog … capture 1` and `00-06 DMIC Raw … capture 1`. Hardware fine.
+5. **Dead end — suspected UCM files unreachable from the store.** `libasound.so.2` has no `ALSA_CONFIG_UCM2` in the pipewire/wireplumber process env; its compiled-in `share/alsa/ucm2` is a symlink into `alsa-ucm-conf-1.2.15.3`, which does contain `conf.d/sof-hda-dsp/`. Then proved UCM itself parses: `nix shell nixpkgs#alsa-utils -c alsaucm -c hw:0 list _verbs` → `0: HiFi`, rc=0. UCM layer healthy.
+6. `journalctl --user -u wireplumber` and `-u pipewire` had nothing useful (one unrelated UPower warning). The failure was silent.
+**Fix:** `systemctl --user restart wireplumber`. On re-election the card came up on `HiFi (HDMI1, HDMI2, HDMI3, Headphones, Mic1, Mic2)` and immediately materialized 4 sinks + 2 sources (`Digital Microphone` default, `Stereo Microphone`). Verified end-to-end: `phonetic --trigger Migrated` → record → stop → OpenRouter HTTP 200 (`voxtral-small-24b`) → clipboard. No rebuild, no repo change.
+**Note:** the elected profile is the *Headphones* variant; the card also offers `HiFi (…, Speaker)`. If laptop speakers are silent later, `wpctl set-profile <id> <n>` to the Speaker variant — same remedy as the verse entry.
+**Commit:** `9d59c71`
+
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
 ## 2026-08-17 — laptop-overheating-crash-loops-and-lazy-fan
@@ -478,7 +494,7 @@ Kernel applies the override only on the matching connector, so listing both is s
 2. Read `system/lib/dotfiles.nix` tmux block → confirmed the activation script only `ln -sf`s the two known files. No glob, no scripts dir.
 3. Considered switching tmux back to a full directory symlink. Rejected: TPM still needs to write into `plugins/`, which is the whole reason file-level symlinks were chosen. Cleanest fix is one extra `ln -sfn` for `scripts/` since it's a read-only dir of executables.
 **Fix:** Added `ln -sfn "$_src/scripts" "$cfg/tmux/scripts"` to the tmux block in `system/lib/dotfiles.nix`. After `./update.sh`, `~/.config/tmux/scripts → nix-config/dotfiles/default/tmux/scripts` and resurrect can find `restore-mosh.sh`.
-**Commit:** `<pending>`
+**Commit:** `9d59c71`
 
 ## 2026-04-25 — norwegian-binds-ydotool-unicode-dropped
 
