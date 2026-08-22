@@ -16,7 +16,7 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 6. `journalctl --user -u wireplumber` and `-u pipewire` had nothing useful (one unrelated UPower warning). The failure was silent.
 **Fix:** `systemctl --user restart wireplumber`. On re-election the card came up on `HiFi (HDMI1, HDMI2, HDMI3, Headphones, Mic1, Mic2)` and immediately materialized 4 sinks + 2 sources (`Digital Microphone` default, `Stereo Microphone`). Verified end-to-end: `phonetic --trigger Migrated` → record → stop → OpenRouter HTTP 200 (`voxtral-small-24b`) → clipboard. No rebuild, no repo change.
 **Note:** the elected profile is the *Headphones* variant; the card also offers `HiFi (…, Speaker)`. If laptop speakers are silent later, `wpctl set-profile <id> <n>` to the Speaker variant — same remedy as the verse entry.
-**Commit:** `9d59c71`
+**Commit:** `6b3a8e3`
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
