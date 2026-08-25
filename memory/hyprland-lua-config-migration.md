@@ -4,7 +4,7 @@ title: Hyprland .conf (hyprlang) is removed in 0.57 — repo must migrate to Lua
 created: 2026-08-18
 ---
 
-# Hyprland retires `.conf` — hard deadline at 0.57
+# Hyprland retires `.conf` — hard deadline at 0.57 (MIGRATION DONE 2026-08-25, commit `5ce0c7c`)
 
 Upstream replaced the hyprlang `.conf` format with a Lua 5.4 config runtime.
 
@@ -17,7 +17,42 @@ Upstream replaced the hyprlang `.conf` format with a Lua 5.4 config runtime.
 Sources: <https://hypr.land/news/26_lua/>, <https://wiki.hypr.land/Configuring/Start/>,
 <https://github.com/hyprwm/Hyprland/pull/15538>
 
-## Why this repo is exposed
+## Status: migrated
+
+All 71 `.conf` files under `dotfiles/default/hypr/` are now `.lua`, and
+`system/lib/dotfiles.nix` emits `hyprland.lua` with `require()` lines instead of
+`hyprland.conf` with `source =`. The `.conf` tree was deleted (git history keeps it).
+
+## Hard-won facts (all verified on verse, 0.56.2 — not guesses)
+
+- **`require()` paths are root-relative** to the directory holding `hyprland.lua`
+  (`~/.config/hypr`), *including from nested modules*. A file three levels deep still
+  writes `require("shared/utility/misc")`, never a sibling-relative path.
+- **Globals DO cross the require boundary**, and **`require()` returns the module's
+  value**. Both were tested with `--verify-config` and deliberate `error()` sentinels.
+  The palette (`shared/colors/startino-neptune.lua`) uses the return-value form.
+- **`Hyprland --verify-config -c <file>`** parses a config without starting a
+  compositor. Cheapest possible check; use it on every host/user pair.
+- **A nested Hyprland is a safe, real validator.** Inside an existing session
+  `WAYLAND_DISPLAY` is set, so `Hyprland -c <lua>` picks the *Wayland* backend and
+  never touches DRM. Then `HYPRLAND_INSTANCE_SIGNATURE=<sig> hyprctl binds -j` /
+  `getoption` lets you diff the new config against the live one. Do NOT try a DRM
+  nested instance — see [[xr-hyprland-lease-hotplug-stall]] for what CRTC contention does.
+- **Lua binds report `dispatcher: "__lua"`** with an opaque callback id, and
+  **`mouse: false` even for mouse binds**. Diff on `(modmask, key, keycode)` instead.
+  `HL.BindOptions` in the shipped stubs has no `mouse` field at all, yet upstream's own
+  `example/hyprland.lua` passes `{ mouse = true }` — the held-drag behaviour comes from
+  the dispatcher (`hl.dsp.window.drag()`), not the flag.
+- **The config manager is chosen once, at startup.** `hyprctl reload` will NOT move a
+  running `.conf` session onto `hyprland.lua`; that needs a fresh session.
+- **A live legacy session regenerates a stub `hyprland.conf`** if the file is deleted
+  out from under it ("This config is a STUB! This should never be generated."). Inert —
+  `.lua` wins when present — and the activation script clears it each rebuild.
+- The `.conf` `**` glob was **not** recursive: `shared/workflow/default/**.conf` never
+  pulled in `binds/*.conf`. Verified by bind count (62 active vs 258 if all keymaps
+  had loaded). The Lua version enumerates requires explicitly.
+
+## Why this repo was exposed
 
 - All ~1230 lines under `dotfiles/default/hypr/**.conf` are hyprlang across 6 hosts / 7 users.
 - `system/lib/dotfiles.nix:136-145` composes `hyprland.conf` from two `source =` lines.
