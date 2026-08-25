@@ -15,11 +15,20 @@ Originally described as "a Catppuccin background with a `_` in the top-left".
 1. *(initrd, ~30s)* Intel VMD (Intel RST) was enabled in BIOS, remapping the NVMe into
    synthetic PCI domain `10000:`. A single `nvme nvme0: I/O tag 64 (4040) QID 3 timeout,
    completion polled` burned the nvme driver's full 30s default I/O timeout inside initrd.
-2. *(userspace, ~60s)* `NetworkManager-wait-online.service` always times out and fails:
-   `nm-online -s` waits for NM `STARTUP=complete`, but the auto-created `p2p-dev-wlo1`
-   (wifi-p2p) device never leaves `disconnected`, so NM stays at `STARTUP=started`.
-   It gates `network-online.target -> docker.service -> multi-user.target -> graphical.target`,
-   and **uwsm blocks the session on `graphical.target`**.
+2. *(userspace, ~60s)* **A self-inflicted deadlock in this repo's own NetworkManager
+   dispatcher script.** `system/hosts/verse/data-saver.nix` ran a *blocking*
+   `systemctl start tailscaled.service` on every `up` event. But `tailscaled.service` is
+   ordered `After=NetworkManager-wait-online.service`, and NM does not report startup
+   complete until its dispatcher scripts finish. So:
+
+       dispatcher -> waits for tailscaled
+         -> waits for NetworkManager-wait-online
+           -> waits for NM startup complete
+             -> waits for this dispatcher
+
+   Nothing broke the cycle except `NetworkManager-wait-online` hitting its 60s timeout.
+   That gated `network-online.target -> docker.service -> multi-user.target ->
+   graphical.target`, and **uwsm blocks the session on `graphical.target`**.
 
 **Investigation:**
 1. `systemd-analyze` split the boot: firmware 4.7s + loader 5.7s + kernel 0.65s +
@@ -45,9 +54,37 @@ Originally described as "a Catppuccin background with a `_` in the top-left".
    and `nixos-upgrade.service`. Neither needs to gate the desktop.
 7. Near-miss detail: `graphical.target` was reached at 69.1s; uwsm gave up at 68.65s.
    It missed by ~0.5s, so the full 60s penalty applied.
+8. **Second wrong turn — blamed `p2p-dev-wlo1`.** `nmcli` showed that wifi-p2p device stuck
+   at `disconnected` while NM reported `STARTUP=started`, which looked like the blocker.
+   Falsified by `nm-online -s -t 5` returning **0 in 58ms** on the running system. Per
+   `nm-online(1)`: *"After startup has completed, nm-online -s will just return immediately"*
+   — so that test can never say anything about boot-time behaviour. Do not use a live
+   `nm-online` run as evidence about boot.
+9. `journalctl -k` showed wpa_supplicant `CTRL-EVENT-CONNECTED` at **10.4s** — the network
+   was up in 10s. So the 60s was never about connectivity, which pointed at NM's
+   *startup-complete* bookkeeping instead.
+10. `man 8 NetworkManager-wait-online.service` lists what gates startup complete. Two
+    candidates matched the config: bridge devices with non-autoactivating ports (docker0,
+    br-*) and **dispatcher scripts**. The bridge theory was killed on timing — tailscaled
+    logged `if docker0: added` at 69.1s, i.e. the bridges did not exist during the 7.6-67.7s
+    wait window.
+11. **The decisive metric:** `NetworkManager-dispatcher.service: Consumed 211ms CPU time
+    over 1min 11.914s wall clock time.` 211ms of CPU across 72s of wall clock means blocked,
+    not busy. `tailscaled.service` then activated at 68.1s — the instant NM-wait-online gave
+    up. `systemctl show tailscaled.service -p After` confirmed
+    `After=NetworkManager-wait-online.service`, closing the cycle.
 
-**Fix:** `systemd.services.NetworkManager-wait-online.enable = false;` in
-`system/hosts/verse/networking.nix`. Removes stall 2 outright.
+**Fix:** Two changes, both on verse:
+- *Root cause:* `systemctl --no-block start ...` in `system/hosts/verse/data-saver.nix`,
+  so the dispatcher never blocks on unit activation. This alone breaks the deadlock.
+- *Defence in depth:* `systemd.services.NetworkManager-wait-online.enable = false;` in
+  `system/hosts/verse/networking.nix`. Independently justified — this is a roaming laptop,
+  and only `docker.service` / `nixos-upgrade.service` want `network-online.target`.
+
+**Rule learned:** never call a blocking `systemctl start` from a NetworkManager dispatcher
+script. NM waits for dispatchers before reporting startup complete, so any unit ordered
+after `NetworkManager-wait-online.service` (tailscaled, and anything else network-adjacent)
+will deadlock against it. Use `--no-block`.
 Stall 1 is a BIOS setting and **cannot be fixed in Nix**; note the user dual-boots Windows,
 which fails to boot with VMD disabled (Windows binds the Intel RST driver as boot-critical).
 Keeping VMD enabled therefore re-introduces the 30s initrd stall unless Windows is first

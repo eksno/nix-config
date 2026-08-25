@@ -37,8 +37,20 @@
           touch /run/data-saver
         else
           # -- Disengage: on any other (or no) network --
-          systemctl start nixos-upgrade.timer 2>/dev/null || true
-          systemctl start tailscaled.service 2>/dev/null || true
+          # --no-block is REQUIRED, not cosmetic. tailscaled.service is ordered
+          # After=NetworkManager-wait-online.service, and NM waits for this
+          # dispatcher to finish before it reports startup complete. A blocking
+          # `systemctl start` therefore deadlocks:
+          #   dispatcher -> waits for tailscaled
+          #     -> waits for NetworkManager-wait-online
+          #       -> waits for NM startup complete
+          #         -> waits for this dispatcher
+          # It only broke when NM-wait-online hit its 60s timeout, costing a
+          # full minute of boot. Symptom in the journal: NetworkManager-
+          # dispatcher.service "Consumed 211ms CPU time over 1min 11.914s wall
+          # clock" — blocked, not busy.
+          systemctl --no-block start nixos-upgrade.timer 2>/dev/null || true
+          systemctl --no-block start tailscaled.service 2>/dev/null || true
           rm -f /run/data-saver
         fi
       '';
