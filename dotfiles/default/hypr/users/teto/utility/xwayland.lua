@@ -1,0 +1,1 @@
+-- Intentionally empty (the .conf had an empty `xwayland { }` block).

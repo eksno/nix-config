@@ -133,16 +133,25 @@ in
         ${linkDir "icons" "/home/${user}/.local/share/icons"}
         ln -sfn /run/current-system/sw/share/X11/fonts "/home/${user}/.local/share/fonts"
 
-        # ── Hyprland (sub-dir symlinks + compose hyprland.conf) ──
+        # ── Hyprland (sub-dir symlinks + compose hyprland.lua) ──
+        # Hyprland deprecated the hyprlang .conf format in 0.55 and removes it
+        # entirely in 0.57, so the config is Lua. Hyprland prefers
+        # hyprland.lua and only falls back to hyprland.conf when it is absent
+        # — and it decides once, at startup, so switching needs a fresh
+        # session, not `hyprctl reload`.
+        #
+        # require() paths are resolved relative to the directory holding
+        # hyprland.lua (i.e. ~/.config/hypr), never relative to the requiring
+        # file, so these stay root-relative all the way down.
         mkdir -p "$cfg/hypr"
         ln -sfn "${defaultPath}/hypr/hosts" "$cfg/hypr/hosts"
         ln -sfn "${defaultPath}/hypr/users" "$cfg/hypr/users"
         ln -sfn "${defaultPath}/hypr/shared" "$cfg/hypr/shared"
-        rm -f "$cfg/hypr/hyprland.conf"
+        rm -f "$cfg/hypr/hyprland.conf" "$cfg/hypr/hyprland.lua"
         _hostname="$(${pkgs.hostname}/bin/hostname)"
-        echo "source = ~/.config/hypr/users/${user}/default.conf" > "$cfg/hypr/hyprland.conf"
-        echo "source = ~/.config/hypr/hosts/$_hostname/default.conf" >> "$cfg/hypr/hyprland.conf"
-        chown -h ${user}:users "$cfg/hypr/hyprland.conf" 2>/dev/null || true
+        printf 'require("users/%s/default")\nrequire("hosts/%s/default")\n' \
+          "${user}" "$_hostname" > "$cfg/hypr/hyprland.lua"
+        chown -h ${user}:users "$cfg/hypr/hyprland.lua" 2>/dev/null || true
 
         # ── Root config ──
         rm -rf /root/.config
