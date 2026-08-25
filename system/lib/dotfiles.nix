@@ -147,11 +147,20 @@ in
         ln -sfn "${defaultPath}/hypr/hosts" "$cfg/hypr/hosts"
         ln -sfn "${defaultPath}/hypr/users" "$cfg/hypr/users"
         ln -sfn "${defaultPath}/hypr/shared" "$cfg/hypr/shared"
-        rm -f "$cfg/hypr/hyprland.conf" "$cfg/hypr/hyprland.lua"
+        # Write atomically. Hyprland hot-reloads on config change AND regenerates
+        # a stub if its config file goes missing, so a plain rm-then-write leaves
+        # a live session momentarily configless and it reloads that stub
+        # ("This config is a STUB! This should never be generated."). Renaming
+        # over the file means it is never absent.
         _hostname="$(${pkgs.hostname}/bin/hostname)"
         printf 'require("users/%s/default")\nrequire("hosts/%s/default")\n' \
-          "${user}" "$_hostname" > "$cfg/hypr/hyprland.lua"
-        chown -h ${user}:users "$cfg/hypr/hyprland.lua" 2>/dev/null || true
+          "${user}" "$_hostname" > "$cfg/hypr/.hyprland.lua.new"
+        chown ${user}:users "$cfg/hypr/.hyprland.lua.new" 2>/dev/null || true
+        mv -f "$cfg/hypr/.hyprland.lua.new" "$cfg/hypr/hyprland.lua"
+        # Legacy hyprlang entrypoint is dead (removed upstream in 0.57). A
+        # still-running .conf session will keep rewriting its stub until it is
+        # restarted; that is harmless, since Hyprland prefers hyprland.lua.
+        rm -f "$cfg/hypr/hyprland.conf"
 
         # ── Root config ──
         rm -rf /root/.config
