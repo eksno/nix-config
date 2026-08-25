@@ -60,12 +60,43 @@ Kernel-param fallbacks if BIOS VMD cannot be turned off (untested here):
 Note `system/lib/device/intel/default.nix:17` currently forces `pcie_aspm=force`, and
 FIXES.md records that flag delivered "marginal improvement at best" for battery.
 
-## Unrelated second stall (does NOT delay login)
+## The SECOND stall — 60s, and it DOES block the desktop
 
-`NetworkManager-wait-online.service` burns 60s then **fails** (`nm-online -s -q`, exit 1).
-Cause: `p2p-dev-wlo1` (wifi-p2p) never leaves `disconnected`, so NM never reports startup
-complete. It gates `network-online.target` → `docker.service` → `multi-user.target` →
-`graphical.target` (100.2s). Because `display-manager.service` is only
-`After=plymouth-quit.service systemd-user-sessions.service`, SDDM does not wait on it.
+Corrected 2026-08-25. An earlier version of this note said this one does not delay login,
+reasoning from `display-manager.service` activating at 7.6s. **That reasoning was wrong.**
 
-Related: [[nixos-rebuild-flow]], [[asus-zenbook-bios-flash-quirks]]
+`NetworkManager-wait-online.service` always burns 60s and fails: `nm-online -s` waits for NM
+`STARTUP=complete`, but the auto-created `p2p-dev-wlo1` (wifi-p2p) never leaves
+`disconnected`, so NM stays at `STARTUP=started`.
+
+SDDM does start early — but it launches **uwsm**, and uwsm blocks on `graphical.target`:
+
+```
+[ 8.58s] uwsm: graphical.target is queued for start, waiting for 60s...
+[68.65s] uwsm: Timed out.  System has not reached graphical.target.
+[73.69s] uwsm: Selected compositor ID: hyprland.desktop
+```
+
+Chain: `NetworkManager-wait-online` → `network-online.target` → `docker.service` →
+`multi-user.target` → `graphical.target` → uwsm releases → Hyprland.
+`graphical.target` landed at 69.1s; uwsm gave up at 68.65s — missed by ~0.5s, so the whole
+60s applied.
+
+**Rule: when the greeter appears but the desktop does not, look at the session launcher
+(uwsm), not just `display-manager.service`.**
+
+Fixed in `system/hosts/verse/networking.nix` with
+`systemd.services.NetworkManager-wait-online.enable = false;` (commit `017eddf`).
+Only `docker.service` and `nixos-upgrade.service` want `network-online.target` here.
+
+## Windows dual-boot blocks the VMD fix
+
+verse dual-boots Windows (`nvme0n1p4`, 415G NTFS + a Microsoft reserved partition).
+Windows was installed with VMD on, so Intel RST is a boot-critical driver and Windows
+fails to boot with VMD disabled. Turning VMD off to kill stall 1 therefore breaks Windows
+unless Windows is first re-pointed at the inbox NVMe driver — the standard one-time
+safe-boot cycle (`bcdedit /set {current} safeboot minimal` → reboot → change BIOS → boot
+safe mode → `bcdedit /deletevalue {current} safeboot`). Untested here.
+
+Measured with VMD **off**: initrd 32.7s → 2.4s, no nvme timeout, nvme at `0000:01:00.0`.
+So the 30s saving is real — it just costs the Windows install until that dance is done.
