@@ -65,9 +65,31 @@ FIXES.md records that flag delivered "marginal improvement at best" for battery.
 Corrected 2026-08-25. An earlier version of this note said this one does not delay login,
 reasoning from `display-manager.service` activating at 7.6s. **That reasoning was wrong.**
 
-`NetworkManager-wait-online.service` always burns 60s and fails: `nm-online -s` waits for NM
-`STARTUP=complete`, but the auto-created `p2p-dev-wlo1` (wifi-p2p) never leaves
-`disconnected`, so NM stays at `STARTUP=started`.
+`NetworkManager-wait-online.service` always burns 60s and fails — because of a **deadlock
+this repo created itself**, not because the network is slow (wpa_supplicant logs
+`CTRL-EVENT-CONNECTED` at **10.4s**).
+
+`system/hosts/verse/data-saver.nix` is an NM dispatcher script that ran a *blocking*
+`systemctl start tailscaled.service` on every `up` event. `tailscaled.service` is ordered
+`After=NetworkManager-wait-online.service`, and NM does not report startup complete until
+its dispatchers finish:
+
+```
+dispatcher -> tailscaled -> NM-wait-online -> NM startup complete -> dispatcher
+```
+
+Only the 60s timeout broke it. Decisive evidence: `NetworkManager-dispatcher.service:
+Consumed 211ms CPU time over 1min 11.914s wall clock` (blocked, not busy) and
+`tailscaled.service` activating at 68.1s, exactly when NM-wait-online gave up.
+Fixed with `systemctl --no-block start` (commit `cdf3703`).
+
+**Falsified theory — do not repeat:** the wifi-p2p device `p2p-dev-wlo1` sits at
+`disconnected` with NM at `STARTUP=started`, which looks like the blocker. It is not.
+A live `nm-online -s -t 5` returns **0 in 58ms**; per `nm-online(1)`, *"After startup has
+completed, nm-online -s will just return immediately"* — so a live run can never be
+evidence about boot-time behaviour.
+
+**Rule:** never call a blocking `systemctl start` from an NM dispatcher script.
 
 SDDM does start early — but it launches **uwsm**, and uwsm blocks on `graphical.target`:
 
