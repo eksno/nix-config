@@ -4,6 +4,56 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-08-25 — boot-stalls-60s-on-blank-screen (uwsm waits for graphical.target)
+
+**Symptom:** ~1 minute on a blank/solid-colour screen after POST before the desktop is usable.
+Originally described as "a Catppuccin background with a `_` in the top-left".
+**Affected:** host `verse`, user `eksno`. `system/hosts/verse/networking.nix` (fix),
+`system/hosts/verse/hardware-configuration.nix:11` (VMD context).
+**Root cause:** **Two independent stalls of ~30s and ~60s that looked like one symptom.**
+
+1. *(initrd, ~30s)* Intel VMD (Intel RST) was enabled in BIOS, remapping the NVMe into
+   synthetic PCI domain `10000:`. A single `nvme nvme0: I/O tag 64 (4040) QID 3 timeout,
+   completion polled` burned the nvme driver's full 30s default I/O timeout inside initrd.
+2. *(userspace, ~60s)* `NetworkManager-wait-online.service` always times out and fails:
+   `nm-online -s` waits for NM `STARTUP=complete`, but the auto-created `p2p-dev-wlo1`
+   (wifi-p2p) device never leaves `disconnected`, so NM stays at `STARTUP=started`.
+   It gates `network-online.target -> docker.service -> multi-user.target -> graphical.target`,
+   and **uwsm blocks the session on `graphical.target`**.
+
+**Investigation:**
+1. `systemd-analyze` split the boot: firmware 4.7s + loader 5.7s + kernel 0.65s +
+   **initrd 32.7s** + userspace 69.4s. `systemd-analyze blame` showed <1s of initrd units,
+   so the initrd number was one stall, not accumulated work.
+2. Journal gap scan (`journalctl -o short-monotonic` + awk diffing timestamps) found the
+   exact 30.2s hole and the nvme timeout line at its end. This gap-scan is the highest-value
+   tool here — `blame` alone hides single-stall waits.
+3. Confirmed VMD via `lspci` (`RAID bus controller ... VMD [8086:7d0b]`) and the nvme sysfs
+   path living under `/pci0000:00/0000:00:0e.0/pci10000:e0/`. Matching upstream report:
+   ASUS Zenbook UX3405CA + Micron MTFDKBA1T0QGN, fixed by disabling VMD.
+4. **Wrong turn — cost a round trip.** From `display-manager.service` activating at 38.2s
+   monotonic I concluded SDDM was up early and therefore `NetworkManager-wait-online`
+   "does not delay login". That was false. SDDM *does* start early; it then launches
+   `uwsm`, which prints `graphical.target is queued for start, waiting for 60s...`,
+   counts down 50/40/30/20/10, logs `Timed out. System has not reached graphical.target.`
+   and only then starts Hyprland. **Check the session launcher, not just the display
+   manager, when the greeter appears but the desktop does not.**
+5. Disabling VMD in BIOS confirmed stall 1 in isolation: initrd **32.7s -> 2.4s**, nvme
+   timeout gone, nvme moved to `0000:01:00.0`. Total still ~1m30 because stall 2 was
+   untouched — which is what made the two-cause structure visible.
+6. `systemctl list-dependencies network-online.target --reverse` -> only `docker.service`
+   and `nixos-upgrade.service`. Neither needs to gate the desktop.
+7. Near-miss detail: `graphical.target` was reached at 69.1s; uwsm gave up at 68.65s.
+   It missed by ~0.5s, so the full 60s penalty applied.
+
+**Fix:** `systemd.services.NetworkManager-wait-online.enable = false;` in
+`system/hosts/verse/networking.nix`. Removes stall 2 outright.
+Stall 1 is a BIOS setting and **cannot be fixed in Nix**; note the user dual-boots Windows,
+which fails to boot with VMD disabled (Windows binds the Intel RST driver as boot-critical).
+Keeping VMD enabled therefore re-introduces the 30s initrd stall unless Windows is first
+re-pointed at the inbox NVMe driver via a one-time safe-boot cycle.
+**Commit:** `f22d1db`
+
 ## 2026-08-18 — wayvr-anv-patches-stop-applying-after-nixpkgs-bump
 
 **Symptom:** `./update.sh` fails with `error: Cannot build '...wayvr-26.7.1.drv'` — `Hunk #3 FAILED at 70` in `wayvr/src/overlays/screen/mod.rs`, `Hunk #2 FAILED at 141` in `wl.rs`, rejects saved to `.rej`. Cascades wayvr → `breezy-hyprland` → `man-paths` → whole system build. As with the moonlight entry below, `update.sh` still exits 0.
