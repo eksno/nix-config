@@ -44,6 +44,7 @@
 - [lewis host profile](lewis-host-profile.md) — Intel Arc, Hyprland primary, battery cap 85%, primary dev box
 - [verse 30s boot stall = Intel VMD + NVMe timeout](verse-nvme-vmd-boot-stall.md) — the Catppuccin screen with a lone `_` is a themed empty VT during initrd, NOT a Hyprland/SDDM hang. Fix is a BIOS setting.
 - [ASUS Zenbook UX3405MA BIOS flash quirks](asus-zenbook-bios-flash-quirks.md) — utility is "ASUS Firmware Update" (NOT EZ Flash), no `Tool` tab on Zenbook, USB-A port for the stick, no Flashback button, don't rename .311→.CAP
+- [verse built-in audio vanishes (WirePlumber profile `off`)](verse-audio-profile-off-recurring.md) — recurring: no speakers/mics, only `Dummy Output`. ALSA is fine; fix is `wpctl set-profile` + restart wireplumber. `pactl` is not installed here.
 
 ### upstream constraints
 
