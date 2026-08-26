@@ -17,7 +17,7 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 5. Unconfirmed correlation worth noting: this appeared on the same boot as the Bluetooth rfkill block (entry above) — the boot following a hard power-off from a flat battery, which also had unusually late USB enumeration (btusb at 199s, webcam at 3:19). Whether the abnormal boot shifted probe timing is not established.
 6. **Corrects the 2026-04-25 entry's claim** that the fix "survives reboot because the corrected profile/route is now persisted." It does not — persisting the Speaker-variant name is exactly what breaks the next boot that enumerates the Headphones variant. Expect this to recur.
 **Fix:** Same two steps as April, in order: `wpctl set-profile 44 1` (forces the lone HiFi profile despite `available=no`) → materialized HDMI×3 + Headphones sinks and both mic sources; then `systemctl --user restart wireplumber` → re-elected the **Speaker** variant `HiFi (HDMI1, HDMI2, HDMI3, Mic1, Mic2, Speaker)`, giving a true Speaker sink as default. Saved sink volume came back at 0.00 → `wpctl set-volume <sink> 0.5` + `wpctl set-mute <sink> 0`; hw `Master` was already 100%/on. Verified: `pw-record` from the DMIC gave peak 5.6% / rms 0.29% FS (not digital silence), and a short generated tone via `pw-play --target <sink>` exited 0 through the Speaker sink. No rebuild needed. A durable guard (a user unit that re-runs the two steps when the card lands on `off` at login) has NOT been implemented — offered to the user.
-**Commit:** `1067011`
+**Commit:** `a5e1777`
 
 ## 2026-08-26 — bluetooth-off-after-battery-deep-discharge-rfkill-persisted
 
