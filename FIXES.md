@@ -2,6 +2,22 @@
 
 Chronological log of non-trivial fixes for this NixOS flake. Newest entries at the top. See `CLAUDE.md` "Log Every Fix" section for the entry format and rules.
 
+## 2026-08-27 — mako-accepts-notifications-but-renders-nothing (no layer surface)
+
+**Symptom:** "I don't see any notifications on my desktop." Phonetic's recording/transcription toasts (and every other app's) never appeared, though the daemon was alive.
+**Affected:** host `lewis` / user `jorge`; runtime state only (mako user process), no repo files.
+**Root cause:** The running `mako` (PID 2436, started at 13:58 login) had **no layer surface bound to any output**. It still owned `org.freedesktop.Notifications` on the bus and happily queued incoming notifications — `makoctl list` showed them — but never created a `namespace: notifications` layer, so nothing was ever drawn. The single monitor is `HDMI-A-1` (external VG258); the laptop panel is not in `hyprctl monitors` at all, consistent with mako having bound to an output that later went away and never re-binding.
+**Investigation:**
+1. `pgrep -a mako` → alive, PID 2436. `busctl --user GetNameOwner org.freedesktop.Notifications` → `:1.39`, and `busctl --user status :1.39` → `Comm=.mako-wrapped`, PID 2436. So the daemon owned the name — not a "no notification daemon" problem.
+2. `notify-send` returned rc=0 and the notification **appeared in `makoctl list`** (id 22) and expired correctly after the configured `default-timeout=5000`. Timers worked. **Dead end — suspected mako was dead or DND.** `makoctl mode` → `default`, not do-not-disturb.
+3. **The decisive check:** sent `notify-send -t 10000` and, while it was still live in `makoctl list` (id 23), ran `hyprctl layers` → HDMI-A-1 had **only** `namespace: waybar`. No `notifications` layer existed while a notification was active. That is the bug: accepted, queued, never rendered.
+4. A stale `Notification 15: Phonetic` (urgency low, `expire_timeout=0`) had been stuck in the queue indefinitely — phonetic's persistent "recording" toast, never dismissed because it was never shown.
+5. Config was fine: `~/.config/mako/config` → symlink to `dotfiles/default/mako` (Startino Neptune theme), no `output=` pin, valid colors. `journalctl --user -u mako` → "No entries" (the process was not running under its unit).
+6. Note: `systemctl --user status mako` reported **inactive (dead)** while PID 2436's PPID was 1151 (`systemd --user`) — the process had been started outside its own `Type=dbus` unit, so the unit had no supervision over it and `systemctl --user restart mako` would not have touched it.
+**Fix:** `kill 2436` then `systemctl --user start mako`. mako came up under its unit (PID 2505676) and immediately created `Layer …: xywh: 1600 0 320 62, namespace: notifications` on HDMI-A-1; a test `notify-send` rendered on screen. No rebuild, no repo change.
+**Note:** if this recurs after a monitor hotplug or dock change, the same two commands are the remedy. `hyprctl layers | grep notifications` while a notification is live is the one-line test that distinguishes "mako not running" from "mako running but not rendering" — `makoctl list` alone will lie to you, because a non-rendering mako still queues everything.
+**Commit:** `bfe05a4`
+
 ## 2026-08-22 — phonetic-mic-dead-paerrorcode-9999 (ACP card stuck on `off`, no HiFi profiles)
 
 **Symptom:** `phonetic --trigger Migrated` failed instantly with `Error opening InputStream: Unanticipated host error [PaErrorCode -9999]: 'No such file or directory' [ALSA error -2]`. Appeared right after an OpenRouter API-key swap, so it looked key-related — it was not.
