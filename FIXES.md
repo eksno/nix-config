@@ -16,7 +16,7 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 6. Note: `systemctl --user status mako` reported **inactive (dead)** while PID 2436's PPID was 1151 (`systemd --user`) — the process had been started outside its own `Type=dbus` unit, so the unit had no supervision over it and `systemctl --user restart mako` would not have touched it.
 **Fix:** `kill 2436` then `systemctl --user start mako`. mako came up under its unit (PID 2505676) and immediately created `Layer …: xywh: 1600 0 320 62, namespace: notifications` on HDMI-A-1; a test `notify-send` rendered on screen. No rebuild, no repo change.
 **Note:** if this recurs after a monitor hotplug or dock change, the same two commands are the remedy. `hyprctl layers | grep notifications` while a notification is live is the one-line test that distinguishes "mako not running" from "mako running but not rendering" — `makoctl list` alone will lie to you, because a non-rendering mako still queues everything.
-**Commit:** `bfe05a4`
+**Commit:** `450941b`
 
 ## 2026-08-22 — phonetic-mic-dead-paerrorcode-9999 (ACP card stuck on `off`, no HiFi profiles)
 
