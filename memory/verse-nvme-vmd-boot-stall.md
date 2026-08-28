@@ -6,6 +6,17 @@ created: 2026-08-21
 
 # The 30-second underscore-on-Catppuccin boot stall (verse)
 
+**RESOLVED 2026-08-25. Boot went 1min 53s -> 22.2s**, measured after both fixes:
+
+```
+before:  4.7s firmware + 5.7s loader + 0.65s kernel + 32.7s initrd + 69.4s userspace = 1min 53s
+after:   4.7s firmware + 5.8s loader + 0.57s kernel +  2.5s initrd +  8.7s userspace = 22.2s
+```
+
+uwsm now clears in 1s (`waiting for 60s...` at 8.85s -> `Selected compositor` at 9.86s)
+instead of timing out at 68s, and `systemctl --failed` is empty. Keep reading for the two
+independent causes — they are still the right things to check if either number regresses.
+
 **Symptom:** After POST, verse sits on a solid Catppuccin-base background with a single `_`
 in the top-left corner for ~35s before SDDM appears.
 

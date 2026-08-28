@@ -17,7 +17,15 @@ Upstream replaced the hyprlang `.conf` format with a Lua 5.4 config runtime.
 Sources: <https://hypr.land/news/26_lua/>, <https://wiki.hypr.land/Configuring/Start/>,
 <https://github.com/hyprwm/Hyprland/pull/15538>
 
-## Status: migrated
+## Status: migrated and running in production
+
+Confirmed on verse after a reboot 2026-08-25:
+`[cfg] Using lua config found at /home/eksno/.config/hypr/hyprland.lua`, 62 binds, empty
+`configerrors`, eDP-1 applied at 2880x1800@59.97 scale 2 from the migrated modeline, and
+`hl.on("hyprland.start")` + `hl.window_rule` placing kitty/discord/protonvpn on the right
+workspaces. `hyprland.conf` is gone from `~/.config/hypr` entirely.
+
+Still unverified: Super+LMB drag / Super+RMB resize (see the `mouse` flag note below).
 
 All 71 `.conf` files under `dotfiles/default/hypr/` are now `.lua`, and
 `system/lib/dotfiles.nix` emits `hyprland.lua` with `require()` lines instead of
