@@ -158,6 +158,7 @@
     code-cursor
     seahorse
     brightnessctl
+    hyprsunset # gamma control; lets brightness climb past the panel's 400-nit max
     axel
     glib
     btop

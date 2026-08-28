@@ -27,6 +27,7 @@ require("shared/utility/monitor")
 require("shared/utility/workspace")
 
 -- users/eksno/default/**
+require("users/eksno/default/brightness")
 require("users/eksno/default/norwegian")
 require("users/eksno/default/startup")
 
