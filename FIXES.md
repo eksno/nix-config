@@ -32,6 +32,7 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 6. `journalctl --user -u wireplumber` and `-u pipewire` had nothing useful (one unrelated UPower warning). The failure was silent.
 **Fix:** `systemctl --user restart wireplumber`. On re-election the card came up on `HiFi (HDMI1, HDMI2, HDMI3, Headphones, Mic1, Mic2)` and immediately materialized 4 sinks + 2 sources (`Digital Microphone` default, `Stereo Microphone`). Verified end-to-end: `phonetic --trigger Migrated` → record → stop → OpenRouter HTTP 200 (`voxtral-small-24b`) → clipboard. No rebuild, no repo change.
 **Note:** the elected profile is the *Headphones* variant; the card also offers `HiFi (…, Speaker)`. If laptop speakers are silent later, `wpctl set-profile <id> <n>` to the Speaker variant — same remedy as the verse entry.
+**Recurrence 2026-09-03:** happened again on `lewis` after a reboot (boot `a501290018`), identical signature — `wpctl status` showed device 45 with an empty Sources section and only `Dummy Output`. Went straight to `systemctl --user restart wireplumber`; sources came back immediately (`Digital Microphone` default + `Stereo Microphone`, 4 sinks) and a trigger/stop cycle returned HTTP 200 → clipboard. **This is not a one-off — treat "no Sources in `wpctl status`" as the diagnostic and the wireplumber restart as the standing remedy; skip the UCM/kernel investigation above, it was already ruled out.**
 **Commit:** `6b3a8e3`
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
