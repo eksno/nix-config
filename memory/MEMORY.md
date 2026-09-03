@@ -42,6 +42,7 @@
 - [NixOS rebuild flow](nixos-rebuild-flow.md) — `update.sh` quirks (`git add .` before flake), `--impure`, dotfile activation script, fast-iteration without flake bumps
 - [Host context detection protocol](nixos-host-context-protocol.md) — `fastfetch` first (mandatory), then host/user → directory mapping
 - [lewis host profile](lewis-host-profile.md) — Intel Arc, Hyprland primary, battery cap 85%, primary dev box
+- [Phonetic mic dead / no audio sources](audio-wireplumber-card-off.md) — recurring on lewis: WirePlumber leaves the SOF card on profile `off`, PipeWire shows zero Sources. `wpctl status` to confirm, `systemctl --user restart wireplumber` to fix. Don't re-investigate kernel/UCM.
 - [ASUS Zenbook UX3405MA BIOS flash quirks](asus-zenbook-bios-flash-quirks.md) — utility is "ASUS Firmware Update" (NOT EZ Flash), no `Tool` tab on Zenbook, USB-A port for the stick, no Flashback button, don't rename .311→.CAP
 
 ### upstream constraints
