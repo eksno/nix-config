@@ -15,7 +15,7 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 5. Chunking at fixed offsets risks cutting mid-word → cut at the quietest 50ms RMS window within ±4s of each boundary instead.
 **Fix:** No repo change — phonetic itself needs chunking upstream (`~/futino/phonetic`). Workaround script kept at `.scratch/phonetic-chunked-transcribe.py`: splits a wav into ~25s quiet-boundary chunks, transcribes each with the profile's model/prompt, retries per chunk, joins with blank lines. Note each chunk is a separate LLM call, so it emits per-chunk artifacts ("Sure, here's the transcription:", stray `Jorge Lewis:` labels, wrapping quotes) that must be stripped after.
 **Recovery note:** Phonetic keeps no transcript history and only the LAST recording survives, at `/tmp/phonetic_debug.wav` (overwritten by the next recording). The daemon log truncates the transcript to ~200 chars. No clipboard manager is installed.
-**Commit:** `d278e91`
+**Commit:** `11528dc`
 
 
 ## 2026-08-27 — mako-accepts-notifications-but-renders-nothing (no layer surface)
