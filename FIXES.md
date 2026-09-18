@@ -2,6 +2,22 @@
 
 Chronological log of non-trivial fixes for this NixOS flake. Newest entries at the top. See `CLAUDE.md` "Log Every Fix" section for the entry format and rules.
 
+## 2026-09-18 — phonetic-long-recording-429
+
+**Symptom:** A 195s Phonetic recording produced no transcript; the toast/clipboard never updated. Log showed `transcription_error`.
+**Affected:** lewis/jorge. `/tmp/phonetic_debug.wav`, `/tmp/phonetic_startup.log`, phonetic 1.0.1 (`mistralai/voxtral-small-24b-2507` via OpenRouter).
+**Root cause:** Voxtral/Mistral rejects long audio payloads with HTTP **429** ("Provider returned error"), not a 413/400. It is an audio-length limit masquerading as a rate limit — retrying never helps.
+**Investigation:**
+1. Assumed a transient rate limit — retried 5x over ~5 min with backoff. All 429. Dead end.
+2. Checked the key: `curl https://openrouter.ai/api/v1/key` showed $0.985 of $1 daily limit remaining → not an account/credit limit.
+3. Bisected by audio length on the SAME wav: 30s slice → **200 OK**; 55s chunk → 429; 195s full → 429. Confirms length, not rate.
+4. Tried `google/gemini-2.5-flash` as a fallback provider → **403** "violation of provider Terms Of Service". Dead end (needs OpenRouter data-policy opt-in).
+5. Chunking at fixed offsets risks cutting mid-word → cut at the quietest 50ms RMS window within ±4s of each boundary instead.
+**Fix:** No repo change — phonetic itself needs chunking upstream (`~/futino/phonetic`). Workaround script kept at `.scratch/phonetic-chunked-transcribe.py`: splits a wav into ~25s quiet-boundary chunks, transcribes each with the profile's model/prompt, retries per chunk, joins with blank lines. Note each chunk is a separate LLM call, so it emits per-chunk artifacts ("Sure, here's the transcription:", stray `Jorge Lewis:` labels, wrapping quotes) that must be stripped after.
+**Recovery note:** Phonetic keeps no transcript history and only the LAST recording survives, at `/tmp/phonetic_debug.wav` (overwritten by the next recording). The daemon log truncates the transcript to ~200 chars. No clipboard manager is installed.
+**Commit:** `d278e91`
+
+
 ## 2026-08-27 — mako-accepts-notifications-but-renders-nothing (no layer surface)
 
 **Symptom:** "I don't see any notifications on my desktop." Phonetic's recording/transcription toasts (and every other app's) never appeared, though the daemon was alive.
