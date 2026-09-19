@@ -1,8 +1,21 @@
 { config, pkgs, lib, ... }:
 
 let
+  power-policy = pkgs.runCommand "power-mode-policy" {} ''
+    mkdir -p $out
+    cp ${./policy.py} $out/policy.py
+    cp ${./cli.py} $out/cli.py
+  '';
   power-mode = pkgs.writeShellScriptBin "power-mode" ''
     set -euo pipefail
+
+    # Help, read-only configuration, and validation precede privilege and sysfs access.
+    if ${pkgs.python3}/bin/python3 ${power-policy}/cli.py "$0" "$@"; then
+      exit 0
+    else
+      cli_status=$?
+      [ "$cli_status" = 64 ] || exit "$cli_status"
+    fi
 
     # Self-elevate to root — sysfs and RAPL require it
     if [ "$(id -u)" != "0" ]; then
@@ -16,7 +29,7 @@ let
 
     case "''${1:-}" in
       configure|config)
-        exec ${pkgs.python3}/bin/python3 ${./policy.py} "$@"
+        exec ${pkgs.python3}/bin/python3 ${power-policy}/policy.py "$@"
         ;;
     esac
 
@@ -538,6 +551,7 @@ let
     }
 
     show_status() {
+      ${pkgs.python3}/bin/python3 ${power-policy}/policy.py status
       local settle="''${1:-}"
 
       local status percent energy
@@ -676,7 +690,7 @@ let
       chmod 644 "$STATE_DIR/current-level"
       echo "$level" > "$DATA_DIR/last-level"
       if [ "$_AUTO" = "0" ]; then
-        ${pkgs.python3}/bin/python3 ${./policy.py} manual "$level"
+        ${pkgs.python3}/bin/python3 ${power-policy}/policy.py manual "$level"
       fi
 
       echo -e "''${CYAN}Applied L$level ($((level * 100 / 9))%)''${RESET}"
@@ -862,46 +876,6 @@ let
       fi
     }
 
-    usage() {
-      echo ""
-      echo -e "''${BOLD}power-mode''${RESET} — power profile manager"
-      echo ""
-      echo -e "  ''${BOLD}Usage:''${RESET}"
-      echo "    power-mode <profile>"
-      echo "    power-mode stretch <hours>"
-      echo "    power-mode status"
-      echo "    power-mode configure [thresholds]"
-      echo "    power-mode config"
-      echo "    Default: 25:notif,10:notif"
-      echo "    Example: 75:notif,50:L5,25:L9,10:notif"
-      echo "    Percentages must descend without duplicates. Levels range from L0 to L9."
-      echo "    Manual levels override a configured ladder until reboot."
-      echo ""
-      echo -e "  ''${BOLD}Levels (0-9):''${RESET}"
-      echo "    0    Full speed, turbo on, 28W"
-      echo "    3    Moderate savings, turbo on, ~22W"
-      echo "    5    Turbo off, ~15W"
-      echo "    8    Deep savings, ~7W"
-      echo "    9    Maximum: P-cores offline, EPP max, ~4W"
-      echo "    1-9  Any level for fine-grained control"
-      echo ""
-      echo -e "  ''${BOLD}Stretch mode:''${RESET}"
-      echo "    calibrate         Benchmark all levels under load (~3 min, run once)"
-      echo "    stretch <hours>   Apply optimal level to last <hours>"
-      echo ""
-      echo -e "  ''${BOLD}Battery health:''${RESET}"
-      echo "    charge-limit <percent>  Set max charge level (20-100)"
-      echo "    charge-limit            Show current charge limit"
-      echo ""
-      echo -e "  ''${BOLD}Examples:''${RESET}"
-      echo "    power-mode calibrate"
-      echo "    power-mode stretch 10"
-      echo "    power-mode 4"
-      echo "    power-mode charge-limit 80"
-      echo "    power-mode status"
-      echo ""
-    }
-
     # --auto flag: called by watchdog, don't overwrite persistent user-level
     _AUTO=0
     if [ "''${1:-}" = "--auto" ]; then
@@ -933,12 +907,12 @@ let
         fi
         ;;
       status) show_status ;;
-      *) usage ;;
+      *) exit 2 ;;
     esac
   '';
 
   battery-watchdog = pkgs.writeShellScriptBin "battery-watchdog" ''
-    exec ${pkgs.python3}/bin/python3 ${./policy.py} tick \
+    exec ${pkgs.python3}/bin/python3 ${power-policy}/policy.py tick \
       ${power-mode}/bin/power-mode ${pkgs.libnotify}/bin/notify-send
   '';
 

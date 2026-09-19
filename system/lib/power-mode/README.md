@@ -6,9 +6,24 @@ L0 gives full performance. L9 gives maximum power saving.
 The default thresholds are `25:notif,10:notif`. They give notifications without automatic level changes.
 Without a level ladder, your manual level survives reboot.
 
+## CLI help
+
+Run `power-mode` for a short command overview.
+Run `power-mode --help` for general help.
+Use `power-mode configure --help` or `power-mode help configure` for the complete ladder guide.
+Every public command accepts `-h` and `--help`.
+Help runs without sudo, battery hardware, or changes to settings.
+
+`power-mode status` shows the applied level, target level, and the target's source.
+A pending target is separate from the applied level.
+`power-mode config` prints only the threshold list for use in scripts.
+
 ## Configure battery thresholds
 
 Run `power-mode configure` to enter a threshold list at the text prompt.
+The prompt explains the syntax and retries after invalid input.
+Press Enter to keep the current configuration. Press Ctrl-C to cancel.
+After saving, the command explains each threshold and the expected level change.
 You can also supply the list directly:
 
 ```sh
