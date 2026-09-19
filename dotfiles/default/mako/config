@@ -15,3 +15,6 @@ progress-color=over #203535
 
 [urgency=high]
 border-color=#ffb084
+
+[app-name=Zen]
+ignore-timeout=1
