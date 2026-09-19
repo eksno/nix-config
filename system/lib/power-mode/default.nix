@@ -9,6 +9,22 @@ let
       exec /run/wrappers/bin/sudo "$(readlink -f "$0")" "$@"
     fi
 
+    # Serialize manual changes, automatic changes, and configuration writes.
+    mkdir -p /run/power-mode
+    exec 9>/run/power-mode/lock
+    ${pkgs.util-linux}/bin/flock 9
+
+    case "''${1:-}" in
+      configure|config)
+        exec ${pkgs.python3}/bin/python3 ${./policy.py} "$@"
+        ;;
+    esac
+
+    # An automatic request must not replace a manual choice from this boot.
+    if [ "''${1:-}" = "--auto" ] && [ -f /run/power-mode/manual-override ]; then
+      exit 75
+    fi
+
     # Auto-detect battery
     BAT=""
     for b in /sys/class/power_supply/BAT*; do
@@ -647,19 +663,6 @@ let
     apply_level() {
       local level=$1
 
-      # Persist current level so unprivileged tools (e.g. waybar) can read it
-      echo "$level" > "$STATE_DIR/current-level"
-      chmod 644 "$STATE_DIR/current-level"
-      echo "$level" > "$DATA_DIR/last-level"
-      # Save as user's persistent preference (only for manual CLI calls)
-      if [ "$_AUTO" = "0" ]; then
-        echo "$level" > "$DATA_DIR/user-level"
-        # Signal the watchdog that the user manually overrode
-        # chown to the calling user so the watchdog (user service) can delete it
-        touch "$STATE_DIR/manual-override"
-        [ -n "''${SUDO_UID:-}" ] && chown "$SUDO_UID" "$STATE_DIR/manual-override"
-      fi
-
       if [ "$level" = "0" ]; then
         restore_state
       else
@@ -667,6 +670,14 @@ let
       fi
 
       apply_round "$level"
+
+      # Publish only after the hardware settings have been applied.
+      echo "$level" > "$STATE_DIR/current-level"
+      chmod 644 "$STATE_DIR/current-level"
+      echo "$level" > "$DATA_DIR/last-level"
+      if [ "$_AUTO" = "0" ]; then
+        ${pkgs.python3}/bin/python3 ${./policy.py} manual "$level"
+      fi
 
       echo -e "''${CYAN}Applied L$level ($((level * 100 / 9))%)''${RESET}"
 
@@ -810,10 +821,10 @@ let
 
       if [ "$best_round" = "-1" ]; then
         echo -e "  ''${DIM}No level meets budget under load — applying maximum (R9)''${RESET}"
-        apply_round 9
+        apply_level 9
       else
         echo -e "  Applying level $best_round ($((best_round * 100 / 9))%) — calibrated: ''${best_watts}W under load"
-        apply_round "$best_round"
+        apply_level "$best_round"
       fi
 
       # Quick 5s verification at actual current load
@@ -859,6 +870,12 @@ let
       echo "    power-mode <profile>"
       echo "    power-mode stretch <hours>"
       echo "    power-mode status"
+      echo "    power-mode configure [thresholds]"
+      echo "    power-mode config"
+      echo "    Default: 25:notif,10:notif"
+      echo "    Example: 75:notif,50:L5,25:L9,10:notif"
+      echo "    Percentages must descend without duplicates. Levels range from L0 to L9."
+      echo "    Manual levels override a configured ladder until reboot."
       echo ""
       echo -e "  ''${BOLD}Levels (0-9):''${RESET}"
       echo "    0    Full speed, turbo on, 28W"
@@ -921,113 +938,8 @@ let
   '';
 
   battery-watchdog = pkgs.writeShellScriptBin "battery-watchdog" ''
-    BAT=""
-    for b in /sys/class/power_supply/BAT*; do
-      [ -f "$b/energy_now" ] && BAT="$b" && break
-    done
-    [ -z "$BAT" ] && exit 0
-
-    PERCENT=$(cat "$BAT/capacity")
-    STATUS=$(cat "$BAT/status")
-    STATE_DIR="/tmp/power-mode"
-    mkdir -p "$STATE_DIR"
-    CURRENT_LEVEL=0
-    [ -f "$STATE_DIR/current-level" ] && CURRENT_LEVEL=$(cat "$STATE_DIR/current-level")
-
-    # User's persistent manual choice (survives reboot)
-    USER_LEVEL=0
-    [ -f /var/lib/power-mode/user-level ] && USER_LEVEL=$(cat /var/lib/power-mode/user-level)
-
-    calc() {
-      ${pkgs.gawk}/bin/awk "BEGIN { printf \"%.''${2:-1}f\", $1 }"
-    }
-
-    # Send or replace a notification, averaging power over 5s.
-    # $1=urgency $2=title $3=profile_name
-    notify_with_estimate() {
-      local urgency="$1" title="$2" profile="$3"
-      local energy watts hours notif_id
-
-      energy=$(calc "$(cat "$BAT/energy_now") / 1000000" 2)
-      watts=$(calc "$(read_power_uw) / 1000000")
-      hours="?"
-      [ "$watts" != "0.0" ] && hours=$(calc "$energy / $watts")
-
-      notif_id=$(${pkgs.libnotify}/bin/notify-send \
-        -u "$urgency" \
-        -t 0 \
-        -p \
-        "$title" \
-        "''${PERCENT}% — $profile\n''${energy} Wh at ''${watts}W\n~''${hours}h remaining")
-
-      local sum count avg
-      sum=$(calc "$(read_power_uw) / 1000000" 4)
-      count=1
-      for _ in $(seq 1 9); do
-        sleep 0.5
-        local sample
-        sample=$(calc "$(read_power_uw) / 1000000" 4)
-        sum=$(${pkgs.gawk}/bin/awk "BEGIN { printf \"%.4f\", $sum + $sample }")
-        count=$((count + 1))
-        avg=$(calc "$sum / $count")
-        hours="?"
-        [ "$avg" != "0.0" ] && hours=$(calc "$energy / $avg")
-        notif_id=$(${pkgs.libnotify}/bin/notify-send \
-          -u "$urgency" \
-          -t 0 \
-          -r "$notif_id" \
-          -p \
-          "$title" \
-          "''${PERCENT}% — $profile\n''${energy} Wh at ''${avg}W avg\n~''${hours}h remaining")
-      done
-    }
-
-    # Clear manual override on charging state changes (plug/unplug)
-    # Use per-user file to avoid SDDM ownership conflicts
-    LAST_STATUS=""
-    STATUS_FILE="$STATE_DIR/last-status-$(id -u)"
-    [ -f "$STATUS_FILE" ] && LAST_STATUS=$(cat "$STATUS_FILE")
-    if [ "$STATUS" != "$LAST_STATUS" ] && [ -n "$LAST_STATUS" ]; then
-      rm -f "$STATE_DIR/manual-override" "$STATE_DIR/overridden-target"
-    fi
-    echo "$STATUS" > "$STATUS_FILE"
-
-    # Determine target level: user's choice, bumped up for low battery (max 9)
-    target=$USER_LEVEL
-    if [ "$STATUS" = "Discharging" ]; then
-      [ "$PERCENT" -le 75 ] && [ "$target" -lt 8 ] && target=8
-      [ "$PERCENT" -le 25 ] && [ "$target" -lt 9 ] && target=9
-    fi
-
-    # Manual override: user ran power-mode manually, back off until a NEW threshold
-    # On first poll after override, record what auto-target was being suppressed
-    if [ -f "$STATE_DIR/manual-override" ]; then
-      echo "$target" > "$STATE_DIR/overridden-target"
-      rm -f "$STATE_DIR/manual-override"
-    fi
-    if [ -f "$STATE_DIR/overridden-target" ]; then
-      saved_target=$(cat "$STATE_DIR/overridden-target")
-      if [ "$target" -gt "$saved_target" ]; then
-        # A higher threshold kicked in (e.g., crossed ≤25%) — clear and apply
-        rm -f "$STATE_DIR/overridden-target"
-      else
-        # Same or lower threshold — respect the user's override
-        exit 0
-      fi
-    fi
-
-    # Only act when current level differs from target
-    if [ "$CURRENT_LEVEL" != "$target" ]; then
-      ${power-mode}/bin/power-mode --auto "$target" > /dev/null 2>&1
-
-      if [ "$STATUS" = "Discharging" ] && [ "$target" -ge 9 ] && [ "$target" -gt "$USER_LEVEL" ]; then
-        notify_with_estimate critical "Battery Low" "level 9\nConsider lowering brightness"
-      elif [ "$STATUS" = "Discharging" ] && [ "$target" -ge 8 ] && [ "$target" -gt "$USER_LEVEL" ]; then
-        ${pkgs.libnotify}/bin/notify-send -u low -t 5000 "Battery ≤75%" "Switched to level 8"
-      elif [ "$STATUS" = "Charging" ] && [ "$target" -le "$USER_LEVEL" ]; then
-        ${pkgs.libnotify}/bin/notify-send -u low -t 5000 "Charging" "Restored to level $target"
-      fi
-    fi
+    exec ${pkgs.python3}/bin/python3 ${./policy.py} tick \
+      ${power-mode}/bin/power-mode ${pkgs.libnotify}/bin/notify-send
   '';
 
   # powertop --auto-tune (enabled below) writes power/control=auto to *every* USB
@@ -1152,20 +1064,20 @@ in
 
   # Battery watchdog: user service so it has D-Bus access for notifications
   systemd.user.services.battery-watchdog = {
-    description = "Auto-switch power profile on low battery";
+    description = "Restore power levels and process battery thresholds";
     serviceConfig = {
       Type = "oneshot";
       ExecStart = "${battery-watchdog}/bin/battery-watchdog";
     };
     unitConfig = {
+      ConditionUser = config.dotfiles.username;
       StartLimitIntervalSec = 0; # Disable rate limiting for 1s polling
     };
   };
 
-  # Auto-bump on battery % disabled — Jorge wants power level to stay where he
-  # sets it manually. Service+timer definitions kept so they can be re-enabled
-  # by adding `wantedBy = [ "timers.target" ];` back if desired.
+  # Notifications and manual-level restoration run even without a level ladder.
   systemd.user.timers.battery-watchdog = {
+    wantedBy = [ "timers.target" ];
     description = "Poll battery level every 1s";
     timerConfig = {
       OnBootSec = "1s";
