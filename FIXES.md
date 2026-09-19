@@ -14,6 +14,9 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 4. Tried `google/gemini-2.5-flash` as a fallback provider → **403** "violation of provider Terms Of Service". Dead end (needs OpenRouter data-policy opt-in).
 5. Chunking at fixed offsets risks cutting mid-word → cut at the quietest 50ms RMS window within ±4s of each boundary instead.
 **Fix:** No repo change — phonetic itself needs chunking upstream (`~/futino/phonetic`). Workaround script kept at `.scratch/phonetic-chunked-transcribe.py`: splits a wav into ~25s quiet-boundary chunks, transcribes each with the profile's model/prompt, retries per chunk, joins with blank lines. Note each chunk is a separate LLM call, so it emits per-chunk artifacts ("Sure, here's the transcription:", stray `Jorge Lewis:` labels, wrapping quotes) that must be stripped after.
+**Recurrence:** 2026-09-18 20:40, a 200.8s recording, same 429. Recovery is now one command:
+`PYTHONPATH=$(head -3 /nix/store/y0cy9r7acx7xj2a7v6awfz8kkdk2fj13-phonetic-1.0.1/bin/.phonetic-wrapped | grep -o "'/nix/store/[^']*site-packages'" | tr -d "'" | paste -sd:) python3.12 .scratch/phonetic-chunked-transcribe.py /tmp/phonetic_debug.wav out.txt`
+(the script now strips the per-chunk artifacts itself). Will keep recurring for any recording over ~30s until phonetic chunks upstream.
 **Recovery note:** Phonetic keeps no transcript history and only the LAST recording survives, at `/tmp/phonetic_debug.wav` (overwritten by the next recording). The daemon log truncates the transcript to ~200 chars. No clipboard manager is installed.
 **Commit:** `11528dc`
 
