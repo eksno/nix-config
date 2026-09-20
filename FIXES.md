@@ -21,7 +21,7 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 - A `wl-copy` started with `setsid` silently failed to hold the selection once. Use `nohup ... & disown` and verify with `wl-paste | cmp`.
 - Chunked mode makes each chunk a separate LLM call, so it emits per-chunk artifacts ("Sure, here's the transcription:", stray `Jorge Lewis:` labels, quotes that can split across paragraphs). The MP3 path avoids all of this.
 **Recovery note:** Phonetic keeps no transcript history, the daemon log truncates the transcript to ~200 chars, only the LAST recording survives at `/tmp/phonetic_debug.wav`, and no clipboard manager is installed.
-**Commit:** `PENDING`
+**Commit:** `eef4261`
 
 ## 2026-08-27 — mako-accepts-notifications-but-renders-nothing (no layer surface)
 
