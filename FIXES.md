@@ -14,7 +14,11 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 4. The 41.9s failure broke the length theory (yesterday 55s failed but the threshold clearly moved), so pulled 14 days of history: **656.4s, 341.0s, 275.5s, 261.5s, 243.4s all returned 200 before 2026-09-18 17:31; every request after it fails.** Length was never the variable — a provider-side limit changed that afternoon. Nothing changed locally.
 5. Tested the size theory directly: 169.3s as 14.9MB WAV → 429; the same audio as 0.68MB MP3 → **200, one call, 2.6k chars, $0.017**.
 **Fix:** No repo change. `~/.local/bin/phonetic-rescue` recovers the last recording: MP3 single call, falling back to ~25s quiet-boundary chunking, then clipboard + `~/Downloads/phonetic_transcript_<date>_<time>.txt`. Scripts in `.scratch/phonetic-mp3-transcribe.py` and `.scratch/phonetic-chunked-transcribe.py`.
-**Real fix (not done):** encode MP3 in phonetic's `transcribe()` instead of base64 WAV, in `~/futino/phonetic`. That removes the failure entirely. Note the installed binary comes from the `phonetic` flake input, so it needs an input bump + rebuild, not just a local edit.
+**Real fix (done upstream, not yet running here):** `startino/phonetic` commit `c730630` — `transcribe()` now sends
+32kbps mono MP3 via ffmpeg (`_encode_mp3` / `audio_to_payload`), falling back to the old WAV payload when ffmpeg is
+missing; `ffmpeg-headless` added to the nix wrapper PATH. 99 tests pass; the 169s recording that 429'd as WAV returns
+200 as MP3. **Still needs `nix flake update phonetic` + `./update.sh` here** — the installed binary comes from the
+`phonetic` flake input (locked at `e55d1a0`), so until that bump lands, keep using `phonetic-rescue`.
 **Gotchas:**
 - Every `transcribe()` call **overwrites `/tmp/phonetic_debug.wav`**, so a chunked rescue destroys the original recording as it runs. Always work on a copy (the script now does).
 - `ffmpeg` is not in systemPackages; the script resolves it from `/nix/store/*ffmpeg*/bin/ffmpeg`, then `nix run nixpkgs#ffmpeg`.
