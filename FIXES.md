@@ -17,6 +17,11 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 **Recurrence:** 2026-09-18 20:40, a 200.8s recording, same 429. Recovery is now one command:
 `PYTHONPATH=$(head -3 /nix/store/y0cy9r7acx7xj2a7v6awfz8kkdk2fj13-phonetic-1.0.1/bin/.phonetic-wrapped | grep -o "'/nix/store/[^']*site-packages'" | tr -d "'" | paste -sd:) python3.12 .scratch/phonetic-chunked-transcribe.py /tmp/phonetic_debug.wav out.txt`
 (the script now strips the per-chunk artifacts itself). Will keep recurring for any recording over ~30s until phonetic chunks upstream.
+**Recurrence:** 2026-09-19 18:48, a 169.3s recording, same 429 (third time). Recovery is now one command:
+`phonetic-rescue` (at `~/.local/bin/phonetic-rescue`) — defaults to `/tmp/phonetic_debug.wav`, chunks + cleans,
+copies to clipboard and writes `~/Downloads/phonetic_transcript_<date>_<time>.txt`. Takes an optional wav path.
+Gotcha: a `wl-copy` started with `setsid` did not hold the selection once; the script now uses `nohup ... & disown`
+and verifies with `wl-paste | cmp`, warning instead of silently leaving an empty clipboard.
 **Recovery note:** Phonetic keeps no transcript history and only the LAST recording survives, at `/tmp/phonetic_debug.wav` (overwritten by the next recording). The daemon log truncates the transcript to ~200 chars. No clipboard manager is installed.
 **Commit:** `11528dc`
 
