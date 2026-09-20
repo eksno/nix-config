@@ -2,29 +2,26 @@
 
 Chronological log of non-trivial fixes for this NixOS flake. Newest entries at the top. See `CLAUDE.md` "Log Every Fix" section for the entry format and rules.
 
-## 2026-09-18 — phonetic-long-recording-429
+## 2026-09-18 — phonetic-long-recording-429 (payload size, not rate limit)
 
-**Symptom:** A 195s Phonetic recording produced no transcript; the toast/clipboard never updated. Log showed `transcription_error`.
-**Affected:** lewis/jorge. `/tmp/phonetic_debug.wav`, `/tmp/phonetic_startup.log`, phonetic 1.0.1 (`mistralai/voxtral-small-24b-2507` via OpenRouter).
-**Root cause:** Voxtral/Mistral rejects long audio payloads with HTTP **429** ("Provider returned error"), not a 413/400. It is an audio-length limit masquerading as a rate limit — retrying never helps.
+**Symptom:** Recordings die with `transcription_error`; no toast, nothing on the clipboard. Started 2026-09-18 17:31 and hit every recording since (195s, 200.8s, 169.3s, 41.9s).
+**Affected:** lewis/jorge. phonetic 1.0.1 (`mistralai/voxtral-small-24b-2507` via OpenRouter), `phonetic/transcribe.py` `audio_to_base64`.
+**Root cause:** Phonetic sends raw 16kHz WAV as base64 in the JSON body. Around 2026-09-18 17:31 the provider began rejecting oversized bodies with HTTP **429 "Provider returned error"** — a misleading status: it is a payload-size limit, not a rate limit and not an audio-length limit. **Sending the same audio as MP3 (32kbps mono 16kHz, ~22x smaller) succeeds in ONE request.**
 **Investigation:**
-1. Assumed a transient rate limit — retried 5x over ~5 min with backoff. All 429. Dead end.
-2. Checked the key: `curl https://openrouter.ai/api/v1/key` showed $0.985 of $1 daily limit remaining → not an account/credit limit.
-3. Bisected by audio length on the SAME wav: 30s slice → **200 OK**; 55s chunk → 429; 195s full → 429. Confirms length, not rate.
-4. Tried `google/gemini-2.5-flash` as a fallback provider → **403** "violation of provider Terms Of Service". Dead end (needs OpenRouter data-policy opt-in).
-5. Chunking at fixed offsets risks cutting mid-word → cut at the quietest 50ms RMS window within ±4s of each boundary instead.
-**Fix:** No repo change — phonetic itself needs chunking upstream (`~/futino/phonetic`). Workaround script kept at `.scratch/phonetic-chunked-transcribe.py`: splits a wav into ~25s quiet-boundary chunks, transcribes each with the profile's model/prompt, retries per chunk, joins with blank lines. Note each chunk is a separate LLM call, so it emits per-chunk artifacts ("Sure, here's the transcription:", stray `Jorge Lewis:` labels, wrapping quotes) that must be stripped after.
-**Recurrence:** 2026-09-18 20:40, a 200.8s recording, same 429. Recovery is now one command:
-`PYTHONPATH=$(head -3 /nix/store/y0cy9r7acx7xj2a7v6awfz8kkdk2fj13-phonetic-1.0.1/bin/.phonetic-wrapped | grep -o "'/nix/store/[^']*site-packages'" | tr -d "'" | paste -sd:) python3.12 .scratch/phonetic-chunked-transcribe.py /tmp/phonetic_debug.wav out.txt`
-(the script now strips the per-chunk artifacts itself). Will keep recurring for any recording over ~30s until phonetic chunks upstream.
-**Recurrence:** 2026-09-19 18:48, a 169.3s recording, same 429 (third time). Recovery is now one command:
-`phonetic-rescue` (at `~/.local/bin/phonetic-rescue`) — defaults to `/tmp/phonetic_debug.wav`, chunks + cleans,
-copies to clipboard and writes `~/Downloads/phonetic_transcript_<date>_<time>.txt`. Takes an optional wav path.
-Gotcha: a `wl-copy` started with `setsid` did not hold the selection once; the script now uses `nohup ... & disown`
-and verifies with `wl-paste | cmp`, warning instead of silently leaving an empty clipboard.
-**Recovery note:** Phonetic keeps no transcript history and only the LAST recording survives, at `/tmp/phonetic_debug.wav` (overwritten by the next recording). The daemon log truncates the transcript to ~200 chars. No clipboard manager is installed.
-**Commit:** `11528dc`
-
+1. Retried 5x with backoff → all 429. Checked the key: $0.985 of $1 daily remaining, so not credit/account. Dead end.
+2. Bisected by length: 30s → 200, 55s → 429, 195s → 429. **Wrongly concluded "audio-length limit"** and built ~25s chunking around that. It worked, but the premise was wrong.
+3. `google/gemini-2.5-flash` fallback → 403 provider ToS. Dead end (needs OpenRouter data-policy opt-in).
+4. The 41.9s failure broke the length theory (yesterday 55s failed but the threshold clearly moved), so pulled 14 days of history: **656.4s, 341.0s, 275.5s, 261.5s, 243.4s all returned 200 before 2026-09-18 17:31; every request after it fails.** Length was never the variable — a provider-side limit changed that afternoon. Nothing changed locally.
+5. Tested the size theory directly: 169.3s as 14.9MB WAV → 429; the same audio as 0.68MB MP3 → **200, one call, 2.6k chars, $0.017**.
+**Fix:** No repo change. `~/.local/bin/phonetic-rescue` recovers the last recording: MP3 single call, falling back to ~25s quiet-boundary chunking, then clipboard + `~/Downloads/phonetic_transcript_<date>_<time>.txt`. Scripts in `.scratch/phonetic-mp3-transcribe.py` and `.scratch/phonetic-chunked-transcribe.py`.
+**Real fix (not done):** encode MP3 in phonetic's `transcribe()` instead of base64 WAV, in `~/futino/phonetic`. That removes the failure entirely. Note the installed binary comes from the `phonetic` flake input, so it needs an input bump + rebuild, not just a local edit.
+**Gotchas:**
+- Every `transcribe()` call **overwrites `/tmp/phonetic_debug.wav`**, so a chunked rescue destroys the original recording as it runs. Always work on a copy (the script now does).
+- `ffmpeg` is not in systemPackages; the script resolves it from `/nix/store/*ffmpeg*/bin/ffmpeg`, then `nix run nixpkgs#ffmpeg`.
+- A `wl-copy` started with `setsid` silently failed to hold the selection once. Use `nohup ... & disown` and verify with `wl-paste | cmp`.
+- Chunked mode makes each chunk a separate LLM call, so it emits per-chunk artifacts ("Sure, here's the transcription:", stray `Jorge Lewis:` labels, quotes that can split across paragraphs). The MP3 path avoids all of this.
+**Recovery note:** Phonetic keeps no transcript history, the daemon log truncates the transcript to ~200 chars, only the LAST recording survives at `/tmp/phonetic_debug.wav`, and no clipboard manager is installed.
+**Commit:** `PENDING`
 
 ## 2026-08-27 — mako-accepts-notifications-but-renders-nothing (no layer surface)
 
