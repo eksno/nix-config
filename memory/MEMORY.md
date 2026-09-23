@@ -39,11 +39,15 @@
 
 ### nixos build + host model
 
+- [Hyprland Lua config migration](hyprland-lua-config-migration.md) — DONE 2026-08-25. Read before touching hypr config: require() is root-relative, globals cross scopes, --verify-config + nested Wayland instance are the validators, config manager is picked once at startup.
 - [NixOS rebuild flow](nixos-rebuild-flow.md) — `update.sh` quirks (`git add .` before flake), `--impure`, dotfile activation script, fast-iteration without flake bumps
 - [Host context detection protocol](nixos-host-context-protocol.md) — `fastfetch` first (mandatory), then host/user → directory mapping
 - [lewis host profile](lewis-host-profile.md) — Intel Arc, Hyprland primary, battery cap 85%, primary dev box
 - [Phonetic mic dead / no audio sources](audio-wireplumber-card-off.md) — recurring on lewis: WirePlumber leaves the SOF card on profile `off`, PipeWire shows zero Sources. `wpctl status` to confirm, `systemctl --user restart wireplumber` to fix. Don't re-investigate kernel/UCM.
+- [verse 30s boot stall = Intel VMD + NVMe timeout](verse-nvme-vmd-boot-stall.md) — the Catppuccin screen with a lone `_` is a themed empty VT during initrd, NOT a Hyprland/SDDM hang. Fix is a BIOS setting.
 - [ASUS Zenbook UX3405MA BIOS flash quirks](asus-zenbook-bios-flash-quirks.md) — utility is "ASUS Firmware Update" (NOT EZ Flash), no `Tool` tab on Zenbook, USB-A port for the stick, no Flashback button, don't rename .311→.CAP
+- [verse built-in audio vanishes (WirePlumber profile `off`)](verse-audio-profile-off-recurring.md) — recurring: no speakers/mics, only `Dummy Output`. ALSA is fine; fix is `wpctl set-profile` + restart wireplumber. `pactl` is not installed here.
+- [Writing + verifying OS images to USB](usb-image-write-verify.md) — `dd` needs `oflag=direct` or it reports page-cache speed; a post-write hash mismatch is udisks automount, NOT corruption; how to spot a junk/fake stick before writing
 
 ### upstream constraints
 

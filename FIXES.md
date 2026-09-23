@@ -62,6 +62,202 @@ missing; `ffmpeg-headless` added to the nix wrapper PATH. 99 tests pass; the 169
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-08-26 — builtin-audio-gone-again-wireplumber-profile-off-recurrence
+
+**Symptom:** All built-in sound devices missing — no speakers, no internal mics. `wpctl status` listed the ALSA device but zero real sinks; PipeWire's fallback `Dummy Output` was the default sink and a Zen stream was feeding into it (silently).
+**Affected:** verse/eksno. Runtime WirePlumber state in `~/.local/state/wireplumber/{default-profile,default-routes}`. No nix-config change.
+**Root cause:** **Recurrence of 2026-04-25 `builtin-audio-disappeared-wireplumber-profile-off`.** The card `alsa_card.pci-0000_00_1f.3-platform-skl_hda_dsp_generic` sat on profile `off`. `pw-dump` showed its entire `EnumProfile` this boot was: `off` (avail yes), `HiFi (HDMI1, HDMI2, HDMI3, Headphones, Mic1, Mic2)` (**avail no**), `pro-audio` (unknown). The saved `default-profile` named the *other* variant, `HiFi (HDMI1, HDMI2, HDMI3, Mic1, Mic2, Speaker)` — which the card did not enumerate on this boot. Saved profile absent + only alternative unavailable → WirePlumber elected `off` → no profile, no nodes, no devices.
+**Investigation:**
+1. ALSA layer fully healthy — do not re-chase this: `/proc/asound/cards` had card0 `sofhdadsp`; `aplay -l` listed HDA Analog + HDMI1-3 + Deepbuffer; `arecord -l` listed HDA Analog + DMIC Raw; SOF firmware 2.14.1.1 booted, topology `sof-hda-generic-2ch.tplg` loaded, ALC294 fixup picked, both CS35L41 amps bound with calibration (R0=10588/10652). The failure is entirely above ALSA.
+2. `wpctl inspect 44` → device present with `api.acp.auto-profile=false`; `pw-dump` → `Profile = off`. Same signature as the April entry, found by grepping FIXES.md for `profile` (the grep saved the whole diagnosis).
+3. `pactl` is **not installed** on this box (`command not found`) — use `wpctl` / `pw-dump` / `amixer`, not pulse CLI, when reproducing.
+4. Dead end: the "CS35L41 probe race" theory (cf. `3a530bd`) does not cleanly explain this boot — the amps bound at monotonic 6.47–6.60s while the card's `device.plugged.usec` is 7.07s, i.e. the amps were ready ~0.5s *before* the card's udev event, and a `Speaker` simple control does exist on the card now. A narrower control-registration/probe-ordering race remains the leading hypothesis but is **unconfirmed** — what is established is only that the enumerated profile *name* varies between boots, and WirePlumber cannot bridge the rename.
+5. Unconfirmed correlation worth noting: this appeared on the same boot as the Bluetooth rfkill block (entry above) — the boot following a hard power-off from a flat battery, which also had unusually late USB enumeration (btusb at 199s, webcam at 3:19). Whether the abnormal boot shifted probe timing is not established.
+6. **Corrects the 2026-04-25 entry's claim** that the fix "survives reboot because the corrected profile/route is now persisted." It does not — persisting the Speaker-variant name is exactly what breaks the next boot that enumerates the Headphones variant. Expect this to recur.
+**Fix:** Same two steps as April, in order: `wpctl set-profile 44 1` (forces the lone HiFi profile despite `available=no`) → materialized HDMI×3 + Headphones sinks and both mic sources; then `systemctl --user restart wireplumber` → re-elected the **Speaker** variant `HiFi (HDMI1, HDMI2, HDMI3, Mic1, Mic2, Speaker)`, giving a true Speaker sink as default. Saved sink volume came back at 0.00 → `wpctl set-volume <sink> 0.5` + `wpctl set-mute <sink> 0`; hw `Master` was already 100%/on. Verified: `pw-record` from the DMIC gave peak 5.6% / rms 0.29% FS (not digital silence), and a short generated tone via `pw-play --target <sink>` exited 0 through the Speaker sink. No rebuild needed. A durable guard (a user unit that re-runs the two steps when the card lands on `off` at login) has NOT been implemented — offered to the user.
+**Commit:** `a5e1777`
+
+## 2026-08-26 — bluetooth-off-after-battery-deep-discharge-rfkill-persisted
+
+**Symptom:** After booting, Bluetooth was completely off — Corne keyboard not connected, waybar/blueman showing nothing — despite `powerOnBoot = true`.
+**Affected:** host `verse`, user `eksno`. `system/hosts/verse/bluetooth.nix:5` (`powerOnBoot`), `/var/lib/systemd/rfkill/*bluetooth` (runtime state, not in repo).
+**Root cause:** The BT radio was **rfkill soft-blocked** at both levels — `asus-bluetooth` (asus-nb-wmi platform switch) and `hci0` — so bluetoothd could not power the adapter: `Failed to set mode: Failed (0x03)`, `bluetoothctl show` → `Powered: no / PowerState: off-blocked`. The block originated from a hard power loss: the previous boot (Aug 25 22:00–23:39) **ends abruptly at 23:39:20 with no shutdown sequence**, and the current boot's first kernel timestamp is `Mar 18 03:55:52` (RTC reset; systemd then bumped to the last timesync stamp `Jun 06 08:00`, then NTP corrected to Aug 26 12:13). Battery read 6% on AC → the pack drained flat, the machine died hard, and the EC/RTC lost state, bringing the ASUS BT switch up blocked. `systemd-rfkill` then **persisted `1` to `/var/lib/systemd/rfkill/{platform-asus-nb-wmi,pci-0000:00:14.0-usb-0:10:1.0}:bluetooth`**, which would have restored the block on every subsequent boot even after the battery recovered.
+**Investigation:**
+1. `rfkill list` → both BT entries `Soft blocked: yes`, Wi-Fi entries `no`. Not airplane mode (that blocks Wi-Fi too), not a hard switch.
+2. `systemctl status bluetooth` → active/running; journal had `Failed to set mode: Failed (0x03)` + `Failed to add device C8:5B:C1:B5:9B:F3 (2)` → daemon healthy, radio blocked.
+3. Dead end: suspected `power-mode`. It only ever calls `bluetoothctl power on/off` (`system/lib/power-mode/default.nix:386,484`) and grep found **no `rfkill` use anywhere in the repo** — it cannot produce a platform-level block. `/var/lib/power-mode` had no `bt-was-on` sentinel (`STATE_DIR` is `/tmp/power-mode` anyway, wiped on boot).
+4. Dead end: suspected firmware actively re-asserting the block; ruled out because a plain `rfkill unblock` stuck (see Fix).
+5. `ls -la /var/lib/systemd/rfkill/` → both bluetooth files contained `1` with mtime **this boot** (12:13), while both wlan files still held `0` at their Apr 5 mtime — systemd-rfkill only rewrites a file when it sees a state change, so the flip to blocked happened at this boot, not earlier.
+6. `journalctl --list-boots` + `journalctl -b -1 | tail` → previous boot has no shutdown log at all; `journalctl -b -k` starts at `Mar 18 03:55:52` → hard power-off + RTC loss, matching the flat battery.
+**Fix:** `sudo rfkill unblock bluetooth`. Both switches cleared and stayed clear (nothing re-asserts them), adapter went `Powered: yes / PowerState: on`, and the Corne reconnected on its own — `Paired/Bonded/Trusted/Connected: yes`, battery 100%. systemd-rfkill immediately re-saved both state files as `0`, so the block does not survive into the next boot. No repo change needed. If it recurs after another deep discharge, the same one-liner fixes it; a permanent guard would be a boot-time `rfkill unblock bluetooth` unit in `system/hosts/verse/bluetooth.nix`.
+**Commit:** `9f1dfb9`
+
+## 2026-08-25 — live-hypr-session-reloaded-autogenerated-stub
+
+**Symptom:** Immediately after the `.conf` -> Lua migration rebuild, the *running*
+Hyprland session dropped to 6 default binds and reported "you are using an autogenerated
+config". No logout had happened.
+**Affected:** host `verse`, user `eksno`. `system/lib/dotfiles.nix` (hyprland entrypoint
+composition).
+**Root cause:** Hyprland hot-reloads when its config file changes, **and regenerates a
+stub config if the file goes missing** ("This config is a STUB! This should never be
+generated."). The activation script did `rm -f hyprland.conf` and then wrote
+`hyprland.lua`. The pre-existing session was on the *legacy* config manager (chosen once
+at startup, so it never looks at `hyprland.lua`), saw its own config file vanish,
+regenerated the stub, and reloaded it.
+
+The old script did the same `rm -f`, but immediately rewrote a valid `hyprland.conf`, so
+the reload always landed on real config. Changing *which file* is written broke that
+invariant.
+
+**Investigation:**
+1. `hyprctl binds -j | len` -> **6** (the stub's binds), confirming the live session was
+   running the stub rather than merely warning about it.
+2. `hyprland.log` still showed `[cfg] Lua config not found, using legacy config` from
+   session start — the config manager is picked once, at startup, so `hyprctl reload`
+   cannot move a running session onto `hyprland.lua`.
+3. `cat ~/.config/hypr/hyprland.conf` -> the upstream stub, timestamped to the second of
+   the rebuild.
+4. Deleting the stub and waiting 2s -> it reappeared, proving the live session actively
+   regenerates it.
+
+**Fix:** Two parts.
+- *Prevent:* write the entrypoint atomically — `printf ... > .hyprland.lua.new` then
+  `mv -f` over the target — so the config file is never absent for a live session to
+  notice. `rm -f hyprland.conf` now happens *after* the new file is in place.
+- *Recover (without logging out):* extracted the pre-migration `.conf` tree from git
+  (`git archive 5ce0c7c~1 dotfiles/default/hypr`) into `~/.config/hypr-legacy/`,
+  rewrote its internal `~/.config/hypr/` source paths to `~/.config/hypr-legacy/`, and
+  pointed a hand-written `~/.config/hypr/hyprland.conf` at it. The live session
+  hot-reloaded and went straight back to **62 binds, zero configerrors**, with every
+  sampled option restored.
+
+**Escape hatches verified while recovering (worth knowing before any future compositor
+change):**
+- `getty.target` is **enabled** and `autovt@.service -> getty@.service`, with `NAutoVTs`
+  unset (systemd default 6), so **Ctrl+Alt+F2 gives a real text login**. Proven by
+  `systemctl start getty@tty2.service` -> active.
+- `xterm` is on PATH as well as `kitty`.
+- On a *Lua* config error Hyprland pops an error overlay and grants emergency binds
+  SUPER+Q / +R / +M (terminal / run / exit).
+- `~/hypr-rescue.sh` disables `hyprland.lua` and restores the legacy tree;
+  `~/hypr-check.sh` runs `--verify-config`. Both live in `$HOME`, not the repo, so a
+  broken rebuild cannot take them with it.
+
+**Commit:** `63ba5a2`
+
+## 2026-08-25 — boot-stalls-60s-on-blank-screen (uwsm waits for graphical.target)
+
+**Symptom:** ~1 minute on a blank/solid-colour screen after POST before the desktop is usable.
+Originally described as "a Catppuccin background with a `_` in the top-left".
+**Affected:** host `verse`, user `eksno`. `system/hosts/verse/networking.nix` (fix),
+`system/hosts/verse/hardware-configuration.nix:11` (VMD context).
+**Root cause:** **Two independent stalls of ~30s and ~60s that looked like one symptom.**
+
+1. *(initrd, ~30s)* Intel VMD (Intel RST) was enabled in BIOS, remapping the NVMe into
+   synthetic PCI domain `10000:`. A single `nvme nvme0: I/O tag 64 (4040) QID 3 timeout,
+   completion polled` burned the nvme driver's full 30s default I/O timeout inside initrd.
+2. *(userspace, ~60s)* **A self-inflicted deadlock in this repo's own NetworkManager
+   dispatcher script.** `system/hosts/verse/data-saver.nix` ran a *blocking*
+   `systemctl start tailscaled.service` on every `up` event. But `tailscaled.service` is
+   ordered `After=NetworkManager-wait-online.service`, and NM does not report startup
+   complete until its dispatcher scripts finish. So:
+
+       dispatcher -> waits for tailscaled
+         -> waits for NetworkManager-wait-online
+           -> waits for NM startup complete
+             -> waits for this dispatcher
+
+   Nothing broke the cycle except `NetworkManager-wait-online` hitting its 60s timeout.
+   That gated `network-online.target -> docker.service -> multi-user.target ->
+   graphical.target`, and **uwsm blocks the session on `graphical.target`**.
+
+**Investigation:**
+1. `systemd-analyze` split the boot: firmware 4.7s + loader 5.7s + kernel 0.65s +
+   **initrd 32.7s** + userspace 69.4s. `systemd-analyze blame` showed <1s of initrd units,
+   so the initrd number was one stall, not accumulated work.
+2. Journal gap scan (`journalctl -o short-monotonic` + awk diffing timestamps) found the
+   exact 30.2s hole and the nvme timeout line at its end. This gap-scan is the highest-value
+   tool here — `blame` alone hides single-stall waits.
+3. Confirmed VMD via `lspci` (`RAID bus controller ... VMD [8086:7d0b]`) and the nvme sysfs
+   path living under `/pci0000:00/0000:00:0e.0/pci10000:e0/`. Matching upstream report:
+   ASUS Zenbook UX3405CA + Micron MTFDKBA1T0QGN, fixed by disabling VMD.
+4. **Wrong turn — cost a round trip.** From `display-manager.service` activating at 38.2s
+   monotonic I concluded SDDM was up early and therefore `NetworkManager-wait-online`
+   "does not delay login". That was false. SDDM *does* start early; it then launches
+   `uwsm`, which prints `graphical.target is queued for start, waiting for 60s...`,
+   counts down 50/40/30/20/10, logs `Timed out. System has not reached graphical.target.`
+   and only then starts Hyprland. **Check the session launcher, not just the display
+   manager, when the greeter appears but the desktop does not.**
+5. Disabling VMD in BIOS confirmed stall 1 in isolation: initrd **32.7s -> 2.4s**, nvme
+   timeout gone, nvme moved to `0000:01:00.0`. Total still ~1m30 because stall 2 was
+   untouched — which is what made the two-cause structure visible.
+6. `systemctl list-dependencies network-online.target --reverse` -> only `docker.service`
+   and `nixos-upgrade.service`. Neither needs to gate the desktop.
+7. Near-miss detail: `graphical.target` was reached at 69.1s; uwsm gave up at 68.65s.
+   It missed by ~0.5s, so the full 60s penalty applied.
+8. **Second wrong turn — blamed `p2p-dev-wlo1`.** `nmcli` showed that wifi-p2p device stuck
+   at `disconnected` while NM reported `STARTUP=started`, which looked like the blocker.
+   Falsified by `nm-online -s -t 5` returning **0 in 58ms** on the running system. Per
+   `nm-online(1)`: *"After startup has completed, nm-online -s will just return immediately"*
+   — so that test can never say anything about boot-time behaviour. Do not use a live
+   `nm-online` run as evidence about boot.
+9. `journalctl -k` showed wpa_supplicant `CTRL-EVENT-CONNECTED` at **10.4s** — the network
+   was up in 10s. So the 60s was never about connectivity, which pointed at NM's
+   *startup-complete* bookkeeping instead.
+10. `man 8 NetworkManager-wait-online.service` lists what gates startup complete. Two
+    candidates matched the config: bridge devices with non-autoactivating ports (docker0,
+    br-*) and **dispatcher scripts**. The bridge theory was killed on timing — tailscaled
+    logged `if docker0: added` at 69.1s, i.e. the bridges did not exist during the 7.6-67.7s
+    wait window.
+11. **The decisive metric:** `NetworkManager-dispatcher.service: Consumed 211ms CPU time
+    over 1min 11.914s wall clock time.` 211ms of CPU across 72s of wall clock means blocked,
+    not busy. `tailscaled.service` then activated at 68.1s — the instant NM-wait-online gave
+    up. `systemctl show tailscaled.service -p After` confirmed
+    `After=NetworkManager-wait-online.service`, closing the cycle.
+
+**Fix:** Two changes, both on verse:
+- *Root cause:* `systemctl --no-block start ...` in `system/hosts/verse/data-saver.nix`,
+  so the dispatcher never blocks on unit activation. This alone breaks the deadlock.
+- *Defence in depth:* `systemd.services.NetworkManager-wait-online.enable = false;` in
+  `system/hosts/verse/networking.nix`. Independently justified — this is a roaming laptop,
+  and only `docker.service` / `nixos-upgrade.service` want `network-online.target`.
+
+**Rule learned:** never call a blocking `systemctl start` from a NetworkManager dispatcher
+script. NM waits for dispatchers before reporting startup complete, so any unit ordered
+after `NetworkManager-wait-online.service` (tailscaled, and anything else network-adjacent)
+will deadlock against it. Use `--no-block`.
+Stall 1 is a BIOS setting and **cannot be fixed in Nix**; note the user dual-boots Windows,
+which fails to boot with VMD disabled (Windows binds the Intel RST driver as boot-critical).
+Keeping VMD enabled therefore re-introduces the 30s initrd stall unless Windows is first
+re-pointed at the inbox NVMe driver via a one-time safe-boot cycle.
+**Commit:** `f22d1db`
+
+## 2026-08-18 — wayvr-anv-patches-stop-applying-after-nixpkgs-bump
+
+**Symptom:** `./update.sh` fails with `error: Cannot build '...wayvr-26.7.1.drv'` — `Hunk #3 FAILED at 70` in `wayvr/src/overlays/screen/mod.rs`, `Hunk #2 FAILED at 141` in `wl.rs`, rejects saved to `.rej`. Cascades wayvr → `breezy-hyprland` → `man-paths` → whole system build. As with the moonlight entry below, `update.sh` still exits 0.
+**Affected:** verse/eksno, `system/users/eksno/dev/default.nix:7-11` (XR imports), `system/lib/xr/wayvr-anv/package.nix`
+**Root cause:** `nix flake update` moved nixpkgs `0e251e2` → `e5bdc4a`, bumping wayvr **26.2.1 → 26.7.1**. `wayvr-anv/package.nix` applies two local patches and its own comment warns: *"Patches apply against the v26.2.1 source nixpkgs pins. If the version bumps, re-verify the patch context."* Exactly that. `text-atlas-larger-initial-size.patch` still applies; `curved-arc-layout.patch` (Phase 4B screen geometry) has 2 of its hunks rejected.
+**Investigation:**
+1. Not a pre-existing verse failure — `git show pre-merge-backup-alpha:system/users/eksno/dev/default.nix` has only `nixpacks.nix` + `python.nix`. The XR stack entered eksno's config through the 113-commit merge from origin/alpha (`d380d38` wired it in), so this was its **first ever build attempt on verse**.
+2. Confirmed nothing XR was actually in use: `which breezy-hyprland breezy-gnome breezy-session wayvr` → all absent from PATH.
+3. **Name-collision trap worth remembering:** "breezy" here is `breezy-desktop`, a *GNOME Shell extension for world-locked XR virtual displays* (AR glasses). It is **unrelated** to the `BreezeX-Dark` **cursor theme**, which is plain files in `dotfiles/default/icons/BreezeX-Dark` symlinked to `~/.local/share/icons` and selected via `XCURSOR_THEME` in `dotfiles/default/hypr/shared/themes/default/env.conf:2`. Verified no module under `system/lib/xr/` references `XCURSOR` or cursors. Disabling XR does not touch the cursor.
+**Fix:** Commented out the five `lib/xr/*` imports in `system/users/eksno/dev/default.nix` with a note on why and how to restore. Contained to eksno/verse — jorge/lewis keep their XR imports. Re-enable after re-rolling `curved-arc-layout.patch` against wayvr 26.7.1.
+**Commit:** `9c41405`
+
+## 2026-08-18 — moonlight-qt-override-breaks-on-ffmpeg-arg-rename
+
+**Symptom:** `./update.sh` fails the system build with `error: function 'anonymous lambda' called with unexpected argument 'ffmpeg'` pointing at `pkgs/by-name/mo/moonlight-qt/package.nix`, plus a `Did you mean ffmpeg_8?` hint. Note `update.sh` still **exits 0** here — the nix build fails inside it but the script's exit status doesn't reflect that, so the run looks successful. Check `/run/current-system` to confirm whether a switch actually landed.
+**Affected:** verse/eksno, `system/users/eksno/programs/default.nix:224` (the `moonlight-qt.override` line)
+**Root cause:** The `nix flake update` inside `update.sh` moved nixpkgs `0e251e2` → `e5bdc4a`. In that range moonlight-qt's `package.nix` changed its function argument from the generic `ffmpeg` to an explicit `ffmpeg_8`. The pin added on 2026-08-13 (`58b6177`) was `moonlight-qt.override { ffmpeg = ffmpeg_7; }` — `override` validates argument names against the function's actual parameters, so an arg that no longer exists is a hard eval error, not a silent no-op.
+**Investigation:**
+1. Confirmed the switch never landed: `/run/current-system` still resolved to the `0e251e2` generation and `systemctl list-unit-files kbd-backlight-off.service` returned `0 unit files listed`. The exit-0 from `update.sh` was misleading.
+2. Read the new `package.nix` from the store: argument list has `ffmpeg_8` (line 11), used in `buildInputs` (line 55). Version unchanged at 6.1.0, and the only patch is the unrelated Xcode one — so nothing in nixpkgs *looked* like an FFmpeg 8 compat fix.
+3. **Wrong first instinct:** rename the override to `{ ffmpeg_8 = ffmpeg_7; }` to preserve the ffmpeg-7 pin. That would have worked but kept an unnecessary from-source build forever.
+4. Decisive check instead — is upstream's ffmpeg_8 build actually good? `nix path-info --store https://cache.nixos.org` on plain `pkgs.moonlight-qt.outPath` **resolved**, meaning Hydra built 6.1.0 against ffmpeg 8 successfully. The 2026-08-13 incompatibility is fixed upstream, so the pin was obsolete, not just misnamed. Cache hit also means no local compile.
+**Fix:** Dropped the override entirely — plain `moonlight-qt` in `environment.systemPackages`, comment updated to record why the pin is gone. `ffmpeg_7` (7.1.5) still exists in nixpkgs; it simply has no remaining references here.
+**Commit:** `36c60f7`
+
 ## 2026-08-17 — laptop-overheating-crash-loops-and-lazy-fan
 
 **Symptom:** package temp 93–98°C at "near-idle", fan stuck at ~3700 RPM, and one unexplained hard power-off at 23:23:27 (suspected thermal safety cutoff).
@@ -173,6 +369,61 @@ missing; `ffmpeg-headless` added to the nix wrapper PATH. 99 tests pass; the 169
 **Fix:** proven sequence in `.scratch/xr-reboot/monado-lease-test.sh` / `wayvr-visual-test.sh`: suspend watcher → `DP-2,disable` + verify it holds 4s → override + `off` → wait DP-2 absent → rule to `DP-2,preferred,auto,1` → `detect` → lease. Teardown: exit-cycle → `hyprctl reload` → `dispatch exec` the watcher. Full detail: `xr/LEARNINGS.md` "never connect-cycle a MIRRORING output".
 **Commit:** `e546aa5`, `5e84c14`, `431b670` (docs; scripts live in gitignored `.scratch/`)
 
+## 2026-08-13 — full-disk-rebuild-breaks-hyprland-session
+
+**Symptom:** Immediately after a large `./update.sh` switch completed, the running Hyprland session threw a large on-screen error. Running `./gc.sh` cleared it.
+**Affected:** verse/eksno, `update.sh:29` (new disk pressure guard)
+**Root cause:** Root filesystem exhaustion. `/` went from 85% (422G used) to **99% (464G used, 6.0G free)** during the rebuild — the nixpkgs bump moved gcc 15.2 → 15.3, which rebuilds essentially the whole store, adding ~42G of new paths on top of the old generations. Aggravating factor: the switch replaced Hyprland **0.55.4 → 0.56.2** on disk and restarted `xdg-desktop-portal-hyprland` under the still-running 0.55.4 compositor, so the new portal was talking to the old compositor.
+**Investigation:**
+1. The tell was indirect — Claude's own scratchpad writes started failing with ENOSPC before the session error was even diagnosed. `df -h /` showed 6.0G free on `/dev/nvme0n1p2`.
+2. `hyprctl configerrors` → **empty**. So it was *not* a config parse error, despite `Creating the Error Overlay!` in the log. That log line is at line 12 of 4163 (compositor startup), i.e. boot-time init of the overlay object, not the actual fault. Don't read it as a live error.
+3. Likewise the `getCurrentCRTC: No CRTC 0` and `Wayland backend cannot start: wl_display_connect failed` errors in `hyprland.log` are normal DRM-backend startup noise from boot, not the failure.
+4. `hyprctl version` (running) vs `readlink -f /run/current-system/sw/bin/Hyprland` (on disk) → 0.55.4 vs 0.56.2, confirming the skew.
+5. **Dead end:** a dangling `~/.config/eww` → `dotfiles/default/eww` symlink looked like a half-finished activation (cleared but not rewritten). It is not — it is dated 2026-04-19 and owned by `eksno`, while activation-managed links are root-owned and dated today. It is stale leftover from the pre-`dotfiles.nix` `symlink.sh` era pointing at a directory no longer in the repo. Unrelated; still worth cleaning up.
+**Fix:** Added a disk pressure guard near the top of `update.sh`. Before touching sudo or the rebuild it checks `/` and `/boot` (whichever is worse), and at ≥ `DISK_WARN_THRESHOLD` (default 85%) prints usage plus free space and offers to hand off to `gc.sh` — `(Y/n)`, default yes. `exec ./gc.sh` with `NIXCFG_SKIP_DISK_CHECK=1` exported, which guards the recursion since `gc.sh` ends by calling `update.sh` again. Non-TTY callers (Claude Code, scripts) warn and continue rather than blocking on `read`. Set `DISK_WARN_THRESHOLD=100` to silence.
+**Note:** even after the user's `gc.sh`, `/` sits at 94% — this guard will fire on the next run. That is intended, but the real headroom problem on this box is unsolved.
+**Commit:** `8929a38`
+
+## 2026-08-13 — scipy-flaky-hypothesis-test-blocks-phonetic
+
+**Symptom:** After fixing the moonlight-qt/ffmpeg-8 breakage below, `./update.sh` still fails the system build. `python3.12-scipy-1.18.0` fails its check phase with `1 failed, 87693 passed` — `test_support_moments_sample` (Hypothesis property test, `scipy.stats._new_distributions.Normal`, `seed=271582488`) asserts `[0., 0.]` vs `[0., 2.010276e-09]`. Cascades scipy → uncertainties → pint → isort → pylint → setuptools-lint → pynput → `phonetic` → `system-path` → `nixos-system-verse`.
+**Affected:** verse/eksno, `system/users/eksno/programs/default.nix:12` (`nixpkgs.overlays`)
+**Root cause:** Two things had to line up. (1) `phonetic` pulls `pynput`, whose nixpkgs build inputs drag in a long lint/test chain bottoming out at scipy. (2) The `flake.lock` bump (nixpkgs `e7a3ca8` → `867dcbc`) changed scipy's derivation hash, and **cache.nixos.org has no build for the new hash** — so scipy compiles locally and actually runs its test suite, where the flaky tolerance assertion fails. Same scipy version (1.18.0) in both revisions; only the cache status differs.
+**Investigation:**
+1. Verified the failure was not the `phonetic` overlay perturbing the Python set — `builtins.attrNames (overlay p p)` → `[ "phonetic" ]` only. Stock nixpkgs scipy.
+2. `nix path-info --store https://cache.nixos.org` on the new scipy outPath → "path is not valid" (uncached). Same query against the **old** lock's `python312Packages.scipy` → resolves fine. That is the whole difference: old lock never built scipy, so the flaky test never ran.
+3. Note `python3.pkgs.scipy` on the old lock is `python3.14-scipy`, not 3.12 — the 3.12 set is the non-default one that Hydra covers less reliably. Don't be misled by the version prefix when comparing.
+4. Considered reverting `flake.lock` — rejected for the same reason as the moonlight entry (it undoes the wifite2/wireshark-cli fix).
+5. First draft used `python312Packages.overrideScope`. **Wrong**: that only rewrites the `python312Packages` attribute, while `phonetic` reaches `pynput` via `python312.pkgs`, which would keep the un-overridden scipy. Verified by diffing `phonetic.drvPath` with and without the overlay.
+**Fix:** Overlay in `system/users/eksno/programs/default.nix` hanging `packageOverrides` on `python312` itself (which `python312Packages` is derived from, so both paths are covered), setting `doCheck = false` on scipy. Confirmed before rebuilding: `phonetic.drvPath` changes, and both `python312.pkgs.scipy.doCheck` and `python312Packages.scipy.doCheck` read `false`.
+**Commit:** `ca5f8ad`
+
+## 2026-08-13 — moonlight-qt-fails-to-build-against-ffmpeg-8
+
+**Symptom:** `./update.sh` fails the whole system build. `moonlight-qt-6.1.0` errors in `streaming/video/ffmpeg-renderers/plvk.cpp:519-520`: `'struct AVVulkanDeviceContext' has no member named 'queue_family_decode_index'` / `'nb_decode_queues'`. Cascades `moonlight-qt.drv` → `man-paths.drv` + `*_fish-completions.drv` → `system-path.drv` → `nixos-system-verse.drv`. Surfaced while adding `sioyek`/`codex`, but unrelated to them.
+**Affected:** verse/eksno, `system/users/eksno/programs/default.nix:197` (moonlight-qt entry)
+**Root cause:** The `flake.lock` bump (nixpkgs `e7a3ca8` → `867dcbc`, 2026-07-21 → 2026-08-12) moved the default `pkgs.ffmpeg` to 8.x. FFmpeg 7.1 deprecated and 8.0 **removed** the flat queue-family fields on `AVVulkanDeviceContext` (`queue_family_decode_index`, `nb_decode_queues`, …) in favour of the `qf[]` array. moonlight-qt 6.1.0 still uses the old API, and 6.1.0 is the newest release — no upstream fix in nixpkgs as of the locked revision.
+**Investigation:**
+1. Confirmed the failure is not caused by the new packages — the errors are pure C++ compile errors inside moonlight-qt.
+2. Checked whether the system was simply stale: `readlink /run/current-system` → generation 146 dated **2026-07-21**, and `flake.lock`/`locale.nix`/wifite2 edits were all still uncommitted → this rebuild had been failing silently for ~3 weeks, not just this session.
+3. Considered reverting `flake.lock` to the old nixpkgs — **rejected**: the pending wifite2 re-enable depends on the *newer* nixpkgs that fixed the wireshark-cli source hash, so a revert undoes that.
+4. Considered commenting out `moonlight-qt` (the pattern used earlier for wifite2) — kept only as a fallback, since it loses the package entirely.
+5. Read the derivation (`pkgs/by-name/mo/moonlight-qt/package.nix`) → `ffmpeg` is a plain `buildInputs` argument, so it is overridable. Test-built `moonlight-qt.override { ffmpeg = ffmpeg_7; }` standalone → succeeded; `ffmpeg-7.1.5` came from `cache.nixos.org` (~614 KiB), so the pin costs no extra compile time.
+**Fix:** Pinned the single package to FFmpeg 7 in `system/users/eksno/programs/default.nix` — `(moonlight-qt.override { ffmpeg = ffmpeg_7; })`. Nothing else in the closure changes; the rest of the system keeps default ffmpeg 8. Remove the override once moonlight-qt ships FFmpeg 8 support.
+**Commit:** `58b6177`
+
+## 2026-08-02 — systemctl-mask-fails-on-nixos-managed-units
+
+**Symptom:** `sudo systemctl mask --now nixos-upgrade.timer` fails with "File '/etc/systemd/system/nixos-upgrade.timer' already exists and is a symlink to /nix/store/...". Hit while building the verse hotspot data-saver dispatcher (`system/hosts/verse/data-saver.nix`), which originally masked the timer.
+**Affected:** verse/eksno (applies to all hosts), `system/hosts/verse/data-saver.nix:26`
+**Root cause:** On NixOS every unit in `/etc/systemd/system` is a nix-managed symlink into the store; `systemctl mask` refuses to overwrite it without `--force`. `--force` is a trap: it replaces the nix symlink with a `/dev/null` link, and a later `unmask` deletes that link leaving *no* unit file at all until the next rebuild.
+**Investigation:**
+1. Tried `mask --now` imperatively → refused with the symlink error (exit 2).
+2. Considered `mask --runtime` → useless: `/etc` outranks `/run` in unit precedence, so the real unit still wins.
+3. Considered `mask --force` → rejected for the unmask-deletes-the-unit trap above.
+**Fix:** Use plain `systemctl stop` on the timer + service instead of masking. Sufficient here because the NM dispatcher re-runs on every connect/disconnect, so a reboot on the hotspot re-stops them as soon as the connection comes up. If a real persistent mask is ever needed on NixOS, do it declaratively (`systemd.units."<unit>".enable = false` or `enable = lib.mkForce false` on the feature).
+**Commit:** `52bdd4c`
+
 ## 2026-07-30 — system-build-broken-by-flaky-scipy-test (phonetic transitive check dep)
 
 **Symptom:** `nix build .#nixosConfigurations.lewis...toplevel` failed after the flake.lock bump (nixpkgs 26.11.20260723). Errors surfaced as unrelated aggregate drvs (`fish-completions`, `mandb`, `user-units`, `dbus`, polkit units) all saying "1 dependency failed".
@@ -184,6 +435,142 @@ missing; `ffmpeg-headless` added to the nix wrapper PATH. 99 tests pass; the 169
 3. Note: the laptop hard-froze once during the scipy rebuild (87k tests, one pytest worker per core on 22 threads). Retry with `--max-jobs 2 --cores 8` completed fine.
 **Fix:** nixpkgs overlay in `flake.nix` adding a `pythonPackagesExtensions` entry that appends `test_support_moments_sample` to scipy's `disabledTests` (verified the pinned scipy expression uses `pytestCheckHook`). Full toplevel now builds.
 **Commit:** see this commit.
+
+## 2026-07-15 — corne-dead-central-battery-plus-fully-removed-host-bond
+
+**Symptom:** Corne not connecting and not advertising over BLE; cabling it did nothing either. It only stays alive while the USB cable is plugged — pull even the charge-only cable and it dies instantly.
+**Affected:** verse/eksno. Corne `C8:5B:C1:B5:9B:F3`, host adapter `2C:33:58:44:27:4D`. Keymap: `~/repos/eksno/corne-36-dvorak/config/corne.keymap` (moved from the old `zmk-dvorak-36` path).
+**Root cause:** (1) **Dead central-half battery** — the keyboard runs only off USB 5V and powers off the instant the cable is pulled, so on battery it can't advertise or stay connected. (2) The host-side bond had been **removed entirely** (bond dir had no `C8:5B` entry — unlike past *keyless* desyncs), leaving profile 1 one-sided, so even on USB power it wouldn't reconnect until re-paired. The USB cable is also charge-only (no data lines), which is why cabling produced zero host enumeration — a side issue, not the cause.
+**Investigation:** `bluetoothctl info C8:5B…` → "not available" and the on-disk bond dir had no Corne entry (fully removed, not keyless → `corne-fix`/`corne-recover` correctly logged `NOOP not-present`). A user photo showed the nice!view display **rendering on USB power** (profile 1, layer "home") → MCU alive; combined with "dies when unplugged" → the battery is dead, and the BLE silence was the removed bond.
+**Fix:** On USB power, fired `&bt BT_CLR` on the keyboard (`'`+`Z`, spaces-layer cross-keyboard combo — clears its side of profile 1 so it re-advertises), then re-paired host-side with a FIFO-held-open `bluetoothctl` (`pair`→`trust`→`connect`; never pipe `quit`, it aborts mid-pair). Result Paired/Bonded/Trusted/Connected, HID resolved, `Corne Keyboard`/`Corne Mouse` attached. **This only holds while cabled** — real fix is replacing the dead cell (new battery ordered).
+**Lesson:** Corne silent on *both* transports but with a *lit display* = it's running on USB VBUS → the battery is dead/disconnected, not the MCU. Whenever the host bond was fully removed, recovery needs keyboard-side `&bt BT_CLR` + a manual host re-pair (the watcher can't, and correctly won't, act).
+**Commit:** `5bf0123`
+
+## 2026-07-12 — power-mode-charge-limit-local-outside-function
+
+**Symptom:** `power-mode charge-limit` (no argument) printed `line 907: local: can only be used in a function`, making it look like the charge limit was not being applied.
+**Affected:** verse/eksno, `system/lib/power-mode/default.nix:906`
+**Root cause:** The read-back branch of the `charge-limit` case declared `local cl`, but the `case` statement is at the script's top level, not inside a function. Bash only permits `local` within a function body, so it aborted before printing.
+**Investigation:**
+1. Grepped for `charge-limit` — found `set_charge_limit` / `get_charge_limit` (both fine) and the top-level dispatch `case`.
+2. Read the dispatch: the set path calls `set_charge_limit "$2"` directly and never uses `local`, so writes were never affected — only the display path was.
+3. Confirmed against hardware: `cat /sys/class/power_supply/BAT*/charge_control_end_threshold` returned `80`, proving the earlier `power-mode charge-limit 80` had in fact succeeded. The bug was cosmetic, not functional.
+**Fix:** Dropped the `local cl` declaration; `cl=$(get_charge_limit)` alone works at top level.
+**Commit:** `426d48b`
+
+## 2026-07-03 — usb-corne-sleeps-after-3-5s-idle (HID autosuspend, no remote-wake)
+
+**Symptom:** When cabled over USB, if the user doesn't type for ~3-5s the Corne "sleeps"; the next keypress takes ~1s to register before typing resumes (and can drop the first keystrokes). Not a BLE desync — the keyboard stays enumerated the whole time.
+**Affected:** verse/eksno — `system/lib/power-mode/default.nix` (new `usb-hid-keep-awake` script + ExecStartPost / resumeCommands / udev wiring). Corne USB `1d50:615e`, device `3-4.1`, HID interface `3-4.1:1.2`.
+**Root cause:** Same powertop `--auto-tune` fallout as the BT-radio (2026-05-22/23) and Hollyland-mic (2026-06-20) entries. auto-tune set the keyboard's `power/control=auto` with `autosuspend_delay_ms=1000`, so it USB-autosuspends after 1s idle. It also enumerates `power/wakeup=disabled`, so it **cannot** USB-remote-wake — a keypress on the suspended device isn't signalled until the host resumes it (~1s), which is the felt "sleep + slow recover." The device's own autosuspend was the direct cause (device `runtime_status=suspended` while parent hub `3-4` stayed `active`).
+**Investigation:**
+1. Ruled out BLE immediately: `bluetoothctl info` gave nothing, but `/proc/bus/input/devices` listed `ZMK Project Corne Keyboard`/`Mouse` and `/dev/ttyACM0` existed → cabled over USB this session, not Bluetooth. All prior Corne FIXES entries are BLE desyncs — wrong family.
+2. Walked `/sys/bus/usb/devices/*/power/` → `3-4.1 [ZMK Project] Corne` `power/control=auto status=suspended`, `autosuspend_delay_ms=1000`, `power/wakeup=disabled`. The 1s delay + disabled wakeup exactly explain the 3-5s→sleep, ~1s→wake report.
+3. Live-verified the fix: `echo on > 3-4.1/power/control` → device held `active` across a 9s idle watch (was `suspended` within 1s before). Confirmed pinning the device alone is sufficient — a pinned child keeps its parent hub awake too, so no bus/root-hub pin needed (unlike the audio case, where the device's own control was already `on` and the *bus* was the culprit).
+4. Interface check: the Corne HID interface is `bInterfaceClass=03` but `bInterfaceProtocol=00` (report-only), NOT boot-keyboard `01` — so the keepalive must match on HID class `03`, not keyboard protocol, or it would miss the device.
+5. **The first-cut script silently didn't pin anything on boot.** After the switch the device was back to `auto/suspended` despite the `ExecStartPost` being wired. `journalctl -u powertop` showed the tell: `usb-hid-keep-awake: /sys/bus/usb/devices/devices/power/control: No such file`. The dev-extraction `basename "$(dirname "$(dirname "$ifc")")"` collapses `.../devices/3-4.1:1.2/bInterfaceClass` to the literal string `devices` (two `dirname`s climb past the interface dir to `/sys/bus/usb/devices`, whose basename is `devices`). **This same idiom is in the shipped `usb-audio-keep-bus-awake` (2026-06-20) — it has been writing to nonexistent `/sys/bus/usb/devices/devices/…` since day one; the Hollyland fix only appeared to work because the runtime pin was applied live and masked it.** Correct extraction: `ifn=$(basename "$(dirname "$ifc")")` (interface dir `3-4.1:1.2`), then `dev="''${ifn%%:*}"` (device `3-4.1`).
+**Fix:** Added `usb-hid-keep-awake` to power-mode: scans for USB HID interfaces (class 03) and pins each parent device's `power/control=on` (correct dev extraction, see step 5). Wired identically to the audio keepalive — powertop `ExecStartPost` (wins the boot race after `--auto-tune`), `powerManagement.resumeCommands` (resume re-enumerates USB PM), and a `services.udev` hotplug rule `ENV{INTERFACE}=="3/*"` (cabling the keyboard after boot). **Also fixed the identical dev-extraction bug in `usb-audio-keep-bus-awake`.** NOTE: apply via `./update.sh`, NOT a bare `nixos-rebuild switch` — the latter skips this repo's Hyprland-config composition and comes up with a broken hypr config.
+**Commit:** `edd73a2` (initial, buggy), `9d9532f` (dev-extraction fix + audio-script fix)
+
+## 2026-06-28 — udev-rules-check-fails-invalid-DEVTYPE (systemd 260 strict verify)
+
+**Symptom:** `./update.sh` fails the system build at `udev-rules.drv`: `udevadm verify` reports `99-local.rules:1 Invalid key 'DEVTYPE'` → `udev rules check failed` (45 success / 1 fail), cascading into `etc.drv` → whole `nixos-system-verse` build failing. Surfaced while adding `moonlight-qt`, but unrelated to it.
+**Affected:** verse/eksno — `system/lib/power-mode/default.nix:1099` (`services.udev.extraRules`, the USB-audio bus-keepalive hotplug rule). The bumped `flake.lock` (nixpkgs e73de5b) pulled systemd 260.2.
+**Root cause:** `DEVTYPE` is not an official udev *match* key — the device type is exposed as the environment var `DEVTYPE`, matched via `ENV{DEVTYPE}`. Older `udevadm` silently tolerated bare `DEVTYPE=="..."`; systemd 260.2's stricter `udevadm verify` (run at build time by the udev-rules derivation) correctly rejects it as an invalid key. The rule had worked for the life of the prior systemd; the nixpkgs bump, not the rule edit, is what broke the build.
+**Investigation:**
+1. `./update.sh` exited 0 but the inner `nix build` failed — the wrapper's trailing `df`/`ok` mask nix's non-zero exit. Always grep the output for `error:` / `Build failed`, don't trust the exit code.
+2. First two retries failed on *different* transient DNS errors (`catppuccin.cachix.org` NAR timeout; `Could not resolve host: dl.google.com` for the chrome .deb). Confirmed network was the cause via `getent hosts` + `ping 1.1.1.1`, retried once DNS was stable — those cleared and the real, deterministic failure appeared underneath.
+3. `nix log .../udev-rules.drv | grep -i verify` → `99-local.rules:1 Invalid key 'DEVTYPE'`. `grep -rn DEVTYPE --include=*.nix` → the power-mode hotplug rule.
+**Fix:** `DEVTYPE=="usb_interface"` → `ENV{DEVTYPE}=="usb_interface"` in `system/lib/power-mode/default.nix:1099`. Equivalent match, valid on all systemd versions.
+**Commit:** `39713d8`
+
+## 2026-06-21 — zmk-studio-build-fails-pkg_resources (nanopb codegen on NixOS)
+
+**Symptom:** Enabling ZMK Studio (`CONFIG_ZMK_STUDIO=y` + `-S studio-rpc-usb-uart`) made the `west`/nix build fail at `Generating nanopb/generator/proto/nanopb_pb2.py` with `ModuleNotFoundError: No module named 'pkg_resources'`.
+**Affected:** keymap repo `~/repos/eksno/zmk-dvorak-36` (`flake.nix`, `build.sh`) — NOT nix-config, but a NixOS-environment gotcha worth recording here. Also added `dialout` to `system/users/eksno/default.nix` for Studio's USB serial.
+**Root cause:** Studio pulls in nanopb protobuf codegen; its `modules/lib/nanopb/generator/protoc` wrapper (`#!/usr/bin/env python3`) imports `pkg_resources` (setuptools) and `google.protobuf`. The zmk-nix dev-shell's *env* python (`python3-3.13.13-env`) HAS both, but CMake's nanopb step resolved a python that didn't (bare interpreter / PYTHONPATH-less invocation), so the import failed only during the build — running `protoc --version` by hand in the same `nix develop` shell worked, which is the tell.
+**Investigation:**
+1. `nix develop --command python3 -c 'import pkg_resources, google.protobuf'` → both OK; nanopb `protoc` wrapper standalone → `libprotoc 31.1`, exit 0. Modules exist; only the *build* couldn't see them.
+2. No venv shadowing (`VIRTUAL_ENV` unset); `which python3`/`which west` both the `-env` python. Difference had to be CMake's interpreter resolution during ninja.
+**Fix:** Override the zmk-nix devShell in `flake.nix` to export `PYTHONPATH` with `python3Packages.setuptools` + `python3Packages.protobuf` site-packages, so whatever python3 the build invokes can import them (versions line up because zmk-nix `follows` the same nixpkgs). Studio firmware then builds (UF2 ~685K→742K) and `/dev/ttyACM0` (`root:dialout`) appears. `build.sh` gained left-only `-S studio-rpc-usb-uart -DCONFIG_ZMK_STUDIO=y`; keymap got a `&studio_unlock` combo (spaces layer, X+B).
+**Commit:** `6d9d708` (flake PYTHONPATH), `28fe6a7` (build.sh+keymap) in zmk repo; `cf147b7` (dialout) in nix-config.
+
+## 2026-06-20 — hollyland-usb-mic-flaps-under-root-hub-autosuspend
+
+**Symptom:** "Audio not working." A Hollyland "Wireless microphone" USB receiver disconnected and re-enumerated every 2–4 min (28× in one boot). Apps using "System Default" mic saw the source vanish mid-use; Mic Test went flat. Both input *and* output felt broken because each flap also forced a PipeWire restart.
+**Affected:** host `verse`, user `eksno`. Device Hollyland `3547:0007` on `usb 3-2` (root hub `usb3`). Fix: `system/lib/power-mode/default.nix` (new `usb-audio-keep-bus-awake` script + powertop `ExecStartPost`/`resumeCommands`/udev wiring).
+**Root cause:** `powertop --auto-tune` (enabled in power-mode) sets the **root hub** `usb3` `power/control=auto` (delay 0). The device's flaky firmware (malformed descriptor: "config 1 has an invalid interface number: 7 but max is 3") cannot survive its *parent hub* autosuspending, so it self-resets. The device's *own* `power/control` was already `on` — pinning the device alone was not enough; the **bus** had to be pinned. Same class of bug as the Bluetooth-radio entry below.
+**Investigation:**
+1. Verified the whole playback stack healthy: default sink = Speaker, unmuted, 120%; CS35L41 amps loaded firmware+calibration fine; ALSA mixers all on; `pw-play` through PipeWire exited 0. `speaker-test` (raw ALSA) also worked — misleading, it bypasses PipeWire. So output was never broken.
+2. `pactl` not installed on this box — used `wpctl`/`pw-*`/sysfs throughout. `lsusb` also non-functional; read `/sys/bus/usb/devices/*` directly instead.
+3. Recorded 4s from the mic with `pw-record --target` and measured peak in Python (note: `audioop` removed in 3.13 — parsed samples via `array` instead): peak 14.7% FS → **the mic and its paired transmitter work fine**; the only problem was the flapping.
+4. Dead end: first hypothesis was device-level USB autosuspend (`usbcore.autosuspend=1` from `device/intel`). Ruled out — device `power/control` was already `on` and `runtime_status` stayed `active` through a 20s watch.
+5. Checked the upstream power chain: xHCI controller `on`, but root hub `usb3` = `auto`, delay 0. Pinned `usb3` to `on` at runtime → **zero flaps for a full 8-min monitor** (prior cadence 2–4 min). Other 3 root hubs left `auto/suspended` (negligible power cost).
+6. One disconnect was preceded by `usb 3-2: 3:1: cannot set freq 48000 to ep 0x81` — kept `snd-usb-audio quirk_flags=0x3547:0x0007:0x200000` (`QUIRK_FLAG_FIXED_RATE`) as a documented fallback if the bus-pin ever proves insufficient; not needed once the hub was pinned.
+**Fix:** Added `usb-audio-keep-bus-awake` to `power-mode`: scans attached USB devices for an audio interface (`bInterfaceClass 01`) and pins both the device and its root hub to `power/control=on`. Wired into powertop `ExecStartPost` (wins the boot race after `--auto-tune`), `powerManagement.resumeCommands` (resume), and a `services.udev` rule matching `ENV{INTERFACE}=="1/*"` (hotplug after boot). Class-matched, so device- and port-agnostic. Runtime pin already applied live; rebuild needed to persist across reboot.
+**Commit:** `5971e7e` (fill in after committing)
+
+## 2026-06-20 — corne-desyncs-were-accidental-BT_CLR (the "spontaneous desync" was self-inflicted)
+
+**Symptom:** The Corne would work fine for ~30 min, then disconnect and refuse to reconnect — `connect` brings the link up and it drops in ~0.5s ("connected then disconnected"). Recurred all evening; sometimes a forget + rescan + re-pair recovered it, sometimes not. Matches the "recurring desync every 2-3 days" of the 2026-06-14 entry below.
+**Affected:** host `verse`, user `eksno`. Corne `C8:5B:C1:B5:9B:F3`. **Fix is in the keymap repo** `~/repos/eksno/zmk-dvorak-36` (`config/corne.keymap`), commit `7495358` — NOT a nix-config file. Related: `system/hosts/verse/corne-bt-recovery.nix`.
+**Root cause:** **The user was accidentally pressing `&bt BT_CLR`.** It was a lone key on the `spaces` layer (position 25, the `'` slot, bottom-left). During a normal `ctrl+shift+left` word-select gesture *while holding the GUI thumb* (which activates `spaces`), the left hand taps that key → ZMK clears the keyboard's bond for the **active profile**. The host still holds the old LTK → key mismatch → every reconnect comes up, fails encryption, and drops in ~0.5s. "Works 30 min then dies" = the interval until the next accidental select-gesture. `&bootloader` sat right next to it (position 26) — equally catastrophic on a stray tap. This **revises** the 2026-06-14 root cause: those keyless/mismatched bonds were not (purely) a spontaneous ZMK↔BlueZ desync — a large share were user-triggered `BT_CLR`. The user themselves identified the trigger gesture.
+**Investigation:**
+1. Confirmed host adapter healthy (saw 29+ other LE devices); host bond state cycled cleanly; multiple btmon captures failed (no passwordless sudo → "Operation not permitted") so used `journalctl -u bluetooth` + per-second `bluetoothctl info` polling instead.
+2. Dead end: chased a "marginal BLE link / firmware instability" theory (we'd recently jumped to bleeding-edge ZMK `main` + Zephyr 4.1 chasing "stability fixes"). A 4-min background logger (`/tmp/corne-connect.log`) caught one clean re-pair (`c=no → c=yes → bonded` in 3s) — the only thing different was an **orphaned `bluetoothctl scan on`** I'd left running (a `timeout`-killed scan never sends `StopDiscovery`, so the adapter stays latched in active discovery). That briefly looked like the cause; it was a red herring.
+3. The real tell came from the user: "when I do right thumb + ctrl + shift + left arrow I accidentally reset." Mapping the gesture onto the `spaces` layer landed exactly on the lone `BT_CLR` key. Everything fit: the instant-disconnect signature, the ~30-min cadence, the recurring "desync."
+**Fix:** In `config/corne.keymap`, replaced the lone `&bt BT_CLR` and `&bootloader` keys with deliberate two-key **combos** scoped to the `spaces` layer (`bt_clear`: positions 25+28 = `'`+`K`; `boot`: 26+29 = `Q`+`X`), each with `require-prior-idle-ms = 200` and `timeout-ms = 50` so a fast gesture can't fire them; the lone positions are now `&trans`. So clearing BT now requires: hold GUI thumb + chord two spaced bottom-row keys. Built `~/corne-flash/zmk_left.uf2` (keymap change → left/central half only). **PENDING:** flash the left half (needs USB; user had none at fix time) to make it live — diagnosis is confirmed by the user's gesture report but the fix is not yet verified in use.
+**Implication for the recovery service:** `corne-bt-recovery.nix` was built to auto-heal a problem that was mostly self-inflicted. Once the gating is flashed and verified, the elaborate watcher/recover machinery is likely overkill and could be simplified. Also note its `notify-send` from a system service can't reach the user's Hyprland session bus, so its "press BT_CLR" prompts never displayed (separate unfixed bug).
+**Commit:** `7495358` (keymap, zmk repo); this FIXES.md entry committed in nix-config.
+
+## 2026-06-15 — corne-recover-destroyed-a-valid-bond (self-heal too aggressive)
+
+**Symptom:** Running `corne-fix` (manual trigger of the day-old self-healing service) FAILED and left the Corne with **no host-side bond at all** (`bluetoothctl info` → `DEVICE NOT KNOWN`, bond dir gone). The pre-action snapshot in the log showed the bond had been **fully valid** (`Bonded: yes`, sections `[General] [PeripheralLongTermKey] [SlaveLongTermKey] [DeviceID]`), just `Connected: no`.
+**Affected:** host `verse`, user `eksno`. `system/hosts/verse/corne-bt-recovery.nix` (the `corne-recover` script shipped in `c048d1f`).
+**Root cause:** The first-cut `corne-recover` removed the bond and tried to re-pair **unconditionally** — its only guard skipped when `Bonded: yes && ServicesResolved: yes`. So for a keyboard that was merely asleep/out-of-range (valid bond, `Connected: no`, no `ServicesResolved`), it `bluetoothctl remove`d the good bond, then found the keyboard wasn't advertising ("asleep?"), failed to re-pair, and left zero host bond. It conflated three distinct failure shapes: (A) keyless host bond + keyboard advertising pairable → remove+re-pair is safe; (B) **both** sides bonded but keys mismatch → host-only re-pair canNOT fix it (needs `&bt BT_CLR` on the keyboard); (C) keyboard simply asleep, bond perfectly valid → must do nothing. It treated B and C like A and destroyed the bond.
+**Investigation:**
+1. The failure log's own snapshot was the tell: `Bonded: yes` + all key sections present, yet the script removed it. A keyless desync (the case it was built for) would have shown `[General]` only.
+2. `events.log` had exactly one row (`DETECT bonded=yes … hidfails5m=7` → `FAILED`), confirming the **watcher had not** been silently firing — this was the manual run alone, so no repeated auto-damage.
+3. Post-failure `bluetoothctl info` → `DEVICE NOT KNOWN`; bond dir absent → the valid bond was gone.
+4. Re-pair after the keyboard came back in range connected but would **not** bond (`Paired: no / Bonded: no / Connected: yes`, no input device) — proving case B: the keyboard still held its own bond, so a host-side fresh pair can't complete until `&bt BT_CLR` clears the keyboard side. (`hidfails5m=7` also showed there *had* been a real desync episode, not purely case C — but the recovery must be safe for C regardless.)
+**Fix:** Rewrote `corne-recover` to gate every destructive step (`c048d1f` superseded by this commit): (1) skip if healthy; (2) try a **non-destructive** `connect` first (fixes transients, bond preserved); (3) **presence gate** — scan, and if the keyboard isn't advertising/in range, do NOTHING and leave the bond intact (this is what would have prevented the damage); (4) only then remove+re-pair, and in **auto** mode only when the host bond is already **keyless** (case A, nothing to lose) — a full bond failing in auto mode (case B) is left intact with a "press BT_CLR" notification instead of being destroyed. Manual `corne-fix` now runs `corne-recover --force` (user is present to press BT_CLR) and removes a full bond only when the keyboard is confirmed present. So the watcher can never nuke a healthy bond. Immediate recovery this session: re-paired after the user pressed `&bt BT_CLR`.
+**Commit:** `91b8a65`
+
+## 2026-06-14 — corne-keyless-trusted-bond-desync-recurring (self-healing)
+
+**Symptom:** Mako buried under ~19 stacked "Corne / Connected" + "Corne / Disconnected" notifications (blueman-applet), "(14 more)". Keyboard not usable.
+**Affected:** host `verse`, user `eksno`. Corne `C8:5B:C1:B5:9B:F3`, host adapter `2C:33:58:44:27:4D`. Not a repo-file bug — host BlueZ bond state + ZMK firmware in `~/repos/eksno/zmk-dvorak-36`.
+**Root cause:** The host held the Corne as `Trusted=yes` but with **zero bond keys** — `/var/lib/bluetooth/2C:33:58:44:27:4D/C8:5B:C1:B5:9B:F3/info` contained only `[General]` (no `[PeripheralLongTermKey]`/`[SlaveLongTermKey]`/`[DeviceID]`), so `bluetoothctl info` showed `Paired: no / Bonded: no / Trusted: yes`. Because it was Trusted, BlueZ auto-connected on every advertisement, but with no LTK the link was unencrypted, so HID-over-GATT reads (PnP ID, HID Information, Report Reference) failed with ATT 0x0E "Request attribute has encountered an unlikely error" → HoG never attached → drop → retry every ~30s, blueman firing a notification per transition. **CORRECTION (root cause):** an initial guess blamed ZMK firmware flashing, but the user confirmed they had **never reflashed** — this is a *spontaneous* ZMK↔BlueZ LE bond-key desync that recurs roughly every 2-3 days with no user action. The precise trigger is not definitively known and there is **no reliable Linux-side prevention** documented: ZMK's connection-issues page has zero Linux guidance, the community remedy is always a manual remove + re-pair, and `CONFIG_ZMK_BLE_EXPERIMENTAL_CONN=y` (set in `config/corne.conf`) is a suspect but is reportedly *needed* just to connect a split to Linux (zmk#2170/#1487) — removing it risks breaking connection, with 2-3 day feedback per attempt. This is NOT the 2026-05-22/05-23 autosuspend cause either: `power/control=on` was correctly applied to the BT controller this time.
+**Investigation:**
+1. Image looked like waybar but `bluetooth.sh` builds a fresh per-poll snapshot and never emits the word "Disconnected" → ruled out waybar; `makoctl history` + `app-name` showed the source was **blueman**.
+2. `bluetoothctl devices` listed only ONE Corne, not 19 → the stack was accumulated event notifications, not duplicate devices.
+3. `bluetoothctl info` → `Trusted: yes` but `Paired: no / Bonded: no`, RSSI -64 (in range). `sudo grep '^\[' .../info` → `[General]` only, vs a healthy device's `[General][DeviceID][LinkKey]` — the definitive keyless-bond proof.
+4. 12s live `journalctl -f` caught zero Corne events (only unrelated "Auto-switch power profile" spam) — not actively flapping at that moment; the loop fires only when the keyboard advertises.
+5. Dead end: first re-pair attempt via a bash `coproc` fed `pair` but produced empty output and left the device `Connected: yes / Paired: no` — an unencrypted connect that immediately hit the 0x0E loop again. The coproc didn't hold the SMP session reliably.
+**Fix:** One-time recovery (no repo change). `bluetoothctl remove C8:5B:C1:B5:9B:F3` to drop the keyless Trusted entry, `sudo systemctl restart bluetooth` to clear stuck Adv-Monitor churn, then re-pair with the bluetoothctl session genuinely held open via a FIFO (write-end kept open with `exec 3>`, not a piped heredoc that EOFs mid-pairing). On the keyboard side, `&bt BT_CLR` (num layer, `config/corne.keymap:139`) clears the keyboard's profile bond so it re-advertises as pairable. Result: `Paired/Bonded/Trusted/Connected: yes`, `info` now has `[PeripheralLongTermKey][SlaveLongTermKey][DeviceID]`, `Corne Keyboard` input device attached, battery 100%. The host-side `remove` + held-open re-pair was sufficient (the keyboard was already advertising bond-less); `&bt BT_CLR` on the keyboard is only needed as a fallback if it isn't.
+**Long-term (since prevention isn't reliable, make recovery free):** added `system/hosts/verse/corne-bt-recovery.nix` (commit `c048d1f`) — `corne-watch.service` tails the bluetooth journal for the `read_pnpid_cb` desync signature (debounced 2-in-120s) and auto-runs `corne-recover.service`, a host-side remove + FIFO-held re-pair (tries without a bluetoothd restart first, then with), with semantic notifications (detect/recover/fail) and a persistent tally at `/var/lib/corne-bt/events.log`. `corne-fix` triggers it manually. This collapses the ~30-min manual fix into a few hands-free seconds; the events log lets a future investigation measure frequency/patterns. The one-off recovery script used this session is at `.scratch/corne-repair.sh`.
+
+**Follow-up / future work (read this before re-investigating):**
+- **Wait for data first.** This self-healing makes the symptom invisible, so the only way to find the real trigger is the tally at `/var/lib/corne-bt/events.log` (format: `YYYY-MM-DD HH:MM:SS | DETECT/RECOVERED/FAILED/SKIP …`, plus full per-run detail in `journalctl -u corne-recover`). After ~2-4 weeks (a handful of `DETECT` rows), check the **timestamps for a pattern** — that single-incident-blind correlation is exactly what we lacked this time.
+- **Prime suspects to correlate the timestamps against** (cheapest → most likely): (1) **suspend/resume** — does each `DETECT` follow a `systemctl suspend`/lid event? Compare against `journalctl | grep -i "PM: suspend"`. (2) **ZMK deep sleep** — `config/corne.conf` has `CONFIG_ZMK_SLEEP=y` + `CONFIG_ZMK_IDLE_SLEEP_TIMEOUT=600000` (10 min idle); desyncs that cluster after idle gaps point here. (3) **low battery / brownout** on the central half (the `DETECT` snapshot doesn't log battery yet — see "possible improvements"). (4) **`CONFIG_ZMK_BLE_EXPERIMENTAL_CONN=y`** quirks.
+- **Firmware experiments (only if data points there; deferred 2026-06-14 as low-ROI):** each needs a flash + 2-3 day observation, and flashing also wipes the bond so plan a re-pair after. Candidates, least-risky first: add `CONFIG_ZMK_BLE_PASSKEY_ENTRY=y` (forces bonded pairing on some hosts); try **toggling** `CONFIG_ZMK_BLE_EXPERIMENTAL_CONN` (DANGER: it may be required to connect a split to Linux at all — zmk#2170/#1487 — so be ready to revert); `CONFIG_BT_CTLR_PHY_2M=n` is a known pair/connect fix but is Windows/Intel-mac-specific, unlikely to help Linux. There is **no documented Linux-side BlueZ prevention**, so don't expect a host-config silver bullet.
+- **Operational reference / tuning knobs** (all in `system/hosts/verse/corne-bt-recovery.nix`): watcher debounce is `THRESH=2 WINDOW=120 COOLDOWN=120` in the `corne-watch` script — raise `THRESH`/`WINDOW` if it ever fires on benign boot transients, lower if a real loop slips through. The recover service is rate-limited `startLimitIntervalSec=600 startLimitBurst=4`; if it ever hits the limit and refuses to start, `systemctl reset-failed corne-recover.service`. Recovery is intentionally **host-side only** because in the desync state the keyboard is already advertising bond-less; if a future failure mode leaves the keyboard still-bonded, recovery will report FAILED and the notification tells the user to press `&bt BT_CLR` (num layer) then run `corne-fix`. The MAC `C8:5B:C1:B5:9B:F3` is hard-coded at the top of the module — update it if the keyboard's static-random address ever changes (it persisted across this session's re-pair).
+- **Possible improvements if the trigger stays elusive:** (a) extend the `DETECT` snapshot in `corne-recover` to also log battery (`busctl get-property … org.bluez.Battery1 Percentage`) and seconds-since-last-resume, so the tally becomes self-correlating; (b) widen `corne-watch` to also count `HID Information read failed`/`Report Reference descriptor failed` if `read_pnpid_cb` alone ever misses a variant of the loop; (c) if recovery proves 100% reliable over months, consider dropping blueman's raw connect/disconnect toasts (kept for now, per user, for debug visibility) and relying solely on the semantic detect/recover/fail notifications.
+**Commit:** `1aca616` (entry), `c048d1f` (self-healing module), `ab58cb2` (root-cause correction)
+
+## 2026-06-04 — waybar-bluetooth-module-blank-set-e-pipefail
+
+**Symptom:** waybar's bluetooth module shows nothing even while a Bluetooth device (Corne keyboard) is actively connected and in use.
+**Affected:** host `verse`, user `eksno`. `dotfiles/default/waybar/scripts/bluetooth.sh:7`, `dotfiles/default/waybar/config:68` (`custom/bluetooth`).
+**Root cause:** The script ran `set -euo pipefail`. The battery line `battery=$(busctl … org.bluez.Battery1 Percentage 2>/dev/null | awk …)` exits non-zero (propagated by `pipefail`) whenever the connected device doesn't expose a `Battery1` interface. At boot the Corne connects before its BLE battery service is exposed (same late-service timing as the reconnect-loop fixes), so the script hit that line, `set -e` killed it, and `custom/bluetooth` had no `interval`/`restart-interval` — so waybar never respawned it and the module stayed blank for the whole session. The same fragility also crashes the script when zero devices are paired (`grep` exits 1 → pipefail → exit).
+**Investigation:**
+1. Ran `bluetooth.sh` by hand → emitted correct JSON (`Cor 44%`). So script *logic* was fine; bug was runtime.
+2. `pgrep -af waybar` → waybar (PID 2710) alive with `network.sh` and `battery.sh` children running, but **no `bluetooth.sh` child** → the bluetooth exec had exited and was never restarted.
+3. `busctl … dev_80…E7… org.bluez.Battery1 Percentage` → exit 1 (no Battery1 iface). Reproduced the crash: `bash -c 'set -euo pipefail; battery=$(busctl … Battery1 … | awk …)'` → exit 1, never reached the next line. Confirmed root cause.
+4. Dead end ruled out early: suspected stale/non-symlinked `~/.config/waybar` (an `ls -la` showed regular files), but `readlink` confirmed it *is* a symlink to the repo and `diff` showed the config identical — not config drift.
+**Fix:** `bluetooth.sh:7` `set -euo pipefail` → `set -uo pipefail` (drop `-e`; it's a resilient poll loop where optional-interface queries legitimately fail). Added `"restart-interval": 5` to `custom/bluetooth` in `config` as a respawn safety-net. Dotfiles are symlinked so changes were live immediately; `pkill -SIGUSR2 waybar` reloaded waybar and the module came back (`Cor 44%`, child PID parented by waybar). No nixos-rebuild required.
+**Commit:** `85eeef9`
+
 
 ## 2026-06-03 — phonetic-keybind-dead-after-version-bump (SIGUSR1 trigger removed in 0.6.10)
 
@@ -229,6 +616,20 @@ After `./update.sh`, requires a **logout/login** for the change to bite the runn
 **Fix:** Replaced the dead `breezy-monitor-watcher.sh` (which reaped the now-removed breezy-sideview) with `glasses-mirror-watcher.sh`: a socket2 listener that applies the correct topology at session start and on every `monitoradded`/`monitorremoved` event. Matches the glasses by EDID description (`desc:`), so the DP-1/DP-2 variance doesn't matter. Topology: VG258 present → VG258 source, eDP+glasses mirror it; else glasses present → glasses source, eDP mirrors glasses; else → eDP native. Stripped the broken static mirror rules from `monitor.conf` (left only the `,preferred,auto,1` fallback + an eDP baseline), and pointed `breezy.conf`'s `exec-once` at the new watcher.
 **Commit:** `531cf96`
 
+## 2026-05-23 — corne-reconnect-loop-recurrence-bt-service-ordering-cycle
+
+**Symptom:** Corne BLE keyboard back in the Connected↔Disconnected loop again, ~2 weeks after the 2026-05-22 fix (`46cae11`/`33fc458`) supposedly resolved it. Same `read_pnpid_cb` ATT 0x0E failures.
+**Affected:** host `verse`, user `eksno`. `system/lib/power-mode/default.nix:1046` (the `bluetooth-no-autosuspend` service, now replaced by a `powertop.service` `ExecStartPost`).
+**Root cause:** The 2026-05-22 fix was logically correct but **never ran**. It created `systemd.services.bluetooth-no-autosuspend` ordered `after = [ "powertop.service" ]` + `wantedBy = [ "multi-user.target" ]`. But NixOS's own `powertop.service` is `After=multi-user.target`, so the three units formed an ordering cycle: `bluetooth-no-autosuspend → powertop → multi-user.target → bluetooth-no-autosuspend`. systemd silently **deleted the bluetooth-no-autosuspend job** to break the cycle (`Found ordering cycle … Job … deleted`), so the BT radio re-pin never executed. powertop's `--auto-tune` set `power/control=auto` on the controller unopposed, it autosuspended after 1s idle, and the BLE link desynced on reconnect exactly as before. 5-whys: loop ← radio re-pin never applied ← service job deleted ← ordering cycle ← anchored a unit both `after powertop` and `wantedBy multi-user.target` while powertop is itself `after multi-user.target`.
+**Investigation:**
+1. `systemctl status bluetooth-no-autosuspend` → `inactive (dead)` with the boot-log line `multi-user.target: Found ordering cycle … Job bluetooth-no-autosuspend.service/start deleted to break ordering cycle`. That was the smoking gun — the unit existed but its job was dropped every boot.
+2. Confirmed live damage: BT controller `usb 3-10` (`8087:…`, class e0) at `power/control=auto`, `autosuspend_delay_ms=1000` — the bad state the service was meant to prevent.
+3. `systemctl cat powertop.service` → `After=multi-user.target`, `Type=oneshot`, `RemainAfterExit=yes`. That `After=multi-user.target` is the third edge that closes the cycle; not obvious without reading the NixOS-generated unit.
+4. Device-recovery side: `bluetoothctl info` showed Corne (`C8:5B:C1:B5:9B:F3`) `Trusted: yes` but `Paired: no / Bonded: no` despite a bond dir on disk — a one-sided/desynced bond driving the Trusted auto-connect loop. `pair` stalled at "Attempting to pair" until **bluetoothd was restarted** to clear stuck Adv-Monitor churn; then `trust` + `pair` (session held open, not piped `quit`) bonded cleanly and `event18 → "Corne Keyboard"` appeared. Dead end worth noting: piping `pair` immediately followed by `quit` aborts the in-flight pairing — the session must stay open ~10–15s.
+**Fix:** Replaced the separate cyclic unit with `systemd.services.powertop.serviceConfig.ExecStartPost = "${bt-no-autosuspend}";`. It runs immediately after `--auto-tune` within powertop's own oneshot and introduces no new unit anchored to `multi-user.target`, so a cycle is structurally impossible. `powerManagement.resumeCommands` re-pin kept for resume. Verified post-rebuild: new generation active, no failed units, `powertop.service` shows the `ExecStartPost`, no ordering-cycle log.
+**Collateral (process lesson, not a code bug):** Applying this via `./update.sh` was disruptive — `update.sh` runs `nix flake update` first, which bumped nixpkgs unstable to `…20260521.f83fc3c`; the resulting `switch` restarted systemd + the graphical stack, tore down the Hyprland/uwsm session (`user@1000.service` deactivated, `switch-to-configuration` exited 101, Discord coredumped), and logged the user out with loss of open app state. For a small `system/` change, prefer a plain `nixos-rebuild switch` without a flake bump, and warn before any switch that can restart the display manager.
+**Commit:** `36a6102`
+
 ## 2026-05-23 — file-picker-window-never-opens (portal landlock-domained as systemd service)
 
 **Symptom:** "File attachments don't open a window with my folders anymore." Clicking attach/open-file in any app produces no file-chooser window at all.
@@ -270,6 +671,45 @@ After `./update.sh`, requires a **logout/login** for the change to bite the runn
 3. `/etc/sddm.conf.d/00-nixos.conf` still had the correct `Session=hyprland-uwsm.desktop` autologin — config wasn't wrong, the session selection behavior changed.
 **Fix:** Removed `../../../lib/xr/breezy-gnome` and `../../../lib/xr/breezy-session` imports from `system/users/jorge/dev/default.nix`; added `../../../lib/xr/breezy-recenter` directly so the Hyprland Super+R recenter binding keeps working (it was only pulled in transitively via breezy-session). GNOME removed entirely — Jorge isn't using the breezy-gnome XR path. Verified via `nixos-rebuild build` that the closure's wayland-sessions contains only hyprland sessions before switching.
 **Commit:** `2981e3e`
+
+## 2026-05-22 — corne-bluetooth-connect-disconnect-loop-after-idle
+
+**Symptom:** Corne (ZMK) BLE keyboard repeatedly flips Connected → Disconnected → Connected every ~2s. Triggered after the laptop sits idle for a while; once it starts, only a full forget + re-pair from scratch recovers it.
+**Affected:** host `verse`, user `eksno` (also applies to `lewis` — shared module). `system/lib/power-mode/default.nix:1026` (`powerManagement.powertop.enable`), `system/hosts/verse/bluetooth.nix:10` (`btusb enable_autosuspend=0`).
+**Root cause:** `powerManagement.powertop.enable = true` runs `powertop --auto-tune` as a boot oneshot, which writes `power/control=auto` to **every** USB device — including the Intel BT controller (`8087:0033`, USB class e0/01/01) — overriding the per-host `btusb enable_autosuspend=0` modprobe option. The radio then autosuspended after ~1s idle (`autosuspend_delay_ms=1000`, `power/wakeup=disabled`). When the keyboard re-advertised after idle, the suspended/desynced controller couldn't complete encryption, so bluetoothd's HID-over-GATT reads (PnP ID, HID Information, Report Reference descriptors) all failed with ATT 0x0E "Request attribute has encountered an unlikely error" → HoG never attached → link dropped and retried in a tight loop. 5-whys: loop ← HID GATT reads fail ← encryption/link desync on reconnect ← BT controller autosuspended on idle ← USB `power/control=auto` ← powertop --auto-tune set it despite `enable_autosuspend=0` ← blanket battery optimization never excluded the radio.
+**Investigation:**
+1. `journalctl -u bluetooth` showed the 2s cycle: `rap_accept RAP unable to attach` (benign BlueZ 5.86 ranging noise) + `read_pnpid_cb`/`info_read_cb`/`report_reference_cb` all failing with ATT 0x0E for `C8:5B:C1:B5:9B:F3`.
+2. `bluetoothctl info` confirmed Paired/Bonded/Trusted yes, random static address, Modalias `v1D50` (OpenMoko VID = ZMK), appearance 0x03c1 (HID keyboard). Bond + GATT cache present in `/var/lib/bluetooth/2C:33:58:44:27:4D/`.
+3. `btusb enable_autosuspend` module param read `N` — so the existing modprobe fix *was* loaded, ruling it out as sufficient. **This was the key dead end that pointed upstream:** the param was correct yet the device still showed `power/control=auto`.
+4. Walked sysfs from `hci0` to the USB device `usb3/3-10`: `power/control=auto`, `autosuspend_delay_ms=1000`, `wakeup=disabled` — i.e. autosuspending after 1s regardless of the module param.
+5. Grepped for what sets USB autosuspend → `powerManagement.powertop.enable = true`. `powertop --auto-tune` writes `auto` to all USB devices at boot, clobbering the module param. User context ("happens after idle / BT sleeps") matched exactly.
+**Fix:** In `system/lib/power-mode/default.nix`, added a `bt-no-autosuspend` script (matches USB BT controllers by device class e0/01/01, writes `power/control=on`) wired into a `systemd.services.bluetooth-no-autosuspend` oneshot ordered `after = [ "powertop.service" ]` (wins the boot race) and into `powerManagement.resumeCommands` (re-applies on resume). Live relief applied same session via `tee .../power/control`. Stale bond cleared once with `bluetoothctl remove` + re-pair to recover the already-desynced link.
+**Commit:** `33fc458`
+
+## 2026-05-21 — wireplumber-soft-mixer-mutes-speaker-and-mic-on-cold-boot
+
+**Symptom:** After a reboot, built-in speaker AND mic both completely dead. Card enumerates, PipeWire/Wireplumber running, Speaker sink + Mic source present in `wpctl`, CS35L41 amps bound cleanly (calibration applied, firmware loaded) — yet no playback and mic records pure digital silence (rms=0).
+**Affected:** host `verse`, user `eksno`. `system/hosts/verse/default.nix` (the reverted `services.pipewire.wireplumber.extraConfig."51-cs35l41-soft-mixer"` block).
+**Root cause:** An `api.alsa.soft-mixer = true` Wireplumber rule (added to keep the CS35L41 fed at full analog regardless of sink %) tells PipeWire to stop managing the hardware mixer's **volume and mute** for the whole ALSA device — playback and capture. While PipeWire was already running it worked (hw controls were already open), but a cold boot brought the hardware `Master` up at 0% + muted and `Capture`/`Dmic0` muted, and PipeWire — now in soft-mixer mode — never unmutes them or sets up the capture route. Per PipeWire docs soft-mixer "leaves the hardware mixer untouched," which on this card means nothing opens the analog path on boot.
+**Investigation:**
+1. `cat /proc/asound/cards` + `wpctl status` — card present, sink/source nodes present → not a driver/topology failure.
+2. `dmesg | grep cs35l41` — both amps bound fine, R0 calibration applied → smart-amp init was healthy, ruled out the racy CS35L41 probe (cf. commit 3a530bd "audio race").
+3. `amixer -c sofhdadsp sget Master` → `0% [-65.25dB] [off]`; `Capture`/`Dmic0` also `[off]`. Manually unmuting Master restored playback, but manually unmuting `Dmic0`/`Capture` did NOT restore mic — it still recorded silence, because the DMIC capture **route** (not just gain) needs PipeWire/UCM to set it up, which soft-mixer suppresses.
+4. Concluded the soft-mixer rule is the root cause and its benefit (never even confirmed audible — the loudness ceiling it chased turned out to be CS35L41 firmware behavior, unrelated) does not justify the regression.
+**Fix:** Removed the `51-cs35l41-soft-mixer` Wireplumber block from `system/hosts/verse/default.nix`. PipeWire resumes managing the hardware mixer and unmutes/routes playback + capture on boot as before. Kept the 1000% pulsemixer cap (harmless). Runtime: `amixer -c sofhdadsp sset Master 100% unmute` restores playback immediately; mic needs the pipewire restart from the rebuild to re-establish the route.
+**Commit:** `2ce36c2`
+
+## 2026-05-20 — wireshark-cli-hash-mismatch-recurrence-eksno
+
+**Symptom:** `./update.sh` aborted with the same `wireshark-cli-4.6.5` hash mismatch (`got: sha256-Zvrwxjp4LK2J3QnxmPxKKrU01YHQvPyp54UWzeGNCjA=`) seen on 2026-05-05, blocking an unrelated audio change.
+**Affected:** `system/users/eksno/programs/default.nix:44`. `jorge` was already commented out from the prior fix; eksno's `wifite2` line had been re-uncommented since `d7914d6`.
+**Root cause:** Upstream `wireshark-cli` source hash still not fixed in nixpkgs unstable. Same pure-upstream issue as before. `nix flake update` in `update.sh` keeps pulling the broken revision.
+**Investigation:**
+1. Greppped FIXES.md per CLAUDE.md rule — found the 2026-05-05 "recurring" entry with the exact same hash and the documented fix (comment `wifite2`).
+2. Confirmed jorge's `wifite2` is still commented; only eksno's needed re-applying.
+3. No new investigation needed — re-applying the documented fix.
+**Fix:** Re-comment `wifite2` in `system/users/eksno/programs/default.nix:44`.
+**Commit:** `71625e7`
 
 ## 2026-05-08 — hyprland-layerrule-ignorealpha-rejected-as-invalid-field
 
@@ -339,6 +779,7 @@ Kernel applies the override only on the matching connector, so listing both is s
 3. Checked monado log: `Removing stale socket file` was the smoking gun — explains the race.
 **Fix:** Added `rm -f "$XDG_RUNTIME_DIR/monado_comp_ipc"` next to the existing `rm -f` for `monado.pid` in `system/lib/xr/breezy-hyprland/launcher.nix`.
 **Commit:** `f74154b`
+
 
 ## 2026-05-06 — waybar-icon-percentage-color-mismatch
 
@@ -523,7 +964,7 @@ Kernel applies the override only on the matching connector, so listing both is s
 3. `pw-dump` for device 44 → `params.Profile` = `off`, `EnumProfile` listed exactly one HiFi profile and it was `available=no`. That answered "why no sinks": no profile, no nodes.
 4. `cat ~/.local/state/wireplumber/default-profile` named the HiFi profile correctly, but `default-routes` had history under a *different* profile name (`…Speaker)` vs `…Headphones)`) — meaning the topology had recently changed names underneath stable user state.
 5. Considered: clearing all WP state files. Rejected as first step: too blunt and would also nuke per-app stream-properties, BT pairings' route prefs, etc. Tried the surgical path first.
-**Fix:** `wpctl set-profile 44 1` forced the only HiFi profile active despite `available=no`. That immediately materialized 4 sinks (HDMI×3 + Headphones) and 2 internal mic sources. `systemctl --user restart wireplumber` then re-elected profiles cleanly — and on this pass the card actually came up with the *other* profile, `HiFi (…Speaker)`, exposing a true Speaker sink (priority-elected as default). Bumped volume from the saved 0.0 with `wpctl set-volume <id> 0.6` and unmuted. No code changes; no rebuild needed; survives reboot because the corrected profile/route is now persisted in `default-{profile,routes,nodes}`.
+**Fix:** `wpctl set-profile 44 1` forced the only HiFi profile active despite `available=no`. That immediately materialized 4 sinks (HDMI×3 + Headphones) and 2 internal mic sources. `systemctl --user restart wireplumber` then re-elected profiles cleanly — and on this pass the card actually came up with the *other* profile, `HiFi (…Speaker)`, exposing a true Speaker sink (priority-elected as default). Bumped volume from the saved 0.0 with `wpctl set-volume <id> 0.6` and unmuted. No code changes; no rebuild needed; survives reboot because the corrected profile/route is now persisted in `default-{profile,routes,nodes}`. **CORRECTION (2026-08-26): it does not survive reboot** — this recurred; see the 2026-08-26 recurrence entry at the top.
 **Commit:** `639f4dd` (FIXES.md entry only — runtime state fix, no nix-config change)
 
 ## 2026-04-25 — tmux-restore-mosh-script-not-symlinked
@@ -536,7 +977,7 @@ Kernel applies the override only on the matching connector, so listing both is s
 2. Read `system/lib/dotfiles.nix` tmux block → confirmed the activation script only `ln -sf`s the two known files. No glob, no scripts dir.
 3. Considered switching tmux back to a full directory symlink. Rejected: TPM still needs to write into `plugins/`, which is the whole reason file-level symlinks were chosen. Cleanest fix is one extra `ln -sfn` for `scripts/` since it's a read-only dir of executables.
 **Fix:** Added `ln -sfn "$_src/scripts" "$cfg/tmux/scripts"` to the tmux block in `system/lib/dotfiles.nix`. After `./update.sh`, `~/.config/tmux/scripts → nix-config/dotfiles/default/tmux/scripts` and resurrect can find `restore-mosh.sh`.
-**Commit:** `9d59c71`
+**Commit:** `956fdb2`
 
 ## 2026-04-25 — norwegian-binds-ydotool-unicode-dropped
 
@@ -632,7 +1073,7 @@ Also note: `sudo -A` needs `SUDO_ASKPASS` in the caller's env. NixOS writes it v
 5. Found `uwsm[…]: Command '['systemctl', '--user', 'start', 'wayland-session-bindpid@<pid>.service']' returned non-zero exit status 5` immediately before session death on failed boots. Grep of `system/` for `uwsm` returned zero hits, confirming the units were missing from the user unit path.
 6. Also noticed `Autologin.Session = "Hyprland"` never matched a `.desktop` file — autologin has been silently broken the whole time, which is why the greeter (with its sticky last-session) was reached at all.
    **Fix:** In `system/lib/desktop/wayland/hyprland/default.nix`, set `programs.uwsm.enable = true;` (installs the uwsm user units so the uwsm session path works) and change `Autologin.Session = "Hyprland"` to `Autologin.Session = "hyprland.desktop"` (matches SDDM's lookup, restores autologin). Per-user `Autologin.User` was already set in each user's own config (`system/users/{eksno,jorge}/default.nix:29`).
-   **Commit:** `<sha>`
+   **Commit:** `edd73a2`
 
 **Investigation:**
 

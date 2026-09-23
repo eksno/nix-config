@@ -1,12 +1,41 @@
 { config, pkgs, lib, ... }:
 
 let
+  power-policy = pkgs.runCommand "power-mode-policy" {} ''
+    mkdir -p $out
+    cp ${./policy.py} $out/policy.py
+    cp ${./cli.py} $out/cli.py
+  '';
   power-mode = pkgs.writeShellScriptBin "power-mode" ''
     set -euo pipefail
+
+    # Help, read-only configuration, and validation precede privilege and sysfs access.
+    if ${pkgs.python3}/bin/python3 ${power-policy}/cli.py "$0" "$@"; then
+      exit 0
+    else
+      cli_status=$?
+      [ "$cli_status" = 64 ] || exit "$cli_status"
+    fi
 
     # Self-elevate to root — sysfs and RAPL require it
     if [ "$(id -u)" != "0" ]; then
       exec /run/wrappers/bin/sudo "$(readlink -f "$0")" "$@"
+    fi
+
+    # Serialize manual changes, automatic changes, and configuration writes.
+    mkdir -p /run/power-mode
+    exec 9>/run/power-mode/lock
+    ${pkgs.util-linux}/bin/flock 9
+
+    case "''${1:-}" in
+      configure|config)
+        exec ${pkgs.python3}/bin/python3 ${power-policy}/policy.py "$@"
+        ;;
+    esac
+
+    # An automatic request must not replace a manual choice from this boot.
+    if [ "''${1:-}" = "--auto" ] && [ -f /run/power-mode/manual-override ]; then
+      exit 75
     fi
 
     # Auto-detect battery
@@ -398,7 +427,7 @@ let
     # Self-contained: sets ALL levers to absolute values for that level.
     # Does NOT set brightness — caller handles that (calibrate vs stretch differ).
     # P-core hotplug: offline P-cores to eliminate leakage current (~1-3W savings)
-    # cpu0 can never be offlined by the kernel, so we skip it
+    # cpu0 can never be offlined by the kernel, so we skip it. Only at level 9.
     offline_pcores() {
       for cpu in /sys/devices/system/cpu/cpu[0-9]*/online; do
         local num
@@ -420,7 +449,14 @@ let
 
     apply_round() {
       local round=$1
-      local pct=$((round * 100 / 9))
+      # Re-LERP: the dial's max-save endpoint (round 9) now reaches only what
+      # the OLD level 8 did. Pushing the continuous levers to the absolute floor
+      # at level 9 caused race-to-idle losses (the slower CPU stayed busy long
+      # enough that total energy went UP), so the efficiency loss outweighed the
+      # time gained. Compress the interpolation so round 9 maps to old-round-8's
+      # depth (~88%, not 100%): effective = round*8/9, pct = effective*100/9
+      #   => pct = round * 800 / 81
+      local pct=$((round * 800 / 81))
 
       # Bring all cores online first so freq/governor writes hit every core
       online_all_cores
@@ -445,13 +481,15 @@ let
       local gov="performance" tv=0 ev="performance" pf="performance"
       local sv="base" av="default" wps="off" ppm="on"
 
-      [ "$round" -ge 1 ] && ev="balance_performance" && wps="on" && ppm="auto"
-      [ "$round" -ge 2 ] && gov="powersave" && av="powersave" && pf="balanced"
-      [ "$round" -ge 3 ] && ev="balance_power" && pf="quiet"
-      [ "$round" -ge 4 ] && tv=1 && sv="power_saving"
-      [ "$round" -ge 5 ] && av="powersupersave"
-      [ "$round" -ge 7 ] && ev="power"
-      [ "$round" -ge 8 ] && ev="255"  # Max power saving EPP (more aggressive than "power"=192)
+      # Thresholds rescaled by the same re-LERP (old T now fires at ceil(T*9/8)),
+      # so round 9 reproduces the old level-8 discrete state exactly.
+      [ "$round" -ge 2 ] && ev="balance_performance" && wps="on" && ppm="auto"
+      [ "$round" -ge 3 ] && gov="powersave" && av="powersave" && pf="balanced"
+      [ "$round" -ge 4 ] && ev="balance_power" && pf="quiet"
+      [ "$round" -ge 5 ] && tv=1 && sv="power_saving"
+      [ "$round" -ge 6 ] && av="powersupersave"
+      [ "$round" -ge 8 ] && ev="power"
+      [ "$round" -ge 9 ] && ev="255"  # Max power saving EPP (more aggressive than "power"=192)
 
       set_governor "$gov"
       set_turbo "$tv"
@@ -462,9 +500,9 @@ let
       set_wifi_powersave "$wps"
       set_pci_pm "$ppm"
 
-      # At level >= 8, offline P-cores to eliminate leakage (~1-3W savings)
-      # E-cores and LP E-cores handle idle/light workloads fine
-      if [ "$round" -ge 8 ]; then
+      # At level 9 (the re-LERPed max), offline P-cores to eliminate leakage
+      # (~1-3W savings). E-cores and LP E-cores handle idle/light workloads fine
+      if [ "$round" -ge 9 ]; then
         offline_pcores
       fi
     }
@@ -513,6 +551,7 @@ let
     }
 
     show_status() {
+      ${pkgs.python3}/bin/python3 ${power-policy}/policy.py status
       local settle="''${1:-}"
 
       local status percent energy
@@ -638,19 +677,6 @@ let
     apply_level() {
       local level=$1
 
-      # Persist current level so unprivileged tools (e.g. waybar) can read it
-      echo "$level" > "$STATE_DIR/current-level"
-      chmod 644 "$STATE_DIR/current-level"
-      echo "$level" > "$DATA_DIR/last-level"
-      # Save as user's persistent preference (only for manual CLI calls)
-      if [ "$_AUTO" = "0" ]; then
-        echo "$level" > "$DATA_DIR/user-level"
-        # Signal the watchdog that the user manually overrode
-        # chown to the calling user so the watchdog (user service) can delete it
-        touch "$STATE_DIR/manual-override"
-        [ -n "''${SUDO_UID:-}" ] && chown "$SUDO_UID" "$STATE_DIR/manual-override"
-      fi
-
       if [ "$level" = "0" ]; then
         restore_state
       else
@@ -658,6 +684,14 @@ let
       fi
 
       apply_round "$level"
+
+      # Publish only after the hardware settings have been applied.
+      echo "$level" > "$STATE_DIR/current-level"
+      chmod 644 "$STATE_DIR/current-level"
+      echo "$level" > "$DATA_DIR/last-level"
+      if [ "$_AUTO" = "0" ]; then
+        ${pkgs.python3}/bin/python3 ${power-policy}/policy.py manual "$level"
+      fi
 
       echo -e "''${CYAN}Applied L$level ($((level * 100 / 9))%)''${RESET}"
 
@@ -724,9 +758,10 @@ let
       # Post-process: -0.5W idle bonus + monotonic enforcement (each ≤ prev - 1W)
       local adjusted
       adjusted=$(echo "$cal_results" | ${pkgs.gawk}/bin/awk -F: '/^[0-9]/ {
-        # Cumulative idle-only discrete levers per round (~0.2W each):
-        # R1:+EPP  R2:+gov,ASPM  R3:+EPP,profile  R4:+SLPC  R5:+ASPM  R7:+EPP
-        split("0,1,3,5,6,7,7,8,8,8", lc, ",")
+        # Cumulative idle-only discrete levers per round (~0.2W each), tracking
+        # the re-LERPed thresholds:
+        # R2:+EPP  R3:+gov,ASPM  R4:+EPP,profile  R5:+SLPC  R6:+ASPM  R8:+EPP
+        split("0,0,1,3,5,6,7,7,8,8", lc, ",")
         raw = $2 - lc[$1 + 1] * 0.2
         if (!started) { adj = raw; started = 1 }
         else {
@@ -800,10 +835,10 @@ let
 
       if [ "$best_round" = "-1" ]; then
         echo -e "  ''${DIM}No level meets budget under load — applying maximum (R9)''${RESET}"
-        apply_round 9
+        apply_level 9
       else
         echo -e "  Applying level $best_round ($((best_round * 100 / 9))%) — calibrated: ''${best_watts}W under load"
-        apply_round "$best_round"
+        apply_level "$best_round"
       fi
 
       # Quick 5s verification at actual current load
@@ -841,40 +876,6 @@ let
       fi
     }
 
-    usage() {
-      echo ""
-      echo -e "''${BOLD}power-mode''${RESET} — power profile manager"
-      echo ""
-      echo -e "  ''${BOLD}Usage:''${RESET}"
-      echo "    power-mode <profile>"
-      echo "    power-mode stretch <hours>"
-      echo "    power-mode status"
-      echo ""
-      echo -e "  ''${BOLD}Levels (0-9):''${RESET}"
-      echo "    0    Full speed, turbo on, 28W"
-      echo "    2    Moderate savings, turbo on, 20W"
-      echo "    4    Turbo off, 10W"
-      echo "    8    P-cores offline, EPP max savings"
-      echo "    9    Maximum power saving"
-      echo "    1-9  Any level for fine-grained control"
-      echo ""
-      echo -e "  ''${BOLD}Stretch mode:''${RESET}"
-      echo "    calibrate         Benchmark all levels under load (~3 min, run once)"
-      echo "    stretch <hours>   Apply optimal level to last <hours>"
-      echo ""
-      echo -e "  ''${BOLD}Battery health:''${RESET}"
-      echo "    charge-limit <percent>  Set max charge level (20-100)"
-      echo "    charge-limit            Show current charge limit"
-      echo ""
-      echo -e "  ''${BOLD}Examples:''${RESET}"
-      echo "    power-mode calibrate"
-      echo "    power-mode stretch 10"
-      echo "    power-mode 4"
-      echo "    power-mode charge-limit 80"
-      echo "    power-mode status"
-      echo ""
-    }
-
     # --auto flag: called by watchdog, don't overwrite persistent user-level
     _AUTO=0
     if [ "''${1:-}" = "--auto" ]; then
@@ -897,7 +898,6 @@ let
         if [ -n "''${2:-}" ]; then
           set_charge_limit "$2"
         else
-          local cl
           cl=$(get_charge_limit)
           if [ -n "$cl" ]; then
             echo -e "''${BOLD}Charge limit:''${RESET} ''${cl}%"
@@ -907,123 +907,107 @@ let
         fi
         ;;
       status) show_status ;;
-      *) usage ;;
+      *) exit 2 ;;
     esac
   '';
 
   battery-watchdog = pkgs.writeShellScriptBin "battery-watchdog" ''
-    BAT=""
-    for b in /sys/class/power_supply/BAT*; do
-      [ -f "$b/energy_now" ] && BAT="$b" && break
+    exec ${pkgs.python3}/bin/python3 ${power-policy}/policy.py tick \
+      ${power-mode}/bin/power-mode ${pkgs.libnotify}/bin/notify-send
+  '';
+
+  # powertop --auto-tune (enabled below) writes power/control=auto to *every* USB
+  # device, including the Bluetooth controller, overriding the
+  # `btusb enable_autosuspend=0` modprobe option set per-host. The radio then
+  # autosuspends after ~1s of idle; on the next BLE reconnect the bond/link state
+  # desyncs and HID-over-GATT attribute reads fail (ATT 0x0E) in a tight
+  # connect/disconnect loop that only a full forget+re-pair clears. Re-pin every
+  # USB Bluetooth controller (class e0/subclass 01/protocol 01) to `on` so it
+  # never autosuspends. Matched by class so it is host- and dongle-agnostic.
+  bt-no-autosuspend = pkgs.writeShellScript "bt-no-autosuspend" ''
+    for dev in /sys/bus/usb/devices/*; do
+      [ -r "$dev/bDeviceClass" ] || continue
+      [ "$(cat "$dev/bDeviceClass")" = "e0" ] || continue
+      [ "$(cat "$dev/bDeviceSubClass" 2>/dev/null)" = "01" ] || continue
+      [ "$(cat "$dev/bDeviceProtocol" 2>/dev/null)" = "01" ] || continue
+      echo on > "$dev/power/control" 2>/dev/null || true
     done
-    [ -z "$BAT" ] && exit 0
+  '';
 
-    PERCENT=$(cat "$BAT/capacity")
-    STATUS=$(cat "$BAT/status")
-    STATE_DIR="/tmp/power-mode"
-    mkdir -p "$STATE_DIR"
-    CURRENT_LEVEL=0
-    [ -f "$STATE_DIR/current-level" ] && CURRENT_LEVEL=$(cat "$STATE_DIR/current-level")
+  # Same powertop fallout, different victim: USB-audio gadgets with flaky
+  # firmware (e.g. the Hollyland "Wireless microphone" 3547:0007) cannot survive
+  # their *parent root hub* autosuspending. powertop --auto-tune sets the root
+  # hub's power/control=auto (delay 0); the device then full-disconnects and
+  # re-enumerates every 2-4 min (malformed descriptor, "cannot set freq 48000 to
+  # ep 0x81"), so any capture stream dies. The device's own power/control was
+  # already `on` — pinning the *bus* is what stops it. Find every attached USB
+  # audio device (bInterfaceClass 01) and pin both it and its root hub to `on`.
+  # Class-matched so it is device- and port-agnostic. See bt-no-autosuspend.
+  usb-audio-keep-bus-awake = pkgs.writeShellScript "usb-audio-keep-bus-awake" ''
+    for ifc in /sys/bus/usb/devices/*:*/bInterfaceClass; do
+      [ "$(cat "$ifc" 2>/dev/null)" = "01" ] || continue
+      ifn="$(basename "$(dirname "$ifc")")"   # interface dir, e.g. "3-2:1.0"
+      dev="''${ifn%%:*}"                       # device, e.g. "3-2"
+      bus="''${dev%%-*}"                       # e.g. "3" -> usb3
+      echo on > "/sys/bus/usb/devices/$dev/power/control" 2>/dev/null || true
+      echo on > "/sys/bus/usb/devices/usb$bus/power/control" 2>/dev/null || true
+    done
+  '';
 
-    # User's persistent manual choice (survives reboot)
-    USER_LEVEL=0
-    [ -f /var/lib/power-mode/user-level ] && USER_LEVEL=$(cat /var/lib/power-mode/user-level)
-
-    calc() {
-      ${pkgs.gawk}/bin/awk "BEGIN { printf \"%.''${2:-1}f\", $1 }"
-    }
-
-    # Send or replace a notification, averaging power over 5s.
-    # $1=urgency $2=title $3=profile_name
-    notify_with_estimate() {
-      local urgency="$1" title="$2" profile="$3"
-      local energy watts hours notif_id
-
-      energy=$(calc "$(cat "$BAT/energy_now") / 1000000" 2)
-      watts=$(calc "$(read_power_uw) / 1000000")
-      hours="?"
-      [ "$watts" != "0.0" ] && hours=$(calc "$energy / $watts")
-
-      notif_id=$(${pkgs.libnotify}/bin/notify-send \
-        -u "$urgency" \
-        -t 0 \
-        -p \
-        "$title" \
-        "''${PERCENT}% — $profile\n''${energy} Wh at ''${watts}W\n~''${hours}h remaining")
-
-      local sum count avg
-      sum=$(calc "$(read_power_uw) / 1000000" 4)
-      count=1
-      for _ in $(seq 1 9); do
-        sleep 0.5
-        local sample
-        sample=$(calc "$(read_power_uw) / 1000000" 4)
-        sum=$(${pkgs.gawk}/bin/awk "BEGIN { printf \"%.4f\", $sum + $sample }")
-        count=$((count + 1))
-        avg=$(calc "$sum / $count")
-        hours="?"
-        [ "$avg" != "0.0" ] && hours=$(calc "$energy / $avg")
-        notif_id=$(${pkgs.libnotify}/bin/notify-send \
-          -u "$urgency" \
-          -t 0 \
-          -r "$notif_id" \
-          -p \
-          "$title" \
-          "''${PERCENT}% — $profile\n''${energy} Wh at ''${avg}W avg\n~''${hours}h remaining")
-      done
-    }
-
-    # Clear manual override on charging state changes (plug/unplug)
-    # Use per-user file to avoid SDDM ownership conflicts
-    LAST_STATUS=""
-    STATUS_FILE="$STATE_DIR/last-status-$(id -u)"
-    [ -f "$STATUS_FILE" ] && LAST_STATUS=$(cat "$STATUS_FILE")
-    if [ "$STATUS" != "$LAST_STATUS" ] && [ -n "$LAST_STATUS" ]; then
-      rm -f "$STATE_DIR/manual-override" "$STATE_DIR/overridden-target"
-    fi
-    echo "$STATUS" > "$STATUS_FILE"
-
-    # Determine target level: user's choice, bumped up for low battery (max 9)
-    target=$USER_LEVEL
-    if [ "$STATUS" = "Discharging" ]; then
-      [ "$PERCENT" -le 75 ] && [ "$target" -lt 8 ] && target=8
-      [ "$PERCENT" -le 25 ] && [ "$target" -lt 9 ] && target=9
-    fi
-
-    # Manual override: user ran power-mode manually, back off until a NEW threshold
-    # On first poll after override, record what auto-target was being suppressed
-    if [ -f "$STATE_DIR/manual-override" ]; then
-      echo "$target" > "$STATE_DIR/overridden-target"
-      rm -f "$STATE_DIR/manual-override"
-    fi
-    if [ -f "$STATE_DIR/overridden-target" ]; then
-      saved_target=$(cat "$STATE_DIR/overridden-target")
-      if [ "$target" -gt "$saved_target" ]; then
-        # A higher threshold kicked in (e.g., crossed ≤25%) — clear and apply
-        rm -f "$STATE_DIR/overridden-target"
-      else
-        # Same or lower threshold — respect the user's override
-        exit 0
-      fi
-    fi
-
-    # Only act when current level differs from target
-    if [ "$CURRENT_LEVEL" != "$target" ]; then
-      ${power-mode}/bin/power-mode --auto "$target" > /dev/null 2>&1
-
-      if [ "$STATUS" = "Discharging" ] && [ "$target" -ge 9 ] && [ "$target" -gt "$USER_LEVEL" ]; then
-        notify_with_estimate critical "Battery Low" "level 9\nConsider lowering brightness"
-      elif [ "$STATUS" = "Discharging" ] && [ "$target" -ge 8 ] && [ "$target" -gt "$USER_LEVEL" ]; then
-        ${pkgs.libnotify}/bin/notify-send -u low -t 5000 "Battery ≤75%" "Switched to level 8"
-      elif [ "$STATUS" = "Charging" ] && [ "$target" -le "$USER_LEVEL" ]; then
-        ${pkgs.libnotify}/bin/notify-send -u low -t 5000 "Charging" "Restored to level $target"
-      fi
-    fi
+  # Same powertop fallout, applied to USB HID input devices. When the Corne is
+  # cabled (USB central, 1d50:615e) powertop --auto-tune sets its power/control
+  # =auto with autosuspend_delay_ms=1000, so the keyboard suspends after 1s idle.
+  # It also comes up power/wakeup=disabled, so it *cannot* USB-remote-wake — the
+  # next keypress on a suspended device isn't signalled until the host resumes it
+  # (~1s), which the user feels as "keyboard sleeps after a few seconds, ~1s to
+  # recover" and can drop the first keystrokes. Pin every USB HID interface's
+  # parent device to `on`; a pinned child also blocks its parent hub from
+  # autosuspending, so the device-level pin is sufficient. Matched on HID class
+  # 03 (the Corne HID interface is class 03 / protocol 00, NOT boot-keyboard
+  # protocol 01, so a protocol match would miss it) — device- and port-agnostic.
+  # See usb-audio-keep-bus-awake / bt-no-autosuspend.
+  usb-hid-keep-awake = pkgs.writeShellScript "usb-hid-keep-awake" ''
+    for ifc in /sys/bus/usb/devices/*:*/bInterfaceClass; do
+      [ "$(cat "$ifc" 2>/dev/null)" = "03" ] || continue
+      ifn="$(basename "$(dirname "$ifc")")"   # interface dir, e.g. "3-4.1:1.2"
+      dev="''${ifn%%:*}"                       # device, e.g. "3-4.1"
+      echo on > "/sys/bus/usb/devices/$dev/power/control" 2>/dev/null || true
+    done
   '';
 
 in
 {
   powerManagement.powertop.enable = true;
+
+  # Counteract powertop's blanket USB autosuspend on the Bluetooth radio.
+  # A *separate* oneshot ordered `after powertop.service` + `wantedBy
+  # multi-user.target` deadlocks: NixOS's powertop.service is itself
+  # `After=multi-user.target`, so that forms an ordering cycle
+  # (bt-svc -> powertop -> multi-user.target -> bt-svc) and systemd silently
+  # deletes our job to break it — the re-pin never runs and the loop returns.
+  # Instead hang the re-pin off powertop's own oneshot as ExecStartPost: it runs
+  # immediately after `--auto-tune` completes, introduces no new unit anchored to
+  # multi-user.target, so a cycle is impossible. Also re-applied on resume since
+  # suspend/resume re-enumerates USB power state. See bt-no-autosuspend.
+  systemd.services.powertop.serviceConfig.ExecStartPost = [
+    "${bt-no-autosuspend}"
+    "${usb-audio-keep-bus-awake}"
+    "${usb-hid-keep-awake}"
+  ];
+  powerManagement.resumeCommands = ''
+    ${bt-no-autosuspend}
+    ${usb-audio-keep-bus-awake}
+    ${usb-hid-keep-awake}
+  '';
+
+  # ExecStartPost only covers devices present when powertop runs (boot) and
+  # resume. For a USB-audio device hot-plugged later, powertop has already set
+  # its root hub to `auto` and never re-runs — so re-pin the bus on hotplug too.
+  # Matched on the audio interface so it stays device-agnostic.
+  services.udev.extraRules = ''
+    ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_interface", ENV{INTERFACE}=="1/*", RUN+="${usb-audio-keep-bus-awake}"
+    ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_interface", ENV{INTERFACE}=="3/*", RUN+="${usb-hid-keep-awake}"
+  '';
 
   # Allow power-mode to run as root without password for wheel users
   # SETENV needed so sudo doesn't strip env in some contexts
@@ -1054,20 +1038,20 @@ in
 
   # Battery watchdog: user service so it has D-Bus access for notifications
   systemd.user.services.battery-watchdog = {
-    description = "Auto-switch power profile on low battery";
+    description = "Restore power levels and process battery thresholds";
     serviceConfig = {
       Type = "oneshot";
       ExecStart = "${battery-watchdog}/bin/battery-watchdog";
     };
     unitConfig = {
+      ConditionUser = config.dotfiles.username;
       StartLimitIntervalSec = 0; # Disable rate limiting for 1s polling
     };
   };
 
-  # Auto-bump on battery % disabled — Jorge wants power level to stay where he
-  # sets it manually. Service+timer definitions kept so they can be re-enabled
-  # by adding `wantedBy = [ "timers.target" ];` back if desired.
+  # Notifications and manual-level restoration run even without a level ladder.
   systemd.user.timers.battery-watchdog = {
+    wantedBy = [ "timers.target" ];
     description = "Poll battery level every 1s";
     timerConfig = {
       OnBootSec = "1s";

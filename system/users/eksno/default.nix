@@ -26,6 +26,7 @@
       "wheel"
       "docker"
       "ydotool" # access to /run/ydotoold/socket for keystroke injection
+      "dialout" # rw on /dev/ttyACM* — ZMK Studio (WebSerial) talks to the Corne over USB
     ];
   };
 

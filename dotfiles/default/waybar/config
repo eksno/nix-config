@@ -68,6 +68,7 @@
   "custom/bluetooth": {
     "exec": "~/.config/waybar/scripts/bluetooth.sh",
     "return-type": "json",
+    "restart-interval": 5,
     "tooltip": true,
     "on-click": "kitty --title bluetuith bluetuith"
   },

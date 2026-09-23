@@ -9,7 +9,28 @@
     ./obs.nix
   ];
 
-  nixpkgs.overlays = [ inputs.phonetic.overlays.default ];
+  nixpkgs.overlays = [
+    inputs.phonetic.overlays.default
+
+    # scipy's test suite is disabled: its hypothesis-driven
+    # test_support_moments_sample fails on a ~2e-09 tolerance violation
+    # (1 failed / 87693 passed), and this nixpkgs revision ships no cached
+    # python3.12 build to fall back on, so it must compile locally and the
+    # flaky test takes the whole system down. scipy gates phonetic through
+    # pynput -> setuptools-lint -> pylint -> isort -> pint -> uncertainties.
+    # Override hangs on python312 (not python312Packages) so it also reaches
+    # consumers going through python312.pkgs. Drop once nixpkgs caches a
+    # working build. See FIXES.md.
+    (final: prev: {
+      python312 = prev.python312.override {
+        packageOverrides = pyfinal: pyprev: {
+          scipy = pyprev.scipy.overridePythonAttrs (_: {
+            doCheck = false;
+          });
+        };
+      };
+    })
+  ];
 
   services.phonetic = {
     enable = true;
@@ -38,10 +59,8 @@
     curl
     libsecret
 
-    # wifite2 — disabled while wireshark-cli source hash is broken upstream
-    # in nixpkgs unstable. Uncomment once nixpkgs ships a working revision.
-    # See FIXES.md "wireshark-cli source hash mismatch (recurring)".
     wifite2
+    hcxtools
     hashcat
     aircrack-ng
 
@@ -53,6 +72,7 @@
     neovim
     tree-sitter
     claude-code
+    codex # openai codex cli
 
     audacity
     powertop # battery usage monitoring (also enabled as service in power-mode module)
@@ -108,11 +128,22 @@
     cloudflared
 
     playerctl # managing eww music
-    pulsemixer # TUI audio device and volume control
+    (pulsemixer.overrideAttrs (old: {
+      # Raise the hardcoded 150% cap to 1000%. Headroom for very quiet source
+      # material (old YouTube uploads etc.); PipeWire applies the extra as
+      # software gain. Above ~120% on normal masters this WILL clip.
+      # NOTE: a Wireplumber api.alsa.soft-mixer rule was tried here to pin the
+      # hardware Speaker attenuator at 0 dB, but it left the hardware Master/
+      # Capture muted on cold boot (PipeWire stops managing hw mute under
+      # soft-mixer) — killed speaker AND mic. Reverted. See FIXES.md.
+      patches = (old.patches or [ ]) ++ [ ../../../../patches/pulsemixer-max-volume-1000.patch ];
+    })) # TUI audio device and volume control
+    alsa-utils # alsamixer / amixer / alsactl — direct ALSA controls (CS35L41 knobs)
     speechd
     eww
     waybar
     libreoffice-fresh
+    sioyek # vim-like pdf viewer for papers/textbooks
     dbeaver-bin
     obsidian # Update nevermind is was flake.nix shit <-- Update R.I.P <-- Update WE'RE SO BACK <-- I'm sorry little one, you were too trash for me to try to figure out. https://github.com/NixOS/nixpkgs/issues/302457
     bitwarden-desktop # Update WE'RE SO BACK <-- I believed in you, but you had to be a pain.
@@ -127,6 +158,7 @@
     code-cursor
     seahorse
     brightnessctl
+    hyprsunset # gamma control; lets brightness climb past the panel's 400-nit max
     axel
     glib
     btop
@@ -182,6 +214,14 @@
 
     # Game Engines
     godot
+
+    # Game streaming — Moonlight client. Connects to a remote Sunshine/GameStream
+    # host (e.g. cloud gaming PC). Client only; initiates outbound connections so
+    # no firewall ports need opening on this machine. Pair via the host's PIN flow.
+    # The ffmpeg_7 override is gone: nixpkgs now builds moonlight-qt against
+    # ffmpeg_8 explicitly and Hydra caches the result, so the FFmpeg 8 break
+    # this pinned around is resolved upstream. See FIXES.md.
+    moonlight-qt
   ];
 
   # Git configuration

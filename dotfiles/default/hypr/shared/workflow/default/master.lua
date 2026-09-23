@@ -1,0 +1,4 @@
+-- Master layout tuning lives here.
+-- See https://wiki.hypr.land/Configuring/Layouts/Master-Layout/
+-- Intentionally empty: the shared default is dwindle (see
+-- shared/utility/general.lua). users/teto/master.lua overrides to master.
