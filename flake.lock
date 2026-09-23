@@ -74,11 +74,11 @@
         "nixpkgs": "nixpkgs_2"
       },
       "locked": {
-        "lastModified": 1787054416,
-        "narHash": "sha256-WxyG+sqmXBkHf7SRrTd4mSSPtSL0d39B1wv5jRSOOX8=",
+        "lastModified": 1789870436,
+        "narHash": "sha256-RXhcB8J160V/ZRTErTqRSPEoE4dX4PlndB7bnsXQylA=",
         "owner": "startino",
         "repo": "phonetic",
-        "rev": "5acf86a7f74acf77202fbeed95692aaa4f20e753",
+        "rev": "c730630d338d9b1db02341d559566d4fe5b7f870",
         "type": "github"
       },
       "original": {
