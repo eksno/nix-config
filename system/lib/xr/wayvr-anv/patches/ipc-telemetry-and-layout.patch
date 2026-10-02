@@ -1,10 +1,9 @@
-diff -ruN a/wayvr/src/backend/wayvr/mod.rs d/wayvr/src/backend/wayvr/mod.rs
---- a/wayvr/src/backend/wayvr/mod.rs	2026-08-16 16:55:32.559590388 -0600
-+++ b/wayvr/src/backend/wayvr/mod.rs	2026-08-16 17:42:29.994817513 -0600
-@@ -285,7 +285,10 @@
-     }
+--- a/wayvr/src/backend/wayvr/mod.rs
++++ b/wayvr/src/backend/wayvr/mod.rs
+@@ -312,7 +312,10 @@
  
      #[allow(clippy::too_many_lines)]
+     #[allow(clippy::significant_drop_tightening)]
 -    pub fn tick_events(app: &mut AppState) -> anyhow::Result<Vec<TickTask>> {
 +    pub fn tick_events(
 +        app: &mut AppState,
@@ -13,19 +12,21 @@ diff -ruN a/wayvr/src/backend/wayvr/mod.rs d/wayvr/src/backend/wayvr/mod.rs
          let mut tasks: Vec<TickTask> = Vec::new();
  
          let Some(wvr_server) = app.wvr_server.as_mut() else {
-@@ -297,6 +300,8 @@
-             input_state: &app.input_state,
+@@ -325,8 +328,11 @@
              tasks: &mut tasks,
              signals: &app.wayvr_signals,
+             hid_wrapper: &mut app.hid_provider,
 +            delta_time: app.delta_time,
 +            layout,
          });
  
++
          // Tick all child processes
-diff -ruN a/wayvr/src/ipc/events.rs d/wayvr/src/ipc/events.rs
---- a/wayvr/src/ipc/events.rs	2026-08-16 16:55:51.074601613 -0600
-+++ b/wayvr/src/ipc/events.rs	2026-08-16 17:42:54.478772358 -0600
-@@ -11,8 +11,73 @@
+         let mut to_remove: SmallVec<[process::ProcessHandle; 2]> = SmallVec::new();
+ 
+--- a/wayvr/src/ipc/events.rs
++++ b/wayvr/src/ipc/events.rs
+@@ -9,8 +9,73 @@
      },
      ipc::signal::WayVRSignal,
      state::AppState,
@@ -100,7 +101,7 @@ diff -ruN a/wayvr/src/ipc/events.rs d/wayvr/src/ipc/events.rs
  
  fn process_tick_tasks(
      tick_tasks: Vec<backend::wayvr::TickTask>,
-@@ -64,6 +129,46 @@
+@@ -65,6 +130,46 @@
                  app.tasks
                      .enqueue(TaskType::Playspace(PlayspaceTask::Recenter));
              }
@@ -147,7 +148,7 @@ diff -ruN a/wayvr/src/ipc/events.rs d/wayvr/src/ipc/events.rs
              WayVRSignal::Handsfree(params) => match params {
                  HandsfreeParams::SetMode(mode) => {
                      let mode = match mode {
-@@ -80,7 +185,8 @@
+@@ -81,7 +186,8 @@
          }
      }
  
@@ -157,21 +158,23 @@ diff -ruN a/wayvr/src/ipc/events.rs d/wayvr/src/ipc/events.rs
      if let Some(wayvr_server) = app.wvr_server.as_mut() {
          process_tick_tasks(tick_tasks, wayvr_server);
      }
-diff -ruN a/wayvr/src/ipc/ipc_server.rs d/wayvr/src/ipc/ipc_server.rs
---- a/wayvr/src/ipc/ipc_server.rs	2026-08-16 16:55:51.074265373 -0600
-+++ b/wayvr/src/ipc/ipc_server.rs	2026-08-16 17:42:15.325522972 -0600
-@@ -86,6 +86,10 @@
-     pub tasks: &'a mut Vec<wayvr::TickTask>,
+--- a/wayvr/src/ipc/ipc_server.rs
++++ b/wayvr/src/ipc/ipc_server.rs
+@@ -89,8 +89,13 @@
      pub signals: &'a SyncEventQueue<WayVRSignal>,
      pub input_state: &'a InputState,
+     pub hid_wrapper: &'a mut HidWrapper,
 +    /// Seconds elapsed in the last render frame.
 +    pub delta_time: f32,
 +    /// Snapshot of the screen overlays, taken once per tick.
 +    pub layout: &'a [packet_server::WlxScreenInfo],
  }
  
++
  pub fn gen_args_vec(input: &str) -> Vec<&str> {
-@@ -167,6 +171,10 @@
+     input.split_whitespace().collect()
+ }
+@@ -170,6 +175,10 @@
          serial: ipc::Serial,
      ) -> anyhow::Result<()> {
          let to_arr = |vec: &Vec3A| -> [f32; 3] { [vec.x, vec.y, vec.z] };
@@ -182,7 +185,7 @@ diff -ruN a/wayvr/src/ipc/ipc_server.rs d/wayvr/src/ipc/ipc_server.rs
  
          send_packet(
              &mut self.conn,
-@@ -174,11 +182,17 @@
+@@ -177,11 +186,17 @@
                  serial,
                  packet_server::WlxInputState {
                      hmd_pos: to_arr(&params.input_state.hmd.translation),
@@ -201,7 +204,7 @@ diff -ruN a/wayvr/src/ipc/ipc_server.rs d/wayvr/src/ipc/ipc_server.rs
                      },
                  },
              )),
-@@ -187,6 +201,22 @@
+@@ -190,6 +205,22 @@
          Ok(())
      }
  
@@ -224,7 +227,7 @@ diff -ruN a/wayvr/src/ipc/ipc_server.rs d/wayvr/src/ipc/ipc_server.rs
      fn handle_wvr_window_list(
          &mut self,
          params: &mut TickParams,
-@@ -444,6 +474,12 @@
+@@ -449,6 +480,12 @@
              PacketClient::WlxRecenter => {
                  params.signals.send(WayVRSignal::Recenter);
              }
@@ -237,21 +240,19 @@ diff -ruN a/wayvr/src/ipc/ipc_server.rs d/wayvr/src/ipc/ipc_server.rs
          }
  
          Ok(())
-diff -ruN a/wayvr/src/ipc/signal.rs d/wayvr/src/ipc/signal.rs
---- a/wayvr/src/ipc/signal.rs	2026-08-16 16:55:51.074191887 -0600
-+++ b/wayvr/src/ipc/signal.rs	2026-08-16 17:42:29.994511989 -0600
-@@ -5,6 +5,7 @@
+--- a/wayvr/src/ipc/signal.rs
++++ b/wayvr/src/ipc/signal.rs
+@@ -6,6 +6,7 @@
      SwitchSet(Option<usize>),
      Handsfree(wayvr_ipc::packet_client::HandsfreeParams),
      Recenter,
 +    ScreenPlace(wayvr_ipc::packet_client::WlxScreenPlace),
      ShowHide,
      CustomTask(crate::backend::task::ModifyPanelTask),
- }
-diff -ruN a/wayvrctl/src/helper.rs d/wayvrctl/src/helper.rs
---- a/wayvrctl/src/helper.rs	2026-08-16 16:55:51.074769166 -0600
-+++ b/wayvrctl/src/helper.rs	2026-08-16 17:43:18.551421856 -0600
-@@ -173,6 +173,29 @@
+     WindowVisibilityChanged(window::WindowHandle, bool),
+--- a/wayvrctl/src/helper.rs
++++ b/wayvrctl/src/helper.rs
+@@ -181,6 +181,29 @@
      )
  }
  
@@ -281,24 +282,19 @@ diff -ruN a/wayvrctl/src/helper.rs d/wayvrctl/src/helper.rs
  pub async fn wlx_recenter(state: &mut WayVRClientState) {
      handle_empty_result(
          WayVRClient::fn_wlx_recenter(state.wayvr_client.clone())
-diff -ruN a/wayvrctl/src/main.rs d/wayvrctl/src/main.rs
---- a/wayvrctl/src/main.rs	2026-08-16 16:55:51.074728313 -0600
-+++ b/wayvrctl/src/main.rs	2026-08-16 18:51:59.138553133 -0600
-@@ -14,9 +14,10 @@
- };
+--- a/wayvrctl/src/main.rs
++++ b/wayvrctl/src/main.rs
+@@ -16,7 +16,8 @@
  
  use crate::helper::{
--    WayVRClientState, wlx_device_haptics, wlx_handsfree, wlx_input_state, wlx_panel_modify, wlx_recenter,
--    wlx_show_hide, wlx_switch_set, wvr_process_get, wvr_process_launch, wvr_process_list,
--    wvr_process_terminate, wvr_window_list, wvr_window_set_visible,
-+    WayVRClientState, wlx_device_haptics, wlx_handsfree, wlx_input_state, wlx_panel_modify,
-+    wlx_recenter, wlx_screen_list, wlx_screen_place, wlx_show_hide, wlx_switch_set,
-+    wvr_process_get, wvr_process_launch, wvr_process_list, wvr_process_terminate,
-+    wvr_window_list, wvr_window_set_visible,
+     WayVRClientState, wlr_input_capture, wlx_device_haptics, wlx_handsfree, wlx_input_state,
+-    wlx_panel_modify, wlx_recenter, wlx_show_hide, wlx_switch_set, wvr_process_get, wvr_process_launch,
++    wlx_panel_modify, wlx_recenter, wlx_screen_list, wlx_screen_place, wlx_show_hide, wlx_switch_set, wvr_process_get, wvr_process_launch,
++
+     wvr_process_list, wvr_process_terminate, wvr_window_list, wvr_window_set_visible,
  };
  
- mod helper;
-@@ -200,6 +201,30 @@
+@@ -203,6 +204,30 @@
          Subcommands::Recenter => {
              wlx_recenter(state).await;
          }
@@ -329,7 +325,7 @@ diff -ruN a/wayvrctl/src/main.rs d/wayvrctl/src/main.rs
          Subcommands::Handsfree { command } => {
              wlx_handsfree(state, command.into()).await;
          }
-@@ -306,6 +331,30 @@
+@@ -315,6 +340,30 @@
      },
      /// Recenter the playspace to the current headset yaw and position
      Recenter,
@@ -360,10 +356,9 @@ diff -ruN a/wayvrctl/src/main.rs d/wayvrctl/src/main.rs
  }
  
  #[derive(Debug, Clone, Copy, clap::ValueEnum)]
-diff -ruN a/wayvr-ipc/src/client.rs d/wayvr-ipc/src/client.rs
---- a/wayvr-ipc/src/client.rs	2026-08-16 16:55:51.074137289 -0600
-+++ b/wayvr-ipc/src/client.rs	2026-08-16 17:51:34.293991703 -0600
-@@ -452,6 +452,26 @@
+--- a/wayvr-ipc/src/client.rs
++++ b/wayvr-ipc/src/client.rs
+@@ -429,6 +429,26 @@
  		Ok(())
  	}
  
@@ -390,21 +385,20 @@ diff -ruN a/wayvr-ipc/src/client.rs d/wayvr-ipc/src/client.rs
  	pub async fn fn_wlx_recenter(client: WayVRClientMutex) -> anyhow::Result<()> {
  		send_only!(client, &PacketClient::WlxRecenter);
  		Ok(())
-diff -ruN a/wayvr-ipc/src/ipc.rs d/wayvr-ipc/src/ipc.rs
---- a/wayvr-ipc/src/ipc.rs	2026-08-16 16:55:32.575305546 -0600
-+++ b/wayvr-ipc/src/ipc.rs	2026-08-16 17:37:38.594558692 -0600
-@@ -22,7 +22,7 @@
+--- a/wayvr-ipc/src/ipc.rs
++++ b/wayvr-ipc/src/ipc.rs
+@@ -22,7 +22,8 @@
  	}
  }
  
--pub const PROTOCOL_VERSION: u32 = 3;
-+pub const PROTOCOL_VERSION: u32 = 4;
+-pub const PROTOCOL_VERSION: u32 = 4;
++pub const PROTOCOL_VERSION: u32 = 5;
++
  pub const CONNECTION_MAGIC: &str = "wayvr_ipc";
  
  pub fn data_encode<T>(data: &T) -> Vec<u8>
-diff -ruN a/wayvr-ipc/src/packet_client.rs d/wayvr-ipc/src/packet_client.rs
---- a/wayvr-ipc/src/packet_client.rs	2026-08-16 16:55:51.074062212 -0600
-+++ b/wayvr-ipc/src/packet_client.rs	2026-08-16 17:37:38.594526194 -0600
+--- a/wayvr-ipc/src/packet_client.rs
++++ b/wayvr-ipc/src/packet_client.rs
 @@ -65,6 +65,18 @@
  	pub frequency: f32,
  }
@@ -424,17 +418,16 @@ diff -ruN a/wayvr-ipc/src/packet_client.rs d/wayvr-ipc/src/packet_client.rs
  #[derive(Clone, Debug, Serialize, Deserialize)]
  pub enum WlxModifyPanelCommand {
  	SetText(String),
-@@ -97,4 +109,6 @@
+@@ -98,4 +110,6 @@
  	WlxSwitchSet(Option<usize>),
  	WlxHandsfree(HandsfreeParams),
  	WlxRecenter,
 +	WlxScreenList(Serial),
 +	WlxScreenPlace(WlxScreenPlace),
  }
-diff -ruN a/wayvr-ipc/src/packet_server.rs d/wayvr-ipc/src/packet_server.rs
---- a/wayvr-ipc/src/packet_server.rs	2026-08-16 16:55:32.575553186 -0600
-+++ b/wayvr-ipc/src/packet_server.rs	2026-08-16 17:57:40.186113896 -0600
-@@ -87,8 +87,27 @@
+--- a/wayvr-ipc/src/packet_server.rs
++++ b/wayvr-ipc/src/packet_server.rs
+@@ -85,8 +85,27 @@
  }
  
  #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -462,7 +455,7 @@ diff -ruN a/wayvr-ipc/src/packet_server.rs d/wayvr-ipc/src/packet_server.rs
  	pub left: WlxInputStatePointer,
  	pub right: WlxInputStatePointer,
  }
-@@ -100,6 +119,7 @@
+@@ -98,6 +117,7 @@
  	Disconnect(Disconnect),
  	HandshakeSuccess(HandshakeSuccess),
  	WlxInputStateResponse(Serial, WlxInputState),
@@ -470,7 +463,7 @@ diff -ruN a/wayvr-ipc/src/packet_server.rs d/wayvr-ipc/src/packet_server.rs
  	WvrWindowListResponse(Serial, Option<WvrWindowList>),
  	WvrProcessGetResponse(Serial, Option<WvrProcess>),
  	WvrProcessLaunchResponse(Serial, Result<WvrProcessHandle, String>),
-@@ -113,6 +133,7 @@
+@@ -111,6 +131,7 @@
  			PacketServer::Disconnect(_) => None,
  			PacketServer::HandshakeSuccess(_) => None,
  			PacketServer::WlxInputStateResponse(serial, _) => Some(serial),

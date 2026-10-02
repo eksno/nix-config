@@ -1,7 +1,6 @@
-diff -ru a/wayvr/src/ipc/events.rs b/wayvr/src/ipc/events.rs
---- a/wayvr/src/ipc/events.rs	2026-08-16 16:32:53.008248808 -0600
-+++ b/wayvr/src/ipc/events.rs	2026-08-16 16:55:51.074601613 -0600
-@@ -7,7 +7,7 @@
+--- a/wayvr/src/ipc/events.rs
++++ b/wayvr/src/ipc/events.rs
+@@ -5,7 +5,7 @@
  use crate::{
      backend::{
          self,
@@ -10,7 +9,7 @@ diff -ru a/wayvr/src/ipc/events.rs b/wayvr/src/ipc/events.rs
      },
      ipc::signal::WayVRSignal,
      state::AppState,
-@@ -60,6 +60,10 @@
+@@ -61,6 +61,10 @@
                  app.tasks
                      .enqueue(TaskType::Overlay(OverlayTask::ModifyPanel(custom_task)));
              }
@@ -21,10 +20,9 @@ diff -ru a/wayvr/src/ipc/events.rs b/wayvr/src/ipc/events.rs
              WayVRSignal::Handsfree(params) => match params {
                  HandsfreeParams::SetMode(mode) => {
                      let mode = match mode {
-diff -ru a/wayvr/src/ipc/ipc_server.rs b/wayvr/src/ipc/ipc_server.rs
---- a/wayvr/src/ipc/ipc_server.rs	2026-08-16 16:32:53.008256579 -0600
-+++ b/wayvr/src/ipc/ipc_server.rs	2026-08-16 16:55:51.074265373 -0600
-@@ -441,6 +441,9 @@
+--- a/wayvr/src/ipc/ipc_server.rs
++++ b/wayvr/src/ipc/ipc_server.rs
+@@ -446,6 +446,9 @@
              PacketClient::WlxHandsfree(payload) => {
                  Self::handle_wlx_handsfree(params, payload);
              }
@@ -34,21 +32,19 @@ diff -ru a/wayvr/src/ipc/ipc_server.rs b/wayvr/src/ipc/ipc_server.rs
          }
  
          Ok(())
-diff -ru a/wayvr/src/ipc/signal.rs b/wayvr/src/ipc/signal.rs
---- a/wayvr/src/ipc/signal.rs	2026-08-16 16:32:53.008276245 -0600
-+++ b/wayvr/src/ipc/signal.rs	2026-08-16 16:55:51.074191887 -0600
-@@ -4,6 +4,7 @@
+--- a/wayvr/src/ipc/signal.rs
++++ b/wayvr/src/ipc/signal.rs
+@@ -5,6 +5,7 @@
      DeviceHaptics(usize, crate::backend::input::Haptics),
      SwitchSet(Option<usize>),
      Handsfree(wayvr_ipc::packet_client::HandsfreeParams),
 +    Recenter,
      ShowHide,
      CustomTask(crate::backend::task::ModifyPanelTask),
- }
-diff -ru a/wayvrctl/src/helper.rs b/wayvrctl/src/helper.rs
---- a/wayvrctl/src/helper.rs	2026-08-16 16:32:53.011100640 -0600
-+++ b/wayvrctl/src/helper.rs	2026-08-16 16:55:51.074769166 -0600
-@@ -173,6 +173,14 @@
+     WindowVisibilityChanged(window::WindowHandle, bool),
+--- a/wayvrctl/src/helper.rs
++++ b/wayvrctl/src/helper.rs
+@@ -181,6 +181,14 @@
      )
  }
  
@@ -63,19 +59,18 @@ diff -ru a/wayvrctl/src/helper.rs b/wayvrctl/src/helper.rs
  pub async fn wlx_handsfree(state: &mut WayVRClientState, params: HandsfreeParams) {
      handle_empty_result(
          WayVRClient::fn_wlx_handsfree(state.wayvr_client.clone(), params)
-diff -ru a/wayvrctl/src/main.rs b/wayvrctl/src/main.rs
---- a/wayvrctl/src/main.rs	2026-08-16 16:32:53.011113217 -0600
-+++ b/wayvrctl/src/main.rs	2026-08-16 16:55:51.074728313 -0600
-@@ -14,7 +14,7 @@
- };
+--- a/wayvrctl/src/main.rs
++++ b/wayvrctl/src/main.rs
+@@ -16,7 +16,7 @@
  
  use crate::helper::{
--    WayVRClientState, wlx_device_haptics, wlx_handsfree, wlx_input_state, wlx_panel_modify,
-+    WayVRClientState, wlx_device_haptics, wlx_handsfree, wlx_input_state, wlx_panel_modify, wlx_recenter,
-     wlx_show_hide, wlx_switch_set, wvr_process_get, wvr_process_launch, wvr_process_list,
-     wvr_process_terminate, wvr_window_list, wvr_window_set_visible,
+     WayVRClientState, wlr_input_capture, wlx_device_haptics, wlx_handsfree, wlx_input_state,
+-    wlx_panel_modify, wlx_show_hide, wlx_switch_set, wvr_process_get, wvr_process_launch,
++    wlx_panel_modify, wlx_recenter, wlx_show_hide, wlx_switch_set, wvr_process_get, wvr_process_launch,
+     wvr_process_list, wvr_process_terminate, wvr_window_list, wvr_window_set_visible,
  };
-@@ -197,6 +197,9 @@
+ 
+@@ -200,6 +200,9 @@
              let set = if set == 0 { None } else { Some((set - 1) as _) };
              wlx_switch_set(state, set).await;
          }
@@ -85,19 +80,18 @@ diff -ru a/wayvrctl/src/main.rs b/wayvrctl/src/main.rs
          Subcommands::Handsfree { command } => {
              wlx_handsfree(state, command.into()).await;
          }
-@@ -301,6 +304,8 @@
-         #[command(subcommand)]
-         command: SubcommandHandsfree,
+@@ -310,6 +313,8 @@
+     InputCapture {
+         command: GrabRelease,
      },
 +    /// Recenter the playspace to the current headset yaw and position
 +    Recenter,
  }
  
  #[derive(Debug, Clone, Copy, clap::ValueEnum)]
-diff -ru a/wayvr-ipc/src/client.rs b/wayvr-ipc/src/client.rs
---- a/wayvr-ipc/src/client.rs	2026-08-16 16:32:53.010971215 -0600
-+++ b/wayvr-ipc/src/client.rs	2026-08-16 16:55:51.074137289 -0600
-@@ -452,6 +452,11 @@
+--- a/wayvr-ipc/src/client.rs
++++ b/wayvr-ipc/src/client.rs
+@@ -429,6 +429,11 @@
  		Ok(())
  	}
  
@@ -109,10 +103,9 @@ diff -ru a/wayvr-ipc/src/client.rs b/wayvr-ipc/src/client.rs
  	pub async fn fn_wlx_handsfree(
  		client: WayVRClientMutex,
  		params: HandsfreeParams,
-diff -ru a/wayvr-ipc/src/packet_client.rs b/wayvr-ipc/src/packet_client.rs
---- a/wayvr-ipc/src/packet_client.rs	2026-08-16 16:32:53.011002320 -0600
-+++ b/wayvr-ipc/src/packet_client.rs	2026-08-16 16:55:51.074062212 -0600
-@@ -96,4 +96,5 @@
+--- a/wayvr-ipc/src/packet_client.rs
++++ b/wayvr-ipc/src/packet_client.rs
+@@ -97,4 +97,5 @@
  	WlxShowHide,
  	WlxSwitchSet(Option<usize>),
  	WlxHandsfree(HandsfreeParams),

@@ -1,6 +1,5 @@
-diff -ruN a/wayvr/src/overlays/screen/capture.rs e/wayvr/src/overlays/screen/capture.rs
---- a/wayvr/src/overlays/screen/capture.rs	2026-08-16 17:37:38.573414487 -0600
-+++ b/wayvr/src/overlays/screen/capture.rs	2026-08-16 18:10:46.382302683 -0600
+--- a/wayvr/src/overlays/screen/capture.rs
++++ b/wayvr/src/overlays/screen/capture.rs
 @@ -504,6 +504,21 @@
      }
  }

@@ -1,7 +1,6 @@
-diff -ruN a/wayvr/src/windowing/manager.rs h/wayvr/src/windowing/manager.rs
---- a/wayvr/src/windowing/manager.rs	2026-08-16 23:52:25.772417180 -0600
-+++ b/wayvr/src/windowing/manager.rs	2026-08-17 00:00:51.410410891 -0600
-@@ -545,6 +545,14 @@
+--- a/wayvr/src/windowing/manager.rs
++++ b/wayvr/src/windowing/manager.rs
+@@ -630,6 +630,14 @@
              let mut inactive_overlays = AStrMap::new();
  
              for (name, o) in &s.overlays {

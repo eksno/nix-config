@@ -1,7 +1,6 @@
-diff -ruN a/wayvr/src/ipc/events.rs f/wayvr/src/ipc/events.rs
---- a/wayvr/src/ipc/events.rs	2026-08-16 18:10:46.362234276 -0600
-+++ b/wayvr/src/ipc/events.rs	2026-08-16 23:18:00.353956048 -0600
-@@ -7,7 +7,7 @@
+--- a/wayvr/src/ipc/events.rs
++++ b/wayvr/src/ipc/events.rs
+@@ -5,7 +5,7 @@
  use crate::{
      backend::{
          self,
@@ -10,7 +9,7 @@ diff -ruN a/wayvr/src/ipc/events.rs f/wayvr/src/ipc/events.rs
      },
      ipc::signal::WayVRSignal,
      state::AppState,
-@@ -129,6 +129,17 @@
+@@ -130,6 +130,17 @@
                  app.tasks
                      .enqueue(TaskType::Playspace(PlayspaceTask::Recenter));
              }
@@ -28,10 +27,9 @@ diff -ruN a/wayvr/src/ipc/events.rs f/wayvr/src/ipc/events.rs
              WayVRSignal::ScreenPlace(place) => {
                  let name: std::sync::Arc<str> = place.name.as_str().into();
                  app.tasks.enqueue(TaskType::Overlay(OverlayTask::Modify(
-diff -ruN a/wayvr/src/ipc/ipc_server.rs f/wayvr/src/ipc/ipc_server.rs
---- a/wayvr/src/ipc/ipc_server.rs	2026-08-16 18:10:46.362244855 -0600
-+++ b/wayvr/src/ipc/ipc_server.rs	2026-08-16 23:18:00.353407691 -0600
-@@ -480,6 +480,9 @@
+--- a/wayvr/src/ipc/ipc_server.rs
++++ b/wayvr/src/ipc/ipc_server.rs
+@@ -486,6 +486,9 @@
              PacketClient::WlxScreenPlace(place) => {
                  params.signals.send(WayVRSignal::ScreenPlace(place));
              }
@@ -41,21 +39,19 @@ diff -ruN a/wayvr/src/ipc/ipc_server.rs f/wayvr/src/ipc/ipc_server.rs
          }
  
          Ok(())
-diff -ruN a/wayvr/src/ipc/signal.rs f/wayvr/src/ipc/signal.rs
---- a/wayvr/src/ipc/signal.rs	2026-08-16 18:10:46.362266647 -0600
-+++ b/wayvr/src/ipc/signal.rs	2026-08-16 23:18:00.353458722 -0600
-@@ -6,6 +6,7 @@
+--- a/wayvr/src/ipc/signal.rs
++++ b/wayvr/src/ipc/signal.rs
+@@ -7,6 +7,7 @@
      Handsfree(wayvr_ipc::packet_client::HandsfreeParams),
      Recenter,
      ScreenPlace(wayvr_ipc::packet_client::WlxScreenPlace),
 +    ScreenSetVisible(String, bool),
      ShowHide,
      CustomTask(crate::backend::task::ModifyPanelTask),
- }
-diff -ruN a/wayvrctl/src/helper.rs f/wayvrctl/src/helper.rs
---- a/wayvrctl/src/helper.rs	2026-08-16 18:10:46.365608949 -0600
-+++ b/wayvrctl/src/helper.rs	2026-08-16 23:18:00.354016346 -0600
-@@ -196,6 +196,14 @@
+     WindowVisibilityChanged(window::WindowHandle, bool),
+--- a/wayvrctl/src/helper.rs
++++ b/wayvrctl/src/helper.rs
+@@ -204,6 +204,14 @@
      )
  }
  
@@ -70,20 +66,23 @@ diff -ruN a/wayvrctl/src/helper.rs f/wayvrctl/src/helper.rs
  pub async fn wlx_recenter(state: &mut WayVRClientState) {
      handle_empty_result(
          WayVRClient::fn_wlx_recenter(state.wayvr_client.clone())
-diff -ruN a/wayvrctl/src/main.rs f/wayvrctl/src/main.rs
---- a/wayvrctl/src/main.rs	2026-08-16 18:51:44.806696728 -0600
-+++ b/wayvrctl/src/main.rs	2026-08-16 23:18:00.354241936 -0600
-@@ -15,7 +15,8 @@
+--- a/wayvrctl/src/main.rs
++++ b/wayvrctl/src/main.rs
+@@ -16,9 +16,10 @@
  
  use crate::helper::{
-     WayVRClientState, wlx_device_haptics, wlx_handsfree, wlx_input_state, wlx_panel_modify,
--    wlx_recenter, wlx_screen_list, wlx_screen_place, wlx_show_hide, wlx_switch_set,
-+    wlx_recenter, wlx_screen_list, wlx_screen_place, wlx_screen_set_visible, wlx_show_hide,
-+    wlx_switch_set,
-     wvr_process_get, wvr_process_launch, wvr_process_list, wvr_process_terminate,
-     wvr_window_list, wvr_window_set_visible,
+     WayVRClientState, wlr_input_capture, wlx_device_haptics, wlx_handsfree, wlx_input_state,
+-    wlx_panel_modify, wlx_recenter, wlx_screen_list, wlx_screen_place, wlx_show_hide, wlx_switch_set, wvr_process_get, wvr_process_launch,
+-
+-    wvr_process_list, wvr_process_terminate, wvr_window_list, wvr_window_set_visible,
++    wlx_panel_modify, wlx_recenter, wlx_screen_list, wlx_screen_place, wlx_screen_set_visible,
++    wlx_show_hide, wlx_switch_set, wvr_process_get, wvr_process_launch,
++    wvr_process_list,
++ wvr_process_terminate, wvr_window_list, wvr_window_set_visible,
  };
-@@ -225,6 +226,12 @@
+ 
+ mod helper;
+@@ -228,6 +229,12 @@
              )
              .await;
          }
@@ -96,7 +95,7 @@ diff -ruN a/wayvrctl/src/main.rs f/wayvrctl/src/main.rs
          Subcommands::Handsfree { command } => {
              wlx_handsfree(state, command.into()).await;
          }
-@@ -355,6 +362,16 @@
+@@ -364,6 +371,16 @@
          #[arg(long)]
          curvature: Option<f32>,
      },
@@ -113,10 +112,9 @@ diff -ruN a/wayvrctl/src/main.rs f/wayvrctl/src/main.rs
  }
  
  #[derive(Debug, Clone, Copy, clap::ValueEnum)]
-diff -ruN a/wayvr-ipc/src/client.rs f/wayvr-ipc/src/client.rs
---- a/wayvr-ipc/src/client.rs	2026-08-16 18:10:46.365467057 -0600
-+++ b/wayvr-ipc/src/client.rs	2026-08-16 23:18:00.353320989 -0600
-@@ -472,6 +472,15 @@
+--- a/wayvr-ipc/src/client.rs
++++ b/wayvr-ipc/src/client.rs
+@@ -449,6 +449,15 @@
  		Ok(())
  	}
  
@@ -132,10 +130,9 @@ diff -ruN a/wayvr-ipc/src/client.rs f/wayvr-ipc/src/client.rs
  	pub async fn fn_wlx_recenter(client: WayVRClientMutex) -> anyhow::Result<()> {
  		send_only!(client, &PacketClient::WlxRecenter);
  		Ok(())
-diff -ruN a/wayvr-ipc/src/packet_client.rs f/wayvr-ipc/src/packet_client.rs
---- a/wayvr-ipc/src/packet_client.rs	2026-08-16 18:10:46.365504716 -0600
-+++ b/wayvr-ipc/src/packet_client.rs	2026-08-16 23:18:00.353221930 -0600
-@@ -111,4 +111,5 @@
+--- a/wayvr-ipc/src/packet_client.rs
++++ b/wayvr-ipc/src/packet_client.rs
+@@ -112,4 +112,5 @@
  	WlxRecenter,
  	WlxScreenList(Serial),
  	WlxScreenPlace(WlxScreenPlace),

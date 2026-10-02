@@ -21,7 +21,7 @@
 # - ipc-telemetry-and-layout.patch — the IPC surface the Glasses cockpit
 #   app needs: WlxInputState gains hmd_rot + fps, and two new packets
 #   (WlxScreenList / WlxScreenPlace) report and set each screen's
-#   yaw/pitch/distance/scale/curvature. Bumps PROTOCOL_VERSION 3 -> 4.
+#   yaw/pitch/distance/scale/curvature. Bumps PROTOCOL_VERSION 4 -> 5.
 #   Also fixes an upstream copy/paste bug where the right pointer's
 #   position was read from pointers[0].
 #
@@ -55,10 +55,13 @@
 #   saved while it was visible (conf.d/zz-saved-state.json5). Skip the
 #   saved kbd state when keyboard_on_spawn = false.
 #
-# Patches apply against the v26.7.1 source nixpkgs pins. If the version
+# Patches apply against the v26.8.0 source nixpkgs pins. If the version
 # bumps, re-verify the patch context (26.2.1 -> 26.7.1 moved the wayland
-# screen-creation loop body and its call site; curved-arc-layout.patch
-# was regenerated for it).
+# screen-creation loop body and its call site; 26.7.1 -> 26.8.0 made screen
+# positioning/curvature config-driven, added hid_wrapper to the IPC tick
+# params, took PROTOCOL_VERSION 4 upstream (ours is now 5) and rewrote
+# recenter() to take the whole AppState). Every patch was regenerated from
+# a sequential replay, so they apply in this order with no fuzz.
 
 # Keep pname = "wayvr" so the vendor-staging derivation name doesn't
 # change (vendor staging takes ~20 min of network fetch on first run

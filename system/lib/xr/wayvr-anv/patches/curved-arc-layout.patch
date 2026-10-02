@@ -1,6 +1,6 @@
 --- a/wayvr/src/overlays/screen/mod.rs
 +++ b/wayvr/src/overlays/screen/mod.rs
-@@ -29,6 +29,7 @@
+@@ -31,6 +31,7 @@
      transform: Transform,
      session: &AppSession,
      backend: Box<dyn OverlayBackend>,
@@ -8,7 +8,7 @@
  ) -> OverlayWindowConfig {
      let angle = if session.config.upright_screen_fix {
          match transform {
-@@ -41,6 +42,26 @@
+@@ -43,6 +44,26 @@
          0.
      };
  
@@ -35,10 +35,10 @@
      OverlayWindowConfig {
          name,
          category: OverlayCategory::Screen,
-@@ -49,11 +70,7 @@
-             positioning: Positioning::Anchored,
+@@ -52,11 +73,7 @@
+             curvature: none_if_0(session.config.default_curvature),
+             alpha: session.config.default_opacity,
              interactable: true,
-             curvature: Some(0.15),
 -            transform: Affine3A::from_scale_rotation_translation(
 -                Vec3::ONE * 1.5 * session.config.default_overlay_scale,
 -                Quat::from_rotation_z(angle),
@@ -47,10 +47,10 @@
 +            transform: Affine3A::from_scale_rotation_translation(scale, world_rot, translation),
              ..OverlayWindowState::default()
          },
-         keyboard_focus: Some(KeyboardFocus::PhysicalScreen),
+         input_focus: Some(InputFocus::PhysicalScreen),
 --- a/wayvr/src/overlays/screen/wl.rs
 +++ b/wayvr/src/overlays/screen/wl.rs
-@@ -82,10 +82,24 @@
+@@ -81,10 +81,24 @@
      let mut screens = vec![];
      let has_wlr_screencopy = wl.maybe_wlr_screencopy_mgr.is_some();
  
@@ -79,7 +79,7 @@
  
          log::info!(
              "{}: Init screen of res {:?}, logical {:?} at {:?}",
-@@ -101,6 +115,7 @@
+@@ -100,6 +114,7 @@
              output.transform,
              &app.session,
              backend,
@@ -89,7 +89,7 @@
          let meta = ScreenMeta {
 --- a/wayvr/src/overlays/screen/x11.rs
 +++ b/wayvr/src/overlays/screen/x11.rs
-@@ -121,6 +121,7 @@
+@@ -120,6 +120,7 @@
                  Transform::Normal,
                  &app.session,
                  Box::new(backend),
@@ -97,7 +97,7 @@
              );
  
              let meta = ScreenMeta {
-@@ -204,6 +205,7 @@
+@@ -203,6 +204,7 @@
                  Transform::Normal,
                  &app.session,
                  Box::new(backend),

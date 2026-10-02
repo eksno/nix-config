@@ -1,6 +1,5 @@
-diff -ru a/wayvr/src/overlays/screen/capture.rs b/wayvr/src/overlays/screen/capture.rs
---- a/wayvr/src/overlays/screen/capture.rs	2026-08-16 16:32:52.966822904 -0600
-+++ b/wayvr/src/overlays/screen/capture.rs	2026-08-16 16:33:24.594970116 -0600
+--- a/wayvr/src/overlays/screen/capture.rs
++++ b/wayvr/src/overlays/screen/capture.rs
 @@ -616,7 +616,16 @@
                      fd,
                      offset,

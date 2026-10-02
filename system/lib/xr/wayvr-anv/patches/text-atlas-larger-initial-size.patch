@@ -1,8 +1,6 @@
-diff --git a/wgui/src/renderer_vk/text/text_atlas.rs b/wgui/src/renderer_vk/text/text_atlas.rs
-index dc40d02..f2a2e9e 100644
 --- a/wgui/src/renderer_vk/text/text_atlas.rs
 +++ b/wgui/src/renderer_vk/text/text_atlas.rs
-@@ -80,7 +80,12 @@ pub(super) struct InnerAtlas {
+@@ -80,7 +80,12 @@
  pub const TEXT_ATLAS_ISLAND_PADDING_PX: u32 = 1;
  
  impl InnerAtlas {
