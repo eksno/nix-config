@@ -2,6 +2,20 @@
 
 Chronological log of non-trivial fixes for this NixOS flake. Newest entries at the top. See `CLAUDE.md` "Log Every Fix" section for the entry format and rules.
 
+## 2026-10-02 — wayvr-anv-patches-break-again-on-26.8.0 (lewis rebuild + laptop freeze)
+
+**Symptom:** `./update.sh` on lewis failed with `curved-arc-layout.patch` "Hunk #3 FAILED" building `wayvr-26.8.0`, which took down `breezy-hyprland` and the system build. The first retry compiled ~92 uncached drvs at full parallelism and froze Hyprland, so Jorge had to hold the power key.
+**Affected:** lewis/jorge. `system/lib/xr/wayvr-anv/package.nix`, all 10 files in `system/lib/xr/wayvr-anv/patches/`.
+**Root cause:** `nix flake update` moved nixpkgs to `c59305b` (2026-10-01): wayvr 26.7.1 → 26.8.0. Same failure class as the 2026-08-18 entry below. Upstream drift that broke the patches: screen `OverlayWindowConfig` became config-driven (positioning/curvature/opacity); IPC `TickParams` gained `hid_wrapper`; `create_keyboard(app, wayland)` became `create_keyboard(app)`; `recenter()` was rewritten to take `(app, overlays)`; upstream took `PROTOCOL_VERSION = 4` itself; the wayvrctl import list was rewrapped; and `use wayvr_ipc::packet_server` was dropped from `ipc/events.rs` because nothing upstream used it any more.
+**Investigation:**
+1. `patch` only reported the FIRST failing patch. Replaying the whole stack in order showed 5 of the 10 needed hand fixes (curved-arc, ipc-recenter, ipc-telemetry, keyboard-optional, ipc-screen-visibility, recenter-include-pitch); the rest only had offsets or fuzz.
+2. One hunk of ipc-telemetry was detected as "Reversed (or previously applied)" — it was our `PROTOCOL_VERSION 3 -> 4`, which upstream had already made. Bumped ours to 5 so a patched client never matches an unpatched server.
+3. Once all patches applied, wayvr still failed to compile: E0433 `packet_server` not found in `ipc/events.rs`. An applied patch is not a compiled one. Fixed by re-adding the import.
+4. The freeze: the journal showed no OOM, thermal or segfault events, only `Power key pressed short`. Load hit ~42 even at `--max-jobs 2 --cores 6`; `--max-jobs 1 --cores 4` kept the box usable. See `memory/lewis-local-builds-freeze-desktop.md`.
+**Fix:** Re-rolled every patch from a sequential replay (each regenerated from an exact diff, so no fuzz is left). Tools: `$CLAUDE_JOB_DIR/tmp/replay.py` (snapshot before each patch, apply, regen, stop on the first failure) and `regen.py <name>` after hand-fixing. The package.nix comment records the 26.8.0 drift. Wayvr builds standalone via `pkgs.callPackage system/lib/xr/wayvr-anv/package.nix {}`.
+**Next time:** `nix build` wayvr-anv on its own BEFORE `./update.sh`; when patches fail, replay the full stack instead of fixing one at a time.
+**Commit:** (this commit)
+
 ## 2026-10-01 — phonetic-rescue-answered-dictation (prompt injection from spoken instructions)
 
 **Symptom:** `phonetic-rescue` on the 11:13 recording (128.8s, original call 429'd) put an assistant *reply* in the clipboard ("Sure, Jorge. Here's a structured outline for your presentation to Emerge…") instead of the transcript. It also made up names (it added an "Adam").

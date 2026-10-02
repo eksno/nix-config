@@ -1,6 +1,6 @@
 --- a/wayvr/src/ipc/events.rs
 +++ b/wayvr/src/ipc/events.rs
-@@ -5,7 +5,7 @@
+@@ -8,7 +8,7 @@
  use crate::{
      backend::{
          self,
@@ -9,7 +9,7 @@
      },
      ipc::signal::WayVRSignal,
      state::AppState,
-@@ -130,6 +130,17 @@
+@@ -133,6 +133,17 @@
                  app.tasks
                      .enqueue(TaskType::Playspace(PlayspaceTask::Recenter));
              }
