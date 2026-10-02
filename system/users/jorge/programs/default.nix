@@ -7,6 +7,7 @@
 {
   imports = [
     ./obs.nix
+    ../../../lib/phonetic-rescue
   ];
 
   nixpkgs.overlays = [ inputs.phonetic.overlays.default ];
