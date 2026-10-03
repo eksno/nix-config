@@ -87,6 +87,20 @@ itself sends MP3; `phonetic-rescue` stays for recovering any recording that stil
 
 **Before debugging a new issue, grep this file first** — a past investigation may contain the answer.
 
+## 2026-10-02 — desktop-unusable-during-update-sh-nix-daemon-saturates-cpu
+
+**Symptom:** Laptop super laggy for the whole `./update.sh` run (and generally sluggish), regardless of power-mode level.
+**Affected:** lewis/jorge, `system/hosts/lewis/nix-builds.nix`, `system/hosts/lewis/default.nix`
+**Root cause:** nix-daemon ran with defaults `max-jobs = 22` × `cores = 0` (all threads) at normal CPU/IO priority, with no swap. When a flake bump misses the binary cache, it compiles everything at full parallelism. Snapshot mid-rebuild: load avg 54 on 22 threads, 14 parallel builds, CPU PSI `some avg10=37`, x86_pkg_temp 96 °C, cores averaging ~1.6 GHz (thermal throttling). The desktop competes as an equal with ~50 cc1plus/rustc processes.
+**Investigation:**
+1. `ps`: `nixos-rebuild switch` running 13+ min, many `cc1plus`/`rustc`/`sphinx-build` under nix build users.
+2. `nix build ...toplevel --dry-run`: **304 derivations to build locally**: scipy for py3.12, 3.13 **and** 3.14, pint/uncertainties/isort/pylint chain, whiskers, yt-dlp, gamescope, wayvr, monado, etc.
+3. cache.nixos.org `.narinfo` for py3.14 scipy, pint, isort, whiskers and yt-dlp at nixpkgs `c59305b` → 404. Hydra hasn't built them, so the cache-miss itself is upstream. The py3.12 part is the known phonetic → pynput → … → scipy chain (see 2026-07-30 entry).
+4. Ruled out: `nixos-upgrade.service` (autoUpgrade) runs ~1 min/day and currently fails; not a background build hog. Phonetic overlay only adds `phonetic`, doesn't override python.
+5. power-mode level was 0 (`platform_profile=performance`, governor performance, no_turbo=0), so power-mode isn't the limiter; thermals are.
+**Fix:** New `system/hosts/lewis/nix-builds.nix`: `nix.daemonCPUSchedPolicy = "idle"`, `nix.daemonIOSchedClass = "idle"`, `max-jobs = 4`, `cores = 6`, and `zramSwap` (25%) since there's no swap device and a big build previously hard-froze the box. Builds take longer but only use idle CPU.
+**Commit:** see this commit.
+
 ## 2026-08-26 — builtin-audio-gone-again-wireplumber-profile-off-recurrence
 
 **Symptom:** All built-in sound devices missing — no speakers, no internal mics. `wpctl status` listed the ALSA device but zero real sinks; PipeWire's fallback `Dummy Output` was the default sink and a Zen stream was feeding into it (silently).
