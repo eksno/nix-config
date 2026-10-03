@@ -43,8 +43,19 @@ glasses_re="SmartGlasses"
 vg258_desc="desc:ASUSTek COMPUTER INC VG258 JCLMQS018649"
 vg258_re="VG258 JCLMQS018649"
 
+# Under the Lua config manager `hyprctl keyword` is rejected ("keyword can't work
+# with non-legacy parsers. Use eval."), so monitor rules go through `hyprctl eval`
+# with hl.monitor(). The descriptions contain no quotes, so plain double-quoted
+# Lua literals are safe.
+mon() {
+    # mon OUTPUT MODE POSITION SCALE [MIRROR]
+    local lua="output = \"$1\", mode = \"$2\", position = \"$3\", scale = $4"
+    [[ -n "${5:-}" ]] && lua+=", mirror = \"$5\""
+    printf 'hl.monitor({ %s }); ' "$lua"
+}
+
 apply_topology() {
-    local mons vg258 glasses
+    local mons vg258 glasses lua
     mons="$(hyprctl monitors all -j 2>/dev/null)" || return 0
     [[ -n "$mons" ]] || return 0
 
@@ -57,28 +68,26 @@ apply_topology() {
             # the glasses both mirror it. 60 Hz cap is mandatory — 120 Hz across
             # all three exceeds the Intel CDCLK budget and trips Hyprland's
             # page-flip watchdog (see header + FIXES.md 2026-05-24).
-            hyprctl --batch "\
-keyword monitor $vg258_desc,1920x1080@60,0x0,1 ; \
-keyword monitor eDP-1,2880x1800@120,0x0,1.25,mirror,$vg258_desc ; \
-keyword monitor $glasses_desc,1920x1080@120,auto,1,mirror,$vg258_desc" >/dev/null 2>&1
+            lua="$(mon "$vg258_desc" 1920x1080@60 0x0 1)"
+            lua+="$(mon eDP-1 2880x1800@120 0x0 1.25 "$vg258_desc")"
+            lua+="$(mon "$glasses_desc" 1920x1080@120 auto 1 "$vg258_desc")"
         else
             # VG258 standalone (no glasses): run it at its native 119.98 Hz.
             # Two-way eDP-1 + HDMI @120 stays within the CDCLK budget; only the
             # three-way case above needs the 60 Hz cap.
-            hyprctl --batch "\
-keyword monitor $vg258_desc,1920x1080@119.98,0x0,1 ; \
-keyword monitor eDP-1,2880x1800@120,0x0,1.25,mirror,$vg258_desc" >/dev/null 2>&1
+            lua="$(mon "$vg258_desc" 1920x1080@119.98 0x0 1)"
+            lua+="$(mon eDP-1 2880x1800@120 0x0 1.25 "$vg258_desc")"
         fi
     elif [[ "$glasses" == "true" ]]; then
         # Glasses are the canonical source; laptop mirrors them. Clean, no bars
         # on the glasses.
-        hyprctl --batch "\
-keyword monitor $glasses_desc,1920x1080@120,0x0,1 ; \
-keyword monitor eDP-1,2880x1800@120,0x0,1.25,mirror,$glasses_desc" >/dev/null 2>&1
+        lua="$(mon "$glasses_desc" 1920x1080@120 0x0 1)"
+        lua+="$(mon eDP-1 2880x1800@120 0x0 1.25 "$glasses_desc")"
     else
         # Bare laptop.
-        hyprctl keyword monitor "eDP-1,2880x1800@120,0x0,1.25" >/dev/null 2>&1
+        lua="$(mon eDP-1 2880x1800@120 0x0 1.25)"
     fi
+    hyprctl eval "$lua" >/dev/null 2>&1
 }
 
 # Apply once at session start (covers glasses already plugged in at login).

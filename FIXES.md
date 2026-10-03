@@ -2,6 +2,18 @@
 
 Chronological log of non-trivial fixes for this NixOS flake. Newest entries at the top. See `CLAUDE.md` "Log Every Fix" section for the entry format and rules.
 
+## 2026-10-03 — glasses-mirror-watcher-keyword-dead-under-lua
+
+**Symptom:** with the VG258 plugged in, lewis extended the desktop (eDP-1 to the right of HDMI-A-1) instead of mirroring.
+**Affected:** lewis/jorge, `dotfiles/default/hypr/shared/scripts/glasses-mirror-watcher.sh:46`
+**Root cause:** the watcher applied every topology with `hyprctl --batch "keyword monitor ..."`. Under the Lua config manager, `keyword` is rejected ("keyword can't work with non-legacy parsers. Use eval."), and the script sent its output to /dev/null, so it failed silently. The static fallback in `monitor.lua` then auto-placed the outputs side by side.
+**Investigation:**
+1. `hyprctl monitors all -j` showed eDP-1 at 2304,0 with `mirrorOf=none`, so nothing had applied a mirror.
+2. Running the watcher's `keyword` line by hand returned the non-legacy-parser error.
+3. `hyprctl eval 'hl.monitor({ ..., mirror = "desc:..." })'` returned `ok`, and eDP-1 flipped to `mirrorOf=1`.
+**Fix:** added a `mon()` helper that emits `hl.monitor({...})` Lua. `apply_topology` builds one Lua string per topology and sends it in a single `hyprctl eval`. The topologies and refresh rates are unchanged.
+**Commit:** (this commit)
+
 ## 2026-10-02 — wayvr-anv-patches-break-again-on-26.8.0 (lewis rebuild + laptop freeze)
 
 **Symptom:** `./update.sh` on lewis failed with `curved-arc-layout.patch` "Hunk #3 FAILED" building `wayvr-26.8.0`, which took down `breezy-hyprland` and the system build. The first retry compiled ~92 uncached drvs at full parallelism and froze Hyprland, so Jorge had to hold the power key.
