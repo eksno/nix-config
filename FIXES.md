@@ -2,6 +2,18 @@
 
 Chronological log of non-trivial fixes for this NixOS flake. Newest entries at the top. See `CLAUDE.md` "Log Every Fix" section for the entry format and rules.
 
+## 2026-10-05 — phonetic-rescue-rerun-gets-last-chunk
+
+**Symptom:** a second `phonetic-rescue` right after a chunked rescue returned only one sentence (202 chars, the last ~13s), timestamped 18:01 instead of 17:58. The first run's log also seemed to skip every third chunk (3, 6, 9…).
+**Affected:** lewis/jorge, `~/.local/bin/phonetic-rescue` (old unpackaged copy, still first on PATH because the packaged `system/lib/phonetic-rescue` is not in the running generation) + `.scratch/phonetic-chunked-transcribe.py`.
+**Root cause:** the chunked fallback calls phonetic's own `transcribe()`, and every call runs `_save_debug_wav` and overwrites `/tmp/phonetic_debug.wav` with that chunk. When the run finished, the "last recording" was the 13.6s final chunk, and the re-run rescued that. The 17:58 transcript itself was complete: the output file was 7940 chars, but the printed chunk sizes only add up to 5579. The "skipped" chunks are just log lines that phonetic's stdout output glued mid-line, so `grep '^\[chunk\]'` dropped them.
+**Investigation:**
+1. `/tmp/phonetic_debug.wav` was 1.2MB (13.6s at 44.1kHz), the same length as chunk 23, with mtime 18:01, the moment the chunk loop ended.
+2. Summing the printed chunk sizes (5579) against the file size (7940) showed the missing chunks were in the file. Their log lines were simply missing.
+3. The packaged version (`system/lib/phonetic-rescue/phonetic_rescue.py`) is not affected: its own `transcribe()` uses `_to_send_audio` and never calls `_save_debug_wav`. The bug is only in the `~/.local/bin` copy that shadows it.
+**Fix:** `~/.local/bin/phonetic-rescue` now copies the rescued recording back to `/tmp/phonetic_debug.wav` after chunking, and the grep pattern is no longer anchored. The real fix is a rebuild so the packaged `phonetic-rescue` takes over, then delete the `~/.local/bin` copy.
+**Commit:** (this commit)
+
 ## 2026-10-03 — glasses-mirror-watcher-keyword-dead-under-lua
 
 **Symptom:** with the VG258 plugged in, lewis extended the desktop (eDP-1 to the right of HDMI-A-1) instead of mirroring.
