@@ -14,6 +14,18 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 **Fix:** `~/.local/bin/phonetic-rescue` now copies the rescued recording back to `/tmp/phonetic_debug.wav` after chunking, and the grep pattern is no longer anchored. The real fix is a rebuild so the packaged `phonetic-rescue` takes over, then delete the `~/.local/bin` copy.
 **Commit:** (this commit)
 
+## 2026-10-06 — glasses-mirror-watcher-startup-apply-dropped
+
+**Symptom:** after a reboot with the VG258 already plugged in, the screens were extended and the VG258 ran at 60 Hz. The watcher was running with the `hyprctl eval` fix.
+**Affected:** lewis/jorge, `dotfiles/default/hypr/shared/scripts/glasses-mirror-watcher.sh` (startup block)
+**Root cause:** the watcher is launched from `hl.on("hyprland.start")` and applied the topology exactly once, straight away. That apply ran before Hyprland had finished bringing up the outputs and was silently dropped. No hotplug event follows when the monitor is already plugged in, so nothing re-applied it.
+**Investigation:**
+1. The watcher PIDs were alive and the script contained `hyprctl eval`, so this was not the 10-03 bug.
+2. Running `apply_topology` by hand mirrored correctly (eDP-1 `mirrorOf=1`, VG258 at 119.98), so the Lua was fine and only the timing failed.
+3. The VG258 at 60 Hz is Hyprland's default mode, so no watcher rule had ever taken effect at login.
+**Fix:** wait for the IPC socket, then re-apply at 0 s, 2 s and 5 s in the background, before the socat loop. Not verified across a real login yet; a manual restart of the watcher re-applied the layout correctly.
+**Commit:** (this commit)
+
 ## 2026-10-03 — glasses-mirror-watcher-keyword-dead-under-lua
 
 **Symptom:** with the VG258 plugged in, lewis extended the desktop (eDP-1 to the right of HDMI-A-1) instead of mirroring.

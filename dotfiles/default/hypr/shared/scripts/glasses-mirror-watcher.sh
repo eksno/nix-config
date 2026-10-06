@@ -90,8 +90,20 @@ apply_topology() {
     hyprctl eval "$lua" >/dev/null 2>&1
 }
 
-# Apply once at session start (covers glasses already plugged in at login).
-apply_topology
+# Apply at session start (covers monitors already plugged in at login). This
+# runs from hl.on("hyprland.start"), before Hyprland has finished bringing up
+# outputs, so a single early apply gets silently dropped (seen 2026-10-06:
+# VG258 left at its 60 Hz default, extended). Wait for the IPC socket, then
+# re-apply a few times while startup settles. Re-applying the same layout is
+# harmless.
+for _ in $(seq 50); do
+    hyprctl monitors -j >/dev/null 2>&1 && break
+    sleep 0.2
+done
+for delay in 0 2 5; do
+    sleep "$delay"
+    apply_topology
+done &
 
 # React to hotplug. monitoraddedv2 fires before the output is fully settled,
 # so debounce briefly before re-applying.
