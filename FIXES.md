@@ -14,6 +14,20 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 **Fix:** `~/.local/bin/phonetic-rescue` now copies the rescued recording back to `/tmp/phonetic_debug.wav` after chunking, and the grep pattern is no longer anchored. The real fix is a rebuild so the packaged `phonetic-rescue` takes over, then delete the `~/.local/bin` copy.
 **Commit:** (this commit)
 
+## 2026-10-10 — lewis-rebuild-compiles-scipy-three-times
+
+**Symptom:** the lewis rebuild for the 2026-09 sync wanted to compile scipy for python 3.12, 3.13 and 3.14. Two attempts froze the laptop: one from load, and one i915 GuC TLB-invalidation hang that crashed Hyprland mid-build.
+**Affected:** lewis/jorge, `system/users/jorge/skip-scipy-test-deps.nix`
+**Root cause:** cache.nixos.org has no scipy for nixpkgs `c59305b` (its flaky hypothesis test; see the eksno overlay comment in `system/users/eksno/programs/default.nix`). Nothing installed uses scipy; every path to it is a test or lint dependency:
+`pynput -(setup_requires)-> setuptools-lint -> pylint -> … -> scipy`, `isort -(tests)-> pylama -> vulture -(tests)-> pint -> uncertainties -> scipy`, and `waypaper -> imageio -(tests)-> astropy -> scipy`.
+**Investigation:**
+1. `nix why-depends --derivation <system.drv> <scipy.drv>` per Python version gave the three chains above.
+2. Read the nixpkgs sources: `pylama`/`pint`/`astropy` sit in `nativeCheckInputs`; `pynput` has `setuptools-lint` in `nativeBuildInputs` and in `setup.py` `SETUP_PACKAGES` (so dropping the input alone would fail the `setup_requires` check).
+3. Checked cache.nixos.org with `nix path-info --store https://cache.nixos.org`: the scipy outputs are missing; nodejs, Hyprland and the kernel modules are present.
+4. Dead end: eksno's approach (`scipy.doCheck = false` via `python312.override`) only makes scipy build; it still compiles it, and only for 3.12.
+**Fix:** a `pythonPackagesExtensions` overlay that sets `doCheck = false` on isort, vulture and imageio, and strips `setuptools-lint` from pynput's inputs and `setup.py`. After it, the dry-run build list has no scipy, astropy, pylint, pint or uncertainties (826 → 803 derivations; what remains is mostly trivial or cached).
+**Commit:** (this commit)
+
 ## 2026-10-06 — glasses-mirror-watcher-startup-apply-dropped
 
 **Symptom:** after a reboot with the VG258 already plugged in, the screens were extended and the VG258 ran at 60 Hz. The watcher was running with the `hyprctl eval` fix.

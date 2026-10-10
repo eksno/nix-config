@@ -14,6 +14,7 @@
     ./dev
     ./locale.nix
     ./theme.nix
+    ./skip-scipy-test-deps.nix
   ];
 
   dotfiles.username = "jorge";
