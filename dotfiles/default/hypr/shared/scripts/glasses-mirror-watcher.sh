@@ -88,6 +88,27 @@ apply_topology() {
         lua="$(mon eDP-1 2880x1800@120 0x0 1.25)"
     fi
     hyprctl eval "$lua" >/dev/null 2>&1
+    rehome_orphans
+}
+
+# When the mirror SOURCE is unplugged (VG258 or glasses) eDP-1 is still a
+# mirror at that instant, so Hyprland has no non-mirror output to hand the
+# source's workspaces to and leaves them with `monitorID: null`. The topology
+# re-apply above turns eDP-1 standalone again but Hyprland does not re-home
+# orphaned workspaces on its own: the bar shows only the one workspace eDP-1
+# already had and the rest are unreachable (seen 2026-10-13). Move every
+# monitor-less workspace onto the first enabled, non-mirror output.
+rehome_orphans() {
+    local target orphans ws
+    sleep 0.5
+    target="$(hyprctl monitors -j 2>/dev/null \
+        | jq -r '[.[] | select(.disabled == false and .mirrorOf == "none")][0].name // empty')"
+    [[ -n "$target" ]] || return 0
+    orphans="$(hyprctl workspaces -j 2>/dev/null \
+        | jq -r '.[] | select(.monitorID == null and .id > 0) | .id')"
+    for ws in $orphans; do
+        hyprctl eval "hl.dispatch(hl.dsp.workspace.move({ workspace = \"$ws\", monitor = \"$target\" }))" >/dev/null 2>&1
+    done
 }
 
 # Apply at session start (covers monitors already plugged in at login). This

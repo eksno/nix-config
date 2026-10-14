@@ -2,6 +2,19 @@
 
 Chronological log of non-trivial fixes for this NixOS flake. Newest entries at the top. See `CLAUDE.md` "Log Every Fix" section for the entry format and rules.
 
+## 2026-10-13 — workspaces-orphaned-after-unplugging-mirror-source
+
+**Symptom:** after unplugging the VG258 from lewis, the laptop panel showed only workspace 1. Workspaces 2–5 (kitty, chrome, discord) were gone from the bar and unreachable with the workspace binds.
+**Affected:** lewis/jorge, `dotfiles/default/hypr/shared/scripts/glasses-mirror-watcher.sh` (`apply_topology`)
+**Root cause:** with the VG258 plugged in, eDP-1 is a *mirror* of HDMI-A-1 and all workspaces live on HDMI-A-1. At the instant HDMI-A-1 is removed, eDP-1 is still a mirror, so Hyprland has no non-mirror output to move the workspaces to and leaves them with `monitorID: null`. The watcher then re-applies "bare laptop" (eDP-1 standalone, scale 1.25), which fixes the output, but Hyprland never re-homes already-orphaned workspaces.
+**Investigation:**
+1. `hyprctl workspaces -j` showed ids 2–5 with `monitor: "?"`, `monitorID: null`; only 1 was on eDP-1. `hyprctl monitors` showed eDP-1 at scale 1 for a second, then 1.25 once the watcher's 1s debounce fired, so the monitor path of the watcher is fine.
+2. Dead end: `hyprctl dispatch moveworkspacetomonitor 2 eDP-1` fails under the Lua config manager (`')' expected near '2'`), same for the raw `.socket.sock` string. Dispatchers must go through `hyprctl eval`.
+3. Dead end: `hl.dispatch("moveworkspacetomonitor", …)` and `hl.dsp.workspace.move("2", "eDP-1")` both error. `hyprctl eval` prints `ok` instead of return values, so `error("KEYS:"..)` was used to dump `hl.dsp.workspace` → `move,change_id,rename,toggle_special,swap_monitors`. The shipped stubs (`share/hypr/stubs/hl.meta.lua`) only say `move fun(...): HL.Dispatcher`; the error text from Hyprland itself gives the shape: a table.
+4. Working form: `hyprctl eval 'hl.dispatch(hl.dsp.workspace.move({ workspace = "2", monitor = "eDP-1" }))'`. Moved 2–5 back live.
+**Fix:** `apply_topology` now calls a new `rehome_orphans` after every `hyprctl eval`: picks the first enabled non-mirror monitor and moves every workspace with `monitorID == null` onto it. Not live until merged into `~/nix-config` (the `~/.config/hypr` symlink points there) and the watcher restarted or the session relogged; no rebuild needed for a script-only change.
+**Commit:** (this commit)
+
 ## 2026-10-05 — phonetic-rescue-rerun-gets-last-chunk
 
 **Symptom:** a second `phonetic-rescue` right after a chunked rescue returned only one sentence (202 chars, the last ~13s), timestamped 18:01 instead of 17:58. The first run's log also seemed to skip every third chunk (3, 6, 9…).
