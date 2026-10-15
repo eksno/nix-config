@@ -2,6 +2,15 @@
 
 Chronological log of non-trivial fixes for this NixOS flake. Newest entries at the top. See `CLAUDE.md` "Log Every Fix" section for the entry format and rules.
 
+## 2026-10-15 — chrome-pages-blocked-by-keyring-prompt
+
+**Symptom:** after a hard power cycle Chrome opens blank tabs that never load; after closing windows its background process prevents a clean reopening. Discord also starts without a window.
+**Affected:** lewis/jorge desktop session; login keyring and gcr-prompter.
+**Root cause:** login keyring was locked and its password prompt stalled without a visible window. Chrome's credential initialization blocked page loads. The original machine freeze is separate and unconfirmed; the previous kernel log contains i915 GuC TLB invalidation timeouts.
+**Investigation:** Disk space, normal DNS and curl HTTPS worked. Restarting Chrome, disabling GPU acceleration, switching to X11, disabling extensions, a fresh profile, fixed DNS and bypassing proxies did not resolve loading. A temporary profile with `--password-store=basic` loaded HTTPS; the normal keyring reported Locked=true. Replacing only gcr-prompter did not clear the pending prompt queue.
+**Fix:** Restarted gnome-keyring-daemon with `--replace --daemonize --components=secrets,pkcs11`; requested Unlock then Prompt on a persistent session-bus connection while launching the installed gcr-prompter with X11/software rendering. User entered password locally. Verified Locked=false, then relaunched normal Chrome with extensions and original profile: window title became **Example Domain**. No keyring files, profile data or permanent password-storage settings changed. Restarting Discord's stuck main process restored its window.
+**Commit:** recorded in git history.
+
 ## 2026-10-15 — anyio-python312-tls-test-blocks-update
 
 **Symptom:** lewis update fails building python3.12-anyio-4.14.2, cascading through httpx, phonetic and the system build.

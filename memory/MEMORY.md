@@ -9,6 +9,8 @@
 
 ## project
 
+- [Chrome blocked by keyring prompt](chrome-keyring-prompt-stall.md) — blank network tabs after login; test keyring before changing profiles or GPU settings
+
 ### xr/ subsystem
 
 - [XR stack overview](xr-stack-overview.md) — entry point: packages, modules, data flow, what does what
