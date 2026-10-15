@@ -2,6 +2,15 @@
 
 Chronological log of non-trivial fixes for this NixOS flake. Newest entries at the top. See `CLAUDE.md` "Log Every Fix" section for the entry format and rules.
 
+## 2026-10-15 — anyio-python312-tls-test-blocks-update
+
+**Symptom:** lewis update fails building python3.12-anyio-4.14.2, cascading through httpx, phonetic and the system build.
+**Affected:** lewis/jorge, `system/users/jorge/skip-scipy-test-deps.nix`.
+**Root cause:** `test_tls_connectable` supplies `hostname="localhost"` with `server_side=True`; Python 3.12 rejects the client-only hostname. The initial heavily loaded run also reported secondary unraisable warnings and a pytest subprocess timeout.
+**Investigation:** Read the failed derivation log and test source. An initial overlay condition on `pyfinal.python` caused evaluation recursion; moving the condition into the package override and using `pyprev.python` resolved it. Patched only the invalid test argument, then built anyio with `--max-jobs 1 --cores 4`: **2601 passed, 102 skipped, 5 xfailed**, with no test failures.
+**Fix:** Remove the server-side hostname in that test for Python 3.12 / anyio 4.14.2 only. Keep the full test suite enabled. The system rebuild still needs to consume the patched dependency.
+**Commit:** recorded in git history.
+
 ## 2026-10-05 — phonetic-rescue-rerun-gets-last-chunk
 
 **Symptom:** a second `phonetic-rescue` right after a chunked rescue returned only one sentence (202 chars, the last ~13s), timestamped 18:01 instead of 17:58. The first run's log also seemed to skip every third chunk (3, 6, 9…).
