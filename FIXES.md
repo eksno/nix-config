@@ -2,6 +2,16 @@
 
 Chronological log of non-trivial fixes for this NixOS flake. Newest entries at the top. See `CLAUDE.md` "Log Every Fix" section for the entry format and rules.
 
+## 2026-10-15 — persist-keyring-dialog-workaround-on-lewis
+
+**Symptom:** after another power-off/reboot, Chrome and Discord again stall behind an invisible login-keyring password prompt.
+**Affected:** lewis/jorge, `system/hosts/lewis/keyring-prompt.nix`, `dotfiles/default/hypr/hosts/lewis/default.lua`.
+**Root cause:** autologin leaves the login keyring locked, and its default gcr prompt again stalled before mapping a window. The Intel host also loaded NVIDIA-only GBM/GLX/VAAPI environment settings, producing missing nvidia-drm GBM and VAAPI errors. Their relationship to the keyring stall is unconfirmed.
+**Investigation:** Repeated daemon restart plus X11/software prompter recovery; user unlocked locally. Verified Locked=false and normal Chrome's Example Domain and Station windows plus Discord's Friends window. Checked the NixOS keyring module: D-Bus activates `pkgs.gcr_3` directly, so overriding only gnome-keyring's private gcr dependency would miss the activated prompt. A global gcr_3 override built successfully but would also rebuild Bitwarden, seahorse and other consumers (1.1 GiB extra dependencies). Narrowed the fix to user-local D-Bus launchers that take precedence over the system launchers.
+**Fix:** Install user-local SystemPrompter and PrivatePrompter D-Bus service files pointing to a wrapper with GDK_BACKEND=x11, GDK_GL=disable, LIBGL_ALWAYS_SOFTWARE=1 and forced NVIDIA variables unset. The host activation script preserves these launchers on subsequent system switches. Installed the two user-local service files immediately and registered a user-owned Nix GC root at ~/.local/state/nix-config/keyring-prompter. Tested D-Bus autoactivation and inspected the actual prompter environment: GDK_BACKEND=x11, GDK_GL=disable, LIBGL_ALWAYS_SOFTWARE=1, and all three NVIDIA variables unset. Hyprland config reload returned no errors. Remove the NVIDIA Lua import from this Intel host. Preserve autologin, keyring contents, browser profile and normal app rendering.
+**Shutdown evidence:** the 18:09:58 logind event says Power key pressed short, then Powering off; user reports no button press and automatic power-off. Aquamarine's 18:10:01 segfault occurred during compositor shutdown, after logind initiated power-off, so it does not explain the trigger. No thermal cutoff or kernel crash was logged at that time. Physical/firmware/input origin of the power-key signal is unconfirmed.
+**Commit:** recorded in git history.
+
 ## 2026-10-15 — chrome-pages-blocked-by-keyring-prompt
 
 **Symptom:** after a hard power cycle Chrome opens blank tabs that never load; after closing windows its background process prevents a clean reopening. Discord also starts without a window.
