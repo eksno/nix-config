@@ -7,6 +7,7 @@
 {
   imports = [
     ./obs.nix
+    ./adspower.nix
     ../../../lib/phonetic-rescue
   ];
 
