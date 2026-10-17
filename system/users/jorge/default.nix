@@ -29,7 +29,10 @@
     ];
   };
 
-  services.displayManager.sddm.settings.Autologin.User = "jorge";
+  # No autologin: typing the password at SDDM lets pam_gnome_keyring unlock
+  # the login keyring. Autologin left it locked, and the boot-time unlock
+  # dialog repeatedly hung Chrome/Discord (see FIXES.md 2026-10-17).
+  services.displayManager.defaultSession = "hyprland-uwsm";
   services.openssh.enable = true;
   programs.ssh.extraConfig = ''
     IdentityAgent ~/.bitwarden-ssh-agent.sock
