@@ -2,6 +2,20 @@
 
 Chronological log of non-trivial fixes for this NixOS flake. Newest entries at the top. See `CLAUDE.md` "Log Every Fix" section for the entry format and rules.
 
+## 2026-10-17 — keyring-dialog-mapped-before-hyprland-xwm
+
+**Symptom:** recurrence after the laptop powered itself off: on boot, Chrome and Discord run but never show a window; "something with login/passkeys".
+**Affected:** lewis/jorge, `system/hosts/lewis/keyring-prompt.nix:7`.
+**Root cause:** the X11 prompter from the 10-15 fix is started by Chrome's keyring unlock ~1s after Hyprland lazily launches Xwayland (Xwayland 10:10:56, gcr-prompter 10:10:57). Its "Unlock Login Keyring" window (0x400006) was mapped before Hyprland's XWM adopted the server: `xwininfo` said IsViewable, `WM_STATE` was empty, `hyprctl clients` listed only kitty. Chrome/Discord block on the pending prompt (`/org/freedesktop/secrets/prompt/u1`).
+**Investigation:**
+1. The 10-15 user-local D-Bus launchers were in place and used (prompter env had GDK_BACKEND=x11), so this was not a missing workaround.
+2. `Locked` on the login collection read false and SearchItems returned every item as unlocked, yet the prompt stayed pending, so lock state alone is not a valid "is it stuck" check. The default alias resolves to login, which rules out a create-keyring prompt.
+3. `xwininfo -root -tree` found the dialog; a fresh test `xmessage` was managed normally (xwayland=true), so XWayland in general was fine and only the early window was orphaned.
+4. `xdotool windowunmap`, then `windowmap 0x400006`: Hyprland adopted it immediately and the dialog became visible. This is the live recovery.
+5. Power-off cause: boot -1 ended at Oct 16 21:50:27 with no shutdown sequence, and the RTC reset to 2025-06-06 (journal stamped "Jun 05"); the battery was at 5% on AC. This is a flat battery from the known lewis charging fault, not a software shutdown.
+**Fix:** the prompter wrapper waits (up to ~15s) for `_NET_SUPPORTING_WM_CHECK` on the X root window, plus 0.5s, before exec'ing gcr-prompter. Tested: passes in 0.5s on a live display and falls through after ~15.7s with no display.
+**Commit:** (see git log for this entry)
+
 ## 2026-10-15 — persist-keyring-dialog-workaround-on-lewis
 
 **Symptom:** after another power-off/reboot, Chrome and Discord again stall behind an invisible login-keyring password prompt.

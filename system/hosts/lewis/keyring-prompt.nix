@@ -5,6 +5,15 @@ let
     "org.gnome.keyring.PrivatePrompter"
   ];
   prompt = pkgs.writeShellScript "lewis-keyring-prompter" ''
+    # Chrome triggers this at login, before Hyprland's XWM has adopted the
+    # lazily started Xwayland; a window mapped then is never managed and the
+    # dialog stays invisible. Wait for the WM check property (max ~15s).
+    for _ in $(${pkgs.coreutils}/bin/seq 30); do
+      ${pkgs.xprop}/bin/xprop -root _NET_SUPPORTING_WM_CHECK 2>/dev/null \
+        | ${pkgs.gnugrep}/bin/grep -q "window id" && break
+      ${pkgs.coreutils}/bin/sleep 0.5
+    done
+    ${pkgs.coreutils}/bin/sleep 0.5
     exec ${pkgs.coreutils}/bin/env \
       -u GBM_BACKEND -u LIBVA_DRIVER_NAME -u __GLX_VENDOR_LIBRARY_NAME \
       GDK_BACKEND=x11 GDK_GL=disable LIBGL_ALWAYS_SOFTWARE=1 \
