@@ -135,15 +135,9 @@
     obsidian # Update nevermind is was flake.nix shit <-- Update R.I.P <-- Update WE'RE SO BACK <-- I'm sorry little one, you were too trash for me to try to figure out. https://github.com/NixOS/nixpkgs/issues/302457
     bitwarden-desktop # Update WE'RE SO BACK <-- I believed in you, but you had to be a pain.
     vscode
-    (pkgs.symlinkJoin {
-      name = "google-chrome";
-      paths = [ pkgs.google-chrome ];
-      buildInputs = [ pkgs.makeWrapper ];
-      postBuild = ''
-        wrapProgram $out/bin/google-chrome-stable \
-          --add-flags "--remote-debugging-port=9222"
-      '';
-    })
+    # No --remote-debugging-port: Chrome 136+ rejects it on the default profile
+    # and it blocks the chrome://inspect toggle, which now serves 127.0.0.1:9222.
+    google-chrome
     easyeffects
     lm_sensors
     docker-compose

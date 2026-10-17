@@ -2,6 +2,18 @@
 
 Chronological log of non-trivial fixes for this NixOS flake. Newest entries at the top. See `CLAUDE.md` "Log Every Fix" section for the entry format and rules.
 
+## 2026-10-17 — chrome-remote-debugging-stuck-starting
+
+**Symptom:** chrome://inspect remote-debugging toggle enabled, but the page stays on "Server running at: starting…"; nothing on 127.0.0.1:9222.
+**Affected:** lewis/jorge, `system/users/jorge/programs/default.nix:138` (Chrome wrapper, from `c4308ab`).
+**Root cause:** the wrapper added `--remote-debugging-port=9222` to every launch. Chrome 136+ refuses that switch on the default user-data dir, and while it is present the user-enabled server (`devtools.remote_debugging.user-enabled: true` in Local State) never starts: no listener and no `DevToolsActivePort` file.
+**Investigation:**
+1. A graceful restart with the flag did not help: still no listener and no DevToolsActivePort.
+2. Pitfall: the user relaunched Chrome from Hyprland in the meantime, so a flag-free launch just attached to that instance ("Opening in existing browser session"). Confirm all Chrome mains have exited before testing.
+3. Relaunching the unwrapped binary without the flag gave `DevTools listening on ws://127.0.0.1:9222/...` within seconds, with Chrome listening on 127.0.0.1:9222.
+**Fix:** replaced the wrapper with plain `google-chrome`. The toggle serves the same port 9222.
+**Commit:** (see git log for this entry)
+
 ## 2026-10-17 — keyring-dialog-mapped-before-hyprland-xwm
 
 **Symptom:** recurrence after the laptop powered itself off: on boot, Chrome and Discord run but never show a window; "something with login/passkeys".
