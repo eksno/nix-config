@@ -2,6 +2,20 @@
 
 Chronological log of non-trivial fixes for this NixOS flake. Newest entries at the top. See `CLAUDE.md` "Log Every Fix" section for the entry format and rules.
 
+## 2026-10-19 — lingering-earn-chrome-triggers-keyring-prompt-before-login
+
+**Symptom:** third recurrence after reboot: Chrome and Discord run but never show a window, even after the 10-17 fix that removed autologin.
+**Affected:** lewis/jorge, `~/.config/systemd/user/earn-chrome.service` (hand-made, not in this repo; linger=yes).
+**Root cause:** `earn-chrome.service` (headless Chrome on CDP 9333, profile `~/.earn-chrome`, `WantedBy=default.target`) starts at boot through linger, 27 min before the SDDM login in this case (22:20:02 vs 22:47:04). Chrome D-Bus-activated gnome-keyring-daemon at 22:20:03 against a locked login keyring and no display, which created `/org/freedesktop/secrets/prompt/u1`. At login, PAM logged `gkr-pam: unable to locate daemon control file` and then `unlocked login keyring`, so `Locked=false`, but `u1` never completed (same daemon bug as 10-17). Desktop Chrome and Discord keyring calls queued behind it.
+**Investigation:**
+1. Read the 10-15 and 10-17 entries first. Confirmed the 10-17 fix is live: no `User=` in sddm.conf and booted == current system. Autologin was not the trigger this time.
+2. Login collection `Locked` was false, yet `prompt/u1` was still in `busctl --user tree`. `hyprctl clients` showed only kitty.
+3. `pgrep` showed a `--headless=new` Chrome (PID 1248) started 22:20:02 by `systemd --user`, and gnome-keyring-daemon (PID 1706) started 1s later, both before login. The user journal named the unit "Earn network reader Chrome".
+4. Rejected `--password-store=basic` for the unit: it changes the cookie encryption key and would log that profile out of Instagram.
+5. `hyprctl dispatch exec` fails on the Lua config (`')' expected`). Use `setsid -f uwsm app -- <cmd>`, because a bare `uwsm app` blocks.
+**Fix:** added `ExecStartPre` to the unit that polls the login collection's `Locked` property every 5s until false, plus `TimeoutStartSec=infinity`, so the headless reader waits for the PAM unlock at login. Live recovery: restarted earn-chrome (it passed the gate immediately and `prompt/u1` disappeared), SIGTERMed the windowless Chrome/Discord and relaunched them with uwsm. Verified "Friends - Discord" and "Google Chrome" windows in `hyprctl clients` and no pending prompt. The unit is not declarative; consider moving it into `system/users/jorge/` as a `systemd.user.services` entry.
+**Commit:** (this commit)
+
 ## 2026-10-05 — phonetic-rescue-rerun-gets-last-chunk
 
 **Symptom:** a second `phonetic-rescue` right after a chunked rescue returned only one sentence (202 chars, the last ~13s), timestamped 18:01 instead of 17:58. The first run's log also seemed to skip every third chunk (3, 6, 9…).
