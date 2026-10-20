@@ -16,8 +16,11 @@ hl.on("hyprland.start", function()
   hl.exec_cmd("waybar")
   hl.exec_cmd("eww open keyboard-cheatsheet")
 
-  -- Startup apps
-  hl.exec_cmd("kitty",                { workspace = "4" })
-  hl.exec_cmd("google-chrome-stable", { workspace = "5 silent" })
-  hl.exec_cmd("discord",              { workspace = "3 silent" })
+  -- Startup apps. Chromium apps go through launch-retry.sh: after a
+  -- crash + re-login they repeatedly started windowless (see FIXES.md
+  -- 2026-10-20); the script gates on session readiness and relaunches once.
+  local retry = "~/.config/hypr/users/jorge/default/launch-retry.sh "
+  hl.exec_cmd("kitty",                                    { workspace = "4" })
+  hl.exec_cmd(retry .. "google-chrome google-chrome-stable", { workspace = "5 silent" })
+  hl.exec_cmd(retry .. "discord discord",                    { workspace = "3 silent" })
 end)
