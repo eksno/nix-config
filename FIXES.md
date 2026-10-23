@@ -2,6 +2,38 @@
 
 Chronological log of non-trivial fixes for this NixOS flake. Newest entries at the top. See `CLAUDE.md` "Log Every Fix" section for the entry format and rules.
 
+## 2026-10-20 — i915-gpu-hang-crashes-hyprland-then-startup-chromium-apps-windowless
+
+**Symptom:** "happened again": something crashed, lewis dropped to the SDDM login, and after logging back in Chrome and Discord were running but had no window. Keyring was unlocked and no prompt was pending this time.
+**Affected:** lewis/jorge, `system/lib/device/intel/default.nix:12` (i915 params), `dotfiles/default/hypr/users/jorge/default/startup.lua`, Hyprland 0.56.2 / aquamarine 0.15.1, kernel 7.2.10.
+**Root cause:** two chained problems.
+1. The crash is an **i915 GPU hang**. Every Hyprland SIGABRT in `coredumpctl` (22:04 and 22:41 on 10-19, 07:38 on 10-20) is preceded in `journalctl -k` by `GUC: TLB invalidation response timed out` → `Fence expiration time out i915-...:.Hyprland-wrapp` → `GPU HANG: ecode 12:1:85dffffb` → `Resetting chip for stopped heartbeat on rcs0`. Hyprland then asserts in `CHyprOpenGLImpl::begin` ← `renderMonitor` ← `CMonitorFrameScheduler::onFrame` ← aquamarine `CDRMBackend::handlePageFlip` (identical backtrace in all three crash reports). Hyprland's `start-hyprland` watchdog relaunched it ("Hyprland exit not-cleanly, restarting") but the relaunched instance logged `No config file found; attempting to generate`, so 07:38→10:11 ran on a bare default config; that instance SEGV'd in the aquamarine destructor on exit at 10:11 and the session ended.
+2. After the 10:14 re-login, `startup.lua` exec'd Chrome and Discord 2s after Hyprland started, in the same second as xdg-desktop-portal. Both ran (Chrome held a wayland-cursor memfd, Discord idled in ppoll) but never mapped a window; `hyprctl clients` showed only kitty. A fresh kitty and a fresh-profile Chrome launched later mapped instantly, so the compositor was fine. Chrome's first log line came 31s after start (D-Bus 25s timeout shape). Exact Chromium-side mechanism unconfirmed; the pattern (windowless after every crash/re-login since 10-15, always fixed by SIGTERM + relaunch) is what the fix targets.
+**Investigation:**
+1. Re-read the 10-15/10-17/10-19 entries. Checked keyring first: `Locked=false`, no `prompt/` object, `OpenSession` answers, `earn-chrome` gate had passed. Keyring ruled out for this occurrence.
+2. Dead end: `/proc/<chrome>/environ` showed no `WAYLAND_DISPLAY`; it is 20k blank entries because Chrome overwrites that memory. Not usable as evidence.
+3. Dead end: `strace -p` on Chrome is refused (`yama.ptrace_scope=1`); it worked on Discord, which was just polling.
+4. `hyprctl dispatch exec ...` fails on the Lua config (`')' expected`). `setsid -f uwsm app -- <cmd>` is the working relaunch; bare `uwsm app` blocks.
+5. Hyprland crashes go back to 2026-08-16 in `coredumpctl list`; 5 in the last 13h is a spike. Crash-report "Log tail" shows a DRM connector rescan right before each abort, which is the kernel reset, not a cable hotplug.
+6. nixos-unstable still ships Hyprland 0.56.2 / aquamarine 0.15.1, so a flake bump does not change the compositor.
+**Fix:** `dotfiles/default/hypr/users/jorge/default/launch-retry.sh` wraps the Chromium startup apps: waits for a monitor, pings portal Settings and the secret service, `exec`s the app (keeps the pid Hyprland bound the `workspace N silent` rule to), and a background watchdog SIGTERMs + relaunches via `uwsm app` if no window of the class exists after 30s. `startup.lua` routes Chrome and Discord through it. Tested live: kitty mapped via the launcher in 1s; with a class that never appears the watchdog killed and relaunched the command after 30s. Live recovery today: SIGTERM both apps, relaunch with uwsm; "Google Chrome" and "Friends - Discord" mapped.
+**Recurrence 2026-10-21 (before the fix was merged):** clean boot, no GPU hang, no crash — plain SDDM login at 11:02:03, Chrome/Discord exec'd at 11:02:05, `xdg-desktop-portal-hyprland` logged "Initializing xdph" at 11:02:07. Same windowless result, same SIGTERM + `uwsm app` recovery. So the race is on every login, not only after a crash; the keyring was never involved on this one.
+**Not changed (needs rebuild + reboot, user decision):** the i915 params `enable_guc=3 enable_psr=2 enable_dc=4 enable_fbc=1 pcie_aspm=force` are aggressive power settings on a GPU that is logging GuC TLB timeouts; dropping `enable_psr=2`/`enable_dc=4` first, or trying the `xe` driver (module present; currently blacklisted in `system/lib/device/intel/default.nix:9`), are the candidate fixes for the hang itself.
+**Commit:** (this commit)
+
+## 2026-10-19 — lingering-earn-chrome-triggers-keyring-prompt-before-login
+
+**Symptom:** third recurrence after reboot: Chrome and Discord run but never show a window, even after the 10-17 fix that removed autologin.
+**Affected:** lewis/jorge, `~/.config/systemd/user/earn-chrome.service` (hand-made, not in this repo; linger=yes).
+**Root cause:** `earn-chrome.service` (headless Chrome on CDP 9333, profile `~/.earn-chrome`, `WantedBy=default.target`) starts at boot through linger, 27 min before the SDDM login in this case (22:20:02 vs 22:47:04). Chrome D-Bus-activated gnome-keyring-daemon at 22:20:03 against a locked login keyring and no display, which created `/org/freedesktop/secrets/prompt/u1`. At login, PAM logged `gkr-pam: unable to locate daemon control file` and then `unlocked login keyring`, so `Locked=false`, but `u1` never completed (same daemon bug as 10-17). Desktop Chrome and Discord keyring calls queued behind it.
+**Investigation:**
+1. Read the 10-15 and 10-17 entries first. Confirmed the 10-17 fix is live: no `User=` in sddm.conf and booted == current system. Autologin was not the trigger this time.
+2. Login collection `Locked` was false, yet `prompt/u1` was still in `busctl --user tree`. `hyprctl clients` showed only kitty.
+3. `pgrep` showed a `--headless=new` Chrome (PID 1248) started 22:20:02 by `systemd --user`, and gnome-keyring-daemon (PID 1706) started 1s later, both before login. The user journal named the unit "Earn network reader Chrome".
+4. Rejected `--password-store=basic` for the unit: it changes the cookie encryption key and would log that profile out of Instagram.
+5. `hyprctl dispatch exec` fails on the Lua config (`')' expected`). Use `setsid -f uwsm app -- <cmd>`, because a bare `uwsm app` blocks.
+**Fix:** added `ExecStartPre` to the unit that polls the login collection's `Locked` property every 5s until false, plus `TimeoutStartSec=infinity`, so the headless reader waits for the PAM unlock at login. Live recovery: restarted earn-chrome (it passed the gate immediately and `prompt/u1` disappeared), SIGTERMed the windowless Chrome/Discord and relaunched them with uwsm. Verified "Friends - Discord" and "Google Chrome" windows in `hyprctl clients` and no pending prompt. The unit is not declarative; consider moving it into `system/users/jorge/` as a `systemd.user.services` entry.
+**Commit:** (this commit)
 ## 2026-10-17 — keyring-dialog-mapped-before-hyprland-xwm
 
 **Symptom:** recurrence after the laptop powered itself off: on boot, Chrome and Discord run but never show a window; "something with login/passkeys".
