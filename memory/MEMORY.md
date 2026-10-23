@@ -10,6 +10,7 @@
 ## project
 
 - [Chrome blocked by keyring prompt](chrome-keyring-prompt-stall.md) — blank network tabs after login; test keyring before changing profiles or GPU settings
+- [Hyprland runtime exec/eval facts](hyprland-runtime-exec-eval-facts.md) — `hyprctl eval hl.monitor` is a no-op at runtime; exec children live in the compositor cgroup (kill by tree); runtime exec with workspace rule via `hl.dsp.exec_cmd`; read before debugging startup apps or monitor topology
 
 ### xr/ subsystem
 

@@ -26,6 +26,7 @@ require("shared/utility/workspace")
 
 -- users/jorge/default/**
 require("users/jorge/default/breezy")
+require("users/jorge/default/debug")
 require("users/jorge/default/monitor")
 require("users/jorge/default/render")
 require("users/jorge/default/startup")
