@@ -15,7 +15,7 @@ Chronological log of non-trivial fixes for this NixOS flake. Newest entries at t
 5. Could not confirm the exact condition in Hyprland's `Windows.cpp` (source fetch failed); the fix rests on the log evidence above.
 **Fix:** both scripts re-point the last monitor at a real output. `glasses-mirror-watcher.sh` runs `hl.dsp.focus({ monitor = <first active> })` 1s after every `apply_topology` (startup T+0/2/5 and hotplug). `launch-retry.sh` does the same after its topology-settle gate and again before each watchdog relaunch; the `WAYLAND_DEBUG` FIFO capture is removed (it served its purpose), the 30s watchdog + 4 attempts stay as a safety net. `debug.lua` stays on so the next recurrence, if any, is readable in `hyprland.log`.
 **Not changed (needs rebuild + reboot, user decision):** the i915 GPU hang that forces the re-logins recurred at 05:15 today (`GUC: TLB invalidation response timed out` → `GPU HANG ecode 12:0` → Hyprland SIGABRT, `hyprlandCrashReport3179.txt`). Candidate fixes unchanged: drop `enable_psr=2` / `enable_dc=4` in `system/lib/device/intel/default.nix:12`, or switch to `xe`.
-**Commit:** (this commit)
+**Commit:** `68725d0`
 
 ## 2026-10-20 — i915-gpu-hang-crashes-hyprland-then-startup-chromium-apps-windowless
 
