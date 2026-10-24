@@ -2,6 +2,21 @@
 
 Chronological log of non-trivial fixes for this NixOS flake. Newest entries at the top. See `CLAUDE.md` "Log Every Fix" section for the entry format and rules.
 
+## 2026-10-24 — stale-last-monitor-after-edp1-mirror-aborts-window-maps
+
+**Symptom:** "nope..": fifth+ recurrence. After login Chrome and Discord run but show no window; this time with the multi-attempt launcher live. Attempts 1 and 2 were windowless, attempt 3 (T+~3.5 min) mapped both — right after Jorge pressed Super+3 / Super+5.
+**Affected:** lewis/jorge, `dotfiles/default/hypr/shared/scripts/glasses-mirror-watcher.sh`, `dotfiles/default/hypr/users/jorge/default/launch-retry.sh`, `dotfiles/default/hypr/users/jorge/default/debug.lua`, Hyprland 0.56.2 (Lua config).
+**Root cause:** Hyprland's "last monitor" goes stale when eDP-1 becomes a mirror. At login kitty mapped on eDP-1 (the only output for the first ~2s); the glasses watcher then applied eDP-1-mirrors-VG258 (`hyprland.log` 1226-1237: eDP-1 workspaces destroyed, output becomes `mirrorOf 1`). Hyprland kept eDP-1 as the last focused monitor, and with no workspace on it every subsequent window was refused: `ERR ]: mapWindow: no valid monitor/workspace, aborting map for ...` (log lines 1557, 1573, 1606, 1741, 1768, 1835 = Chrome and Discord, attempts 1 and 2). The clients are healthy — the Chrome `WAYLAND_DEBUG` capture shows the full xdg_toplevel / configure / ack / dmabuf+syncobj / commit sequence — the compositor just never maps them. Any input event on HDMI-A-1 (mouse move, Super+N) re-points the last monitor, which is why "relaunch minutes later" always worked and the first ~30s never did, and why attempt 3 mapped only after workspaces 3/5 were created by the keypresses (log 1915/1927 → 2233).
+**Investigation:**
+1. Turned Hyprland logging on via `debug.lua` (`debug.disable_logs = false`) — the first instance with map/surface events in the log. Flipping the same option with `hyprctl eval` at runtime does not start logging.
+2. Correlated `~/.cache/launch-retry.log` (attempt timestamps) with `hyprland.log`: every windowless attempt has a matching `aborting map` line; the successful one has `Rule workspace matched` + a normal map.
+3. Dead ends from earlier rounds, now explained: environment (identical), i915 (no hang on the 10-21/10-23 logins), keyring (unlocked), Chromium portal timing (portal was up), "Chromium sensitive to output changes" (clients were fine, Hyprland refused the map).
+4. `hyprctl dispatch "hl.dsp.focus({ monitor = 'HDMI-A-1' })"` → `ok`; by numeric id → "monitor not found". `hyprctl monitors -j` (without `all`) lists only active non-mirror outputs, so its first entry is a safe target.
+5. Could not confirm the exact condition in Hyprland's `Windows.cpp` (source fetch failed); the fix rests on the log evidence above.
+**Fix:** both scripts re-point the last monitor at a real output. `glasses-mirror-watcher.sh` runs `hl.dsp.focus({ monitor = <first active> })` 1s after every `apply_topology` (startup T+0/2/5 and hotplug). `launch-retry.sh` does the same after its topology-settle gate and again before each watchdog relaunch; the `WAYLAND_DEBUG` FIFO capture is removed (it served its purpose), the 30s watchdog + 4 attempts stay as a safety net. `debug.lua` stays on so the next recurrence, if any, is readable in `hyprland.log`.
+**Not changed (needs rebuild + reboot, user decision):** the i915 GPU hang that forces the re-logins recurred at 05:15 today (`GUC: TLB invalidation response timed out` → `GPU HANG ecode 12:0` → Hyprland SIGABRT, `hyprlandCrashReport3179.txt`). Candidate fixes unchanged: drop `enable_psr=2` / `enable_dc=4` in `system/lib/device/intel/default.nix:12`, or switch to `xe`.
+**Commit:** (this commit)
+
 ## 2026-10-20 — i915-gpu-hang-crashes-hyprland-then-startup-chromium-apps-windowless
 
 **Symptom:** "happened again": something crashed, lewis dropped to the SDDM login, and after logging back in Chrome and Discord were running but had no window. Keyring was unlocked and no prompt was pending this time.

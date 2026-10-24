@@ -1,23 +1,27 @@
 #!/bin/sh
 # launch-retry.sh [--attempt N] [--ws "RULE"] <window-class> <cmd...>
 #
-# Startup launcher for the Chromium apps (Chrome, Discord). Since 2026-10-15
-# they come up running but windowless on every login when exec'd 2-3s after
-# Hyprland starts. A kill + relaunch minutes later always maps a window, but
-# the 2026-10-23 login showed that a relaunch ~33s after login is ALSO
-# windowless (Discord's krisp log: init at 15:17:14, killed, init again at
-# 15:17:42, still no window until a manual relaunch at 15:34). So:
-#   1. gate: monitor present, xdg-desktop-portal active and answering, secret
-#      service answering, monitor topology (mirror/position) unchanged for 3s
-#      (the glasses-mirror watcher re-applies hl.monitor at T+0/2/5),
-#   2. exec the app (keeps the pid Hyprland bound the workspace rule to),
-#   3. a detached watchdog checks for a window of <class> after 30s; if none,
-#      logs diagnostics, kills the app's process tree and asks Hyprland to run
-#      this script again with --attempt N+1 (same workspace rule). Attempts are
-#      spaced 15s, 45s, 120s apart; four attempts max.
-#   4. attempt 1 runs with WAYLAND_DEBUG=client, stderr captured (30MB cap) to
-#      ~/.cache/launch-retry-<class>.wl.log, to see where the handshake stops.
-# Log: ~/.cache/launch-retry.log
+# Startup launcher for the Chromium apps (Chrome, Discord).
+#
+# Root cause of the windowless logins (FIXES.md 2026-10-24): glasses-mirror-
+# watcher.sh turns eDP-1 into a mirror of the VG258 a few seconds after
+# Hyprland starts. Hyprland destroys eDP-1's workspaces but keeps it as the
+# "last monitor" until the next input event, so every window created after
+# that is refused with "mapWindow: no valid monitor/workspace, aborting map"
+# (hyprland.log). The apps run fine, they just never get mapped, until the
+# user moves the mouse or presses Super+N, which re-points the last monitor.
+#
+# So this script:
+#   1. gates on: a monitor present, xdg-desktop-portal + secret service
+#      answering, monitor topology unchanged for 3s,
+#   2. re-focuses the first ACTIVE (non-mirror) monitor so Hyprland has a valid
+#      last monitor / workspace to map onto,
+#   3. execs the app (keeps the pid Hyprland bound the workspace rule to),
+#   4. a detached watchdog checks for a window of <class> after 30s; if none,
+#      logs diagnostics to ~/.cache/launch-retry.log, kills the app's process
+#      tree, re-focuses a valid monitor and asks Hyprland to run this script
+#      again with --attempt N+1 (same workspace rule); 15s/45s/120s apart,
+#      four attempts max.
 attempt=1; ws=""
 while :; do
   case "$1" in
@@ -28,12 +32,19 @@ while :; do
   esac
 done
 self=$0
-cache=/home/jorge/.cache
-log=$cache/launch-retry.log
+log=/home/jorge/.cache/launch-retry.log
 say() { printf '%s %s#%s[%s]: %s\n' "$(date +%T)" "$cls" "$attempt" "$$" "$*" >>"$log"; }
 has_window() { hyprctl clients -j 2>/dev/null | grep -qE "\"class\": *\"$cls\""; }
 mon_sig() { hyprctl monitors all -j 2>/dev/null | grep -E '"(description|mirrorOf|x|y|disabled|dpmsStatus)"' | tr -d ' \t\n'; }
 tree() { echo "$1"; for c in $(ps -o pid= --ppid "$1" 2>/dev/null); do tree "$c"; done; }
+# Point Hyprland's "last monitor" at a real, active output. `hyprctl monitors`
+# (without `all`) lists only active, non-mirror monitors.
+refocus() {
+  m=$(hyprctl monitors -j 2>/dev/null | grep -m1 -E '^\s*"name": *"' | sed -E 's/.*"name": *"([^"]*)".*/\1/')
+  [ -n "$m" ] || { say "refocus: no active monitor found"; return 1; }
+  out=$(hyprctl dispatch "hl.dsp.focus({ monitor = '$m' })" 2>&1)
+  say "refocus monitor $m -> $out"
+}
 
 # ---------------------------------------------------------------- watchdog
 if [ "${mode:-}" = watch ]; then
@@ -59,6 +70,7 @@ if [ "${mode:-}" = watch ]; then
   next=$((attempt + 1))
   say "relaunch attempt $next in ${delay}s via Hyprland exec"
   sleep "$delay"
+  refocus
   cmd="$self --attempt $next"
   [ -n "$ws" ] && cmd="$cmd --ws \"$ws\""
   cmd="$cmd $cls $*"
@@ -99,21 +111,9 @@ while [ "$stable" -lt 3 ] && [ "$i" -lt 25 ]; do
   prev=$cur
 done
 say "topology settled after ${i}s"
-sleep 2
+refocus
+sleep 1
 
 setsid -f "$self" --watch "$$" "$attempt" "$cls" "$ws" "$@" >/dev/null 2>&1 </dev/null
-
-if [ "$attempt" = 1 ]; then
-  wl=$cache/launch-retry-$cls.wl.log
-  fifo=$cache/.launch-retry-$cls-$$.fifo
-  rm -f "$fifo"
-  if mkfifo "$fifo" 2>/dev/null; then
-    ( head -c 30000000 >"$wl"; cat >/dev/null ) <"$fifo" &
-    exec 2>"$fifo"
-    rm -f "$fifo"
-    export WAYLAND_DEBUG=client
-    say "wayland debug -> $wl"
-  fi
-fi
 say "exec"
 exec "$@"

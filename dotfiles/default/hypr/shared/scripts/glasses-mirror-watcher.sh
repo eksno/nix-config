@@ -24,6 +24,12 @@
 # capped to 60 Hz ONLY when the glasses are also in the chain. Two-way eDP-1 +
 # HDMI @120 is within budget (verified working, FIXES.md 2026-05-05), so the
 # VG258 runs at its native 119.98 Hz whenever the glasses are absent.
+#
+# Side effect to undo (FIXES.md 2026-10-24): when eDP-1 flips to a mirror,
+# Hyprland destroys its workspaces but keeps it as the "last monitor" until the
+# next input event; every window created meanwhile is refused with
+# "mapWindow: no valid monitor/workspace". After each apply we therefore focus
+# the first ACTIVE (non-mirror) monitor so new windows have somewhere to map.
 
 set -uo pipefail
 
@@ -52,6 +58,15 @@ mon() {
     local lua="output = \"$1\", mode = \"$2\", position = \"$3\", scale = $4"
     [[ -n "${5:-}" ]] && lua+=", mirror = \"$5\""
     printf 'hl.monitor({ %s }); ' "$lua"
+}
+
+# Re-point Hyprland's "last monitor" at a real output. `hyprctl monitors`
+# (without `all`) lists only active, non-mirror monitors.
+refocus_active_monitor() {
+    local m
+    m="$(hyprctl monitors -j 2>/dev/null | jq -r '.[0].name // empty' 2>/dev/null)"
+    [[ -n "$m" ]] || return 0
+    hyprctl dispatch "hl.dsp.focus({ monitor = '$m' })" >/dev/null 2>&1
 }
 
 apply_topology() {
@@ -88,6 +103,8 @@ apply_topology() {
         lua="$(mon eDP-1 2880x1800@120 0x0 1.25)"
     fi
     hyprctl eval "$lua" >/dev/null 2>&1
+    sleep 1
+    refocus_active_monitor
 }
 
 # Apply at session start (covers monitors already plugged in at login). This

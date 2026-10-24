@@ -10,7 +10,7 @@
 ## project
 
 - [Chrome blocked by keyring prompt](chrome-keyring-prompt-stall.md) — blank network tabs after login; test keyring before changing profiles or GPU settings
-- [Hyprland runtime exec/eval facts](hyprland-runtime-exec-eval-facts.md) — `hyprctl eval hl.monitor` is a no-op at runtime; exec children live in the compositor cgroup (kill by tree); runtime exec with workspace rule via `hl.dsp.exec_cmd`; read before debugging startup apps or monitor topology
+- [Hyprland runtime exec/eval facts](hyprland-runtime-exec-eval-facts.md) — ROOT CAUSE of windowless Chrome/Discord at login: eDP-1 turning into a mirror leaves a stale "last monitor" and Hyprland aborts every map (`mapWindow: no valid monitor/workspace`) until a focus lands on a real output; also `hyprctl eval hl.monitor` is a runtime no-op, exec children live in the compositor cgroup, runtime exec via `hl.dsp.exec_cmd`
 
 ### xr/ subsystem
 
